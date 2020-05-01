@@ -6,16 +6,17 @@ import (
 )
 
 func main() {
-	session := Session{
-		Envelope: Envelope{
-			ID: "1",
-			To: &Node{
-				Identity: Identity{Name: "postmaster", Domain: "msging.net"},
-				Instance: "#az-iris1",
-			},
-		},
-		State: SessionAuthenticating,
+	session := Session{}
+	session.ID = "1"
+	session.To = &Node{
+		Identity: Identity{"postmaster", "msging.net"},
+		Instance: "#az-iris1",
 	}
+	session.State = SessionAuthenticating
+	//session.Encryption = SessionEncryptionTLS
+
+	session.Scheme = AuthenticationSchemePlain
+	session.Authentication = &PlainAuthentication{Password: "banana"}
 
 	b, err := json.Marshal(session)
 	if err != nil {
@@ -24,10 +25,7 @@ func main() {
 
 	fmt.Println("Session", string(b))
 
-	identity := Identity{
-		Name:   "postmaster",
-		Domain: "msging.net",
-	}
+	identity := Identity{"postmaster", "msging.net"}
 
 	fmt.Println("Identity", identity)
 

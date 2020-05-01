@@ -13,6 +13,9 @@ type Node struct {
 }
 
 func (n Node) String() string {
+	if n == (Node{}) {
+		return ""
+	}
 	return fmt.Sprintf("%v/%v", n.Identity, n.Instance)
 }
 

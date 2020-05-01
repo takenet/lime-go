@@ -11,6 +11,10 @@ type Identity struct {
 }
 
 func (i Identity) String() string {
+	if i == (Identity{}) {
+		return ""
+	}
+
 	return fmt.Sprintf("%v@%v", i.Name, i.Domain)
 }
 
