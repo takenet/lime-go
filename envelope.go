@@ -1,4 +1,4 @@
-package main
+package lime
 
 // Base struct to all communication envelopes.
 type Envelope struct {

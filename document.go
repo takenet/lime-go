@@ -1,4 +1,4 @@
-package main
+package lime
 
 type MediaType struct {
 }

@@ -1,6 +1,10 @@
-package main
+package lime
 
-import "fmt"
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+)
 
 // Allows the configuration and establishment of the communication channel between nodes.
 type Session struct {
@@ -30,6 +34,72 @@ type Session struct {
 	// Authentication data, related to the selected schema.
 	// Information like password sent by the client or roundtrip data sent by the server.
 	Authentication Authentication `json:"authentication,omitempty"`
+}
+
+func (s *Session) UnmarshalJSON(b []byte) error {
+	var sessionMap map[string]json.RawMessage
+	err := json.Unmarshal(b, &sessionMap)
+	if err != nil {
+		return err
+	}
+	session := Session{}
+
+	// https://eagain.net/articles/go-dynamic-json/
+	// didn't find a better way of doing this yet...
+	for k, v := range sessionMap {
+		//if k == "authentication" {
+		//	continue
+		//}
+		//f := reflect.ValueOf(session).FieldByNameFunc(func(n string) bool {
+		//	return strings.ToLower(n) == strings.ToLower(k)
+		//})
+		//i := f.Interface()
+		//err := json.Unmarshal(v, i)
+		//if err != nil {
+		//	return err
+		//}
+
+		var err error
+		switch k {
+		// envelope fields
+		case "id":
+			err = json.Unmarshal(v, &session.ID)
+		case "from":
+			err = json.Unmarshal(v, &session.From)
+		case "pp":
+			err = json.Unmarshal(v, &session.Pp)
+		case "to":
+			err = json.Unmarshal(v, &session.To)
+		case "metadata":
+			err = json.Unmarshal(v, &session.Metadata)
+		// session fields
+		case "state":
+			err = json.Unmarshal(v, &session.State)
+		case "encryption":
+			err = json.Unmarshal(v, &session.Encryption)
+		case "scheme":
+			err = json.Unmarshal(v, &session.Scheme)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	// Handle the authentication field
+	if rawAuth, ok := sessionMap["authentication"]; ok {
+		if session.Scheme == "" {
+			return errors.New("scheme is required when authentication is present")
+		}
+		auth := authFactories[session.Scheme]()
+		err = json.Unmarshal(rawAuth, &auth)
+		if err != nil {
+			return err
+		}
+		session.Authentication = auth
+	}
+
+	*s = session
+	return nil
 }
 
 // Defines the supported session states
@@ -133,6 +203,15 @@ const (
 	AuthenticationSchemeExternal = AuthenticationScheme("external")
 )
 
+var authFactories = map[AuthenticationScheme]func() Authentication{
+	AuthenticationSchemePlain: func() Authentication {
+		return &PlainAuthentication{}
+	},
+	AuthenticationSchemeKey: func() Authentication {
+		return &KeyAuthentication{}
+	},
+}
+
 // Defines a session authentications scheme container
 type Authentication interface {
 	GetAuthenticationScheme() AuthenticationScheme
@@ -147,4 +226,15 @@ type PlainAuthentication struct {
 
 func (a *PlainAuthentication) GetAuthenticationScheme() AuthenticationScheme {
 	return AuthenticationSchemePlain
+}
+
+// Defines a plain authentication scheme, that uses a key for authentication.
+// Should be used only with encrypted sessions.
+type KeyAuthentication struct {
+	// Base64 representation of the key
+	Key string `json:"key"`
+}
+
+func (a *KeyAuthentication) GetAuthenticationScheme() AuthenticationScheme {
+	return AuthenticationSchemeKey
 }
