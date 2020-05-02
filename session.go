@@ -31,9 +31,17 @@ type Session struct {
 	// The authentication scheme option selected for the session.
 	// This property must be present if the property authentication is defined.
 	Scheme AuthenticationScheme `json:"scheme,omitempty"`
-	// Authentication data, related to the selected schema.
+	// RawAuthentication data, related to the selected schema.
 	// Information like password sent by the client or roundtrip data sent by the server.
 	Authentication Authentication `json:"authentication,omitempty"`
+	// In cases where the client receives a session with failed state,
+	// this property should provide more details about the problem.
+	Reason *Reason `json:"reason,omitempty"`
+}
+
+func (s *Session) SetAuthentication(a Authentication) {
+	s.Authentication = a
+	s.Scheme = a.GetAuthenticationScheme()
 }
 
 func (s *Session) UnmarshalJSON(b []byte) error {
@@ -44,21 +52,21 @@ func (s *Session) UnmarshalJSON(b []byte) error {
 	}
 	session := Session{}
 
-	// https://eagain.net/articles/go-dynamic-json/
-	// didn't find a better way of doing this yet...
 	for k, v := range sessionMap {
+
+		// Reflection solution (not working)
 		//if k == "authentication" {
 		//	continue
 		//}
-		//f := reflect.ValueOf(session).FieldByNameFunc(func(n string) bool {
-		//	return strings.ToLower(n) == strings.ToLower(k)
+		//r := reflect.ValueOf(&session).Elem()
+		//f := r.FieldByNameFunc(func(n string) bool {
+		//	return strings.EqualFold(n, k)
 		//})
 		//i := f.Interface()
-		//err := json.Unmarshal(v, i)
-		//if err != nil {
-		//	return err
-		//}
+		//err = json.Unmarshal(v, &i)
 
+		// https://eagain.net/articles/go-dynamic-json/
+		// didn't find a better way of doing this yet...
 		var err error
 		switch k {
 		// envelope fields
@@ -77,8 +85,18 @@ func (s *Session) UnmarshalJSON(b []byte) error {
 			err = json.Unmarshal(v, &session.State)
 		case "encryption":
 			err = json.Unmarshal(v, &session.Encryption)
+		case "encryptionOptions":
+			err = json.Unmarshal(v, &session.EncryptionOptions)
+		case "compression":
+			err = json.Unmarshal(v, &session.Compression)
+		case "compressionOptions":
+			err = json.Unmarshal(v, &session.CompressionOptions)
 		case "scheme":
 			err = json.Unmarshal(v, &session.Scheme)
+		case "schemeOptions":
+			err = json.Unmarshal(v, &session.SchemeOptions)
+		case "reason":
+			err = json.Unmarshal(v, &session.Reason)
 		}
 		if err != nil {
 			return err

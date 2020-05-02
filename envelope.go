@@ -17,3 +17,12 @@ type Envelope struct {
 	// Additional information to be delivered with the envelope.
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
+
+// Represents a known reason for events occurred during the client-server
+// interactions.
+type Reason struct {
+	// The reason code
+	Code int `json:"code,omitempty"`
+	// The reason description
+	Description string `json:"description,omitempty"`
+}
