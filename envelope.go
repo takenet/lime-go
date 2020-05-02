@@ -1,6 +1,9 @@
 package lime
 
-import "github.com/google/uuid"
+import (
+	"encoding/json"
+	"github.com/google/uuid"
+)
 
 // Base struct to all communication envelopes.
 type Envelope struct {
@@ -27,6 +30,28 @@ type Reason struct {
 	Code int `json:"code,omitempty"`
 	// The reason description
 	Description string `json:"description,omitempty"`
+}
+
+func (e *Envelope) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
+	switch n {
+	// envelope fields
+	case "id":
+		err := json.Unmarshal(v, &e.ID)
+		return true, err
+	case "from":
+		err := json.Unmarshal(v, &e.From)
+		return true, err
+	case "pp":
+		err := json.Unmarshal(v, &e.Pp)
+		return true, err
+	case "to":
+		err := json.Unmarshal(v, &e.To)
+		return true, err
+	case "metadata":
+		err := json.Unmarshal(v, &e.Metadata)
+		return true, err
+	}
+	return false, nil
 }
 
 // Generates a new unique envelope id.

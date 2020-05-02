@@ -53,63 +53,27 @@ func (s *Session) UnmarshalJSON(b []byte) error {
 	session := Session{}
 
 	for k, v := range sessionMap {
-
-		// Reflection solution (not working)
-		//if k == "authentication" {
-		//	continue
-		//}
-		//r := reflect.ValueOf(&session).Elem()
-		//f := r.FieldByNameFunc(func(n string) bool {
-		//	return strings.EqualFold(n, k)
-		//})
-		//i := f.Interface()
-		//err = json.Unmarshal(v, &i)
-
-		// https://eagain.net/articles/go-dynamic-json/
-		// didn't find a better way of doing this yet...
-		var err error
-		switch k {
-		// envelope fields
-		case "id":
-			err = json.Unmarshal(v, &session.ID)
-		case "from":
-			err = json.Unmarshal(v, &session.From)
-		case "pp":
-			err = json.Unmarshal(v, &session.Pp)
-		case "to":
-			err = json.Unmarshal(v, &session.To)
-		case "metadata":
-			err = json.Unmarshal(v, &session.Metadata)
-		// session fields
-		case "state":
-			err = json.Unmarshal(v, &session.State)
-		case "encryption":
-			err = json.Unmarshal(v, &session.Encryption)
-		case "encryptionOptions":
-			err = json.Unmarshal(v, &session.EncryptionOptions)
-		case "compression":
-			err = json.Unmarshal(v, &session.Compression)
-		case "compressionOptions":
-			err = json.Unmarshal(v, &session.CompressionOptions)
-		case "scheme":
-			err = json.Unmarshal(v, &session.Scheme)
-		case "schemeOptions":
-			err = json.Unmarshal(v, &session.SchemeOptions)
-		case "reason":
-			err = json.Unmarshal(v, &session.Reason)
+		var ok bool
+		ok, err = session.Envelope.unmarshalJSONField(k, v)
+		if !ok {
+			ok, err = session.unmarshalJSONField(k, v)
 		}
+
+		if !ok {
+			return fmt.Errorf(`unknown session field '%v'`, k)
+		}
+
 		if err != nil {
 			return err
 		}
 	}
 
-	// Handle the authentication field
-	if rawAuth, ok := sessionMap["authentication"]; ok {
+	if v, ok := sessionMap["authentication"]; ok {
 		if session.Scheme == "" {
 			return errors.New("scheme is required when authentication is present")
 		}
 		auth := authFactories[session.Scheme]()
-		err = json.Unmarshal(rawAuth, &auth)
+		err := json.Unmarshal(v, &auth)
 		if err != nil {
 			return err
 		}
@@ -118,6 +82,40 @@ func (s *Session) UnmarshalJSON(b []byte) error {
 
 	*s = session
 	return nil
+}
+
+func (s *Session) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
+	switch n {
+	case "state":
+		err := json.Unmarshal(v, &s.State)
+		return true, err
+	case "encryption":
+		err := json.Unmarshal(v, &s.Encryption)
+		return true, err
+	case "encryptionOptions":
+		err := json.Unmarshal(v, &s.EncryptionOptions)
+		return true, err
+	case "compression":
+		err := json.Unmarshal(v, &s.Compression)
+		return true, err
+	case "compressionOptions":
+		err := json.Unmarshal(v, &s.CompressionOptions)
+		return true, err
+	case "scheme":
+		err := json.Unmarshal(v, &s.Scheme)
+		return true, err
+	case "schemeOptions":
+		err := json.Unmarshal(v, &s.SchemeOptions)
+		return true, err
+	case "reason":
+		err := json.Unmarshal(v, &s.Reason)
+		return true, err
+	case "authentication":
+		// authentication requires scheme to be present so should be handled outside this
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // Defines the supported session states
