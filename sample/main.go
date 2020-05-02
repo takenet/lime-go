@@ -13,7 +13,7 @@ func main() {
 		Identity: lime.Identity{Name: "postmaster", Domain: "msging.net"},
 		Instance: "#az-iris1",
 	}
-	session.State = lime.SessionAuthenticating
+	session.State = lime.SessionStateAuthenticating
 	//session.Encryption = SessionEncryptionTLS
 
 	//session.Scheme = lime.AuthenticationSchemePlain

@@ -126,7 +126,7 @@ type SessionState string
 const (
 	// The session is new and doesn't exists an established context.
 	// It is sent by a client node to start a session with a server.
-	SessionNew = SessionState("new")
+	SessionStateNew = SessionState("new")
 	// The server and the client are negotiating the session options,
 	// like cryptography and compression.
 	// The server sends to the client the options (if available) and
@@ -134,31 +134,31 @@ const (
 	// (for instance, if the connection is already encrypted or the
 	// transport protocol doesn't support these options), the server
 	// SHOULD skip the negotiation.
-	SessionNegotiating = SessionState("negotiating")
+	SessionStateNegotiating = SessionState("negotiating")
 	// The session is being authenticated. The server sends to
 	// the client the available authentication schemes list and
 	// the client must choose one and send the specific authentication
 	// data. The authentication can occurs in multiple round trips,
 	// according to the selected schema.
-	SessionAuthenticating = SessionState("authenticating")
+	SessionStateAuthenticating = SessionState("authenticating")
 	// The session is active and it is possible to send and receive
 	// messages and commands. The server sends this state
 	// after the session was authenticated.
-	SessionEstablished = SessionState("established")
+	SessionStateEstablished = SessionState("established")
 	// The client node is requesting to the server to finish the session.
-	SessionFinishing = SessionState("finishing")
+	SessionStateFinishing = SessionState("finishing")
 	// The session was gracefully finished by the server.
-	SessionFinished = SessionState("finished")
+	SessionStateFinished = SessionState("finished")
 	// A problem occurred while the session was established, under
 	// negotiation or authentication and it was closed by the server.
 	// In this case, the property reason MUST be present to provide
 	// more details about the problem.
-	SessionFailed = SessionState("failed")
+	SessionStateFailed = SessionState("failed")
 )
 
 func (s *SessionState) IsValid() error {
 	switch *s {
-	case SessionNew, SessionNegotiating, SessionAuthenticating, SessionEstablished, SessionFinishing, SessionFinished, SessionFailed:
+	case SessionStateNew, SessionStateNegotiating, SessionStateAuthenticating, SessionStateEstablished, SessionStateFinishing, SessionStateFinished, SessionStateFailed:
 		return nil
 	}
 
@@ -228,6 +228,12 @@ var authFactories = map[AuthenticationScheme]func() Authentication{
 	AuthenticationSchemeKey: func() Authentication {
 		return &KeyAuthentication{}
 	},
+	AuthenticationSchemeTransport: func() Authentication {
+		return &TransportAuthentication{}
+	},
+	AuthenticationSchemeExternal: func() Authentication {
+		return &ExternalAuthentication{}
+	},
 }
 
 // Defines a session authentications scheme container
@@ -255,4 +261,24 @@ type KeyAuthentication struct {
 
 func (a *KeyAuthentication) GetAuthenticationScheme() AuthenticationScheme {
 	return AuthenticationSchemeKey
+}
+
+// Defines a transport layer authentication scheme.
+type TransportAuthentication struct {
+}
+
+func (a *TransportAuthentication) GetAuthenticationScheme() AuthenticationScheme {
+	return AuthenticationSchemeTransport
+}
+
+// Defines a external authentication scheme, that uses third-party validation.
+type ExternalAuthentication struct {
+	// The authentication token on base64 representation.
+	Token string `json:"token"`
+	// The trusted token issuer.
+	Issuer string `json:"issuer"`
+}
+
+func (a *ExternalAuthentication) GetAuthenticationScheme() AuthenticationScheme {
+	return AuthenticationSchemeExternal
 }
