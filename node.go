@@ -5,8 +5,6 @@ import (
 	"strings"
 )
 
-// https://ashleyd.ws/custom-json-marshalling-in-golang/index.html
-// https://gist.github.com/mdwhatcott/8dd2eef0042f7f1c0cd8#file-custom_json-go-L26
 type Node struct {
 	Identity
 	Instance string

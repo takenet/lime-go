@@ -1,5 +1,7 @@
 package lime
 
+import "github.com/google/uuid"
+
 // Base struct to all communication envelopes.
 type Envelope struct {
 	// The envelope identifier
@@ -25,4 +27,9 @@ type Reason struct {
 	Code int `json:"code,omitempty"`
 	// The reason description
 	Description string `json:"description,omitempty"`
+}
+
+// Generates a new unique envelope id.
+func NewEnvelopeId() string {
+	return uuid.New().String()
 }
