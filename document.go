@@ -85,3 +85,22 @@ var DocumentFactories = map[MediaType]func() Document{
 		return &JsonDocument{}
 	},
 }
+
+func GetDocumentFactory(mediaType MediaType) (func() Document, error) {
+	// Check for a specific document factory for the media type
+	factory, ok := DocumentFactories[mediaType]
+	if !ok {
+		// Use the default ones
+		if mediaType.IsJson() {
+			factory = DocumentFactories[mediaTypeApplicationJson]
+		} else {
+			factory = DocumentFactories[mediaTypeTextPlain]
+		}
+	}
+
+	if factory == nil {
+		return nil, fmt.Errorf("no document factory found for media type %v", mediaType)
+	}
+
+	return factory, nil
+}

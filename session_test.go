@@ -448,6 +448,18 @@ func TestSession_UnmarshalJSON_AuthenticatingExternal(t *testing.T) {
 	assert.Equal(t, "auth.limeprotocol.org", a.Issuer)
 }
 
+func TestSession_UnmarshalJSON_AuthenticatingUnknown(t *testing.T) {
+	// Arrange
+	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"golang@limeprotocol.org/default","to":"postmaster@limeprotocol.org/#server1","state":"authenticating","scheme":"unknown","authentication":{"token":"HePX3PtLNJ1hDubBJmxHGAfQnTczpeze","issuer":"auth.limeprotocol.org"}}`)
+	var s Session
+
+	// Act
+	err := json.Unmarshal(j, &s)
+
+	// Assert
+	assert.Error(t, err)
+}
+
 func TestSession_UnmarshalJSON_Established(t *testing.T) {
 	// Arrange
 	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","state":"established"}`)

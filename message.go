@@ -10,9 +10,9 @@ import (
 type Message struct {
 	Envelope
 	// MIME declaration of the content type of the message.
-	Type MediaType `json:"type,omitempty"`
+	Type MediaType `json:"type"`
 	// Message body content
-	Content Document `json:"content,omitempty"`
+	Content Document `json:"content"`
 }
 
 func (m *Message) SetContent(d Document) {
@@ -53,7 +53,13 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 		return errors.New("type is required")
 	}
 
-	document := DocumentFactories[message.Type]()
+	factory, err := GetDocumentFactory(message.Type)
+	if err != nil {
+		return err
+	}
+
+	// Create the document type instance and unmarshal the json to it
+	document := factory()
 	err = json.Unmarshal(v, &document)
 	if err != nil {
 		return err

@@ -72,7 +72,11 @@ func (s *Session) UnmarshalJSON(b []byte) error {
 		if session.Scheme == "" {
 			return errors.New("scheme is required when authentication is present")
 		}
-		auth := authFactories[session.Scheme]()
+		factory, ok := authFactories[session.Scheme]
+		if !ok {
+			return fmt.Errorf(`unknown authentication scheme '%v'`, session.Scheme)
+		}
+		auth := factory()
 		err := json.Unmarshal(v, &auth)
 		if err != nil {
 			return err
