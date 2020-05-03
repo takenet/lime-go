@@ -158,8 +158,8 @@ const (
 	SessionStateFailed = SessionState("failed")
 )
 
-func (s *SessionState) IsValid() error {
-	switch *s {
+func (s SessionState) IsValid() error {
+	switch s {
 	case SessionStateNew, SessionStateNegotiating, SessionStateAuthenticating, SessionStateEstablished, SessionStateFinishing, SessionStateFinished, SessionStateFailed:
 		return nil
 	}
