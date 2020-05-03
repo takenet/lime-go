@@ -5,8 +5,10 @@ import (
 	"strings"
 )
 
+// Represents an element of a network.
 type Node struct {
 	Identity
+	// The name of the instance used by the node to connect to the network.
 	Instance string
 }
 
@@ -14,6 +16,11 @@ func (n Node) String() string {
 	if n == (Node{}) {
 		return ""
 	}
+
+	if n.Instance == "" {
+		return n.Identity.String()
+	}
+
 	return fmt.Sprintf("%v/%v", n.Identity, n.Instance)
 }
 
