@@ -1,6 +1,8 @@
 package lime
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 )
@@ -32,6 +34,78 @@ func (c *Command) SetResource(d Document) {
 func (c *Command) SetStatusFailure(r *Reason) {
 	c.Status = CommandStatusFailure
 	c.Reason = r
+}
+
+func (c *Command) UnmarshalJSON(b []byte) error {
+	var commandMap map[string]json.RawMessage
+	err := json.Unmarshal(b, &commandMap)
+	if err != nil {
+		return err
+	}
+	command := Command{}
+
+	for k, v := range commandMap {
+		var ok bool
+		ok, err = command.Envelope.unmarshalJSONField(k, v)
+		if !ok {
+			ok, err = command.unmarshalJSONField(k, v)
+		}
+
+		if !ok {
+			return fmt.Errorf(`unknown command field '%v'`, k)
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	// Handle the content
+	v, ok := commandMap["resource"]
+	if ok {
+		if command.Type == (MediaType{}) {
+			return errors.New("type is required when resource is present")
+		}
+
+		factory, err := GetDocumentFactory(command.Type)
+		if err != nil {
+			return err
+		}
+
+		// Create the document type instance and unmarshal the json to it
+		document := factory()
+		err = json.Unmarshal(v, &document)
+		if err != nil {
+			return err
+		}
+		command.Resource = document
+	}
+
+	*c = command
+	return nil
+}
+
+func (c *Command) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
+	switch n {
+	case "method":
+		err := json.Unmarshal(v, &c.Method)
+		return true, err
+	case "uri":
+		err := json.Unmarshal(v, &c.Uri)
+		return true, err
+	case "type":
+		err := json.Unmarshal(v, &c.Type)
+		return true, err
+	case "status":
+		err := json.Unmarshal(v, &c.Status)
+		return true, err
+	case "reason":
+		err := json.Unmarshal(v, &c.Reason)
+		return true, err
+	case "resource":
+		return true, nil // Handled externally
+	}
+	return false, nil
 }
 
 // Defines methods for the manipulation of resources.
