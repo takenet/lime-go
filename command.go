@@ -21,7 +21,7 @@ type Command struct {
 	Resource Document `json:"resource,omitempty"`
 	// Indicates the status of the action taken to the resource, in case of
 	// a response command.
-	Status CommandStatus `json:"resource,omitempty"`
+	Status CommandStatus `json:"status,omitempty"`
 	// Indicates the reason for a failure response command.
 	Reason *Reason `json:"reason,omitempty"`
 }
