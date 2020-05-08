@@ -8,7 +8,7 @@ import (
 // Represents an element of a network.
 type Node struct {
 	Identity
-	// The name of the instance used by the node to connect to the network.
+	// The name of the instance used by the node To connect To the network.
 	Instance string
 }
 

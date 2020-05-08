@@ -2,7 +2,6 @@ package lime
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 )
 
@@ -31,7 +30,7 @@ type Session struct {
 	// The authentication scheme option selected for the session.
 	// This property must be present if the property authentication is defined.
 	Scheme AuthenticationScheme `json:"scheme,omitempty"`
-	// RawAuthentication data, related to the selected schema.
+	// RawAuthentication data, related To the selected schema.
 	// Information like password sent by the client or roundtrip data sent by the server.
 	Authentication Authentication `json:"authentication,omitempty"`
 	// In cases where the client receives a session with failed state,
@@ -44,49 +43,50 @@ func (s *Session) SetAuthentication(a Authentication) {
 	s.Scheme = a.GetAuthenticationScheme()
 }
 
-func (s *Session) UnmarshalJSON(b []byte) error {
-	var sessionMap map[string]json.RawMessage
-	err := json.Unmarshal(b, &sessionMap)
-	if err != nil {
-		return err
-	}
-	session := Session{}
-
-	for k, v := range sessionMap {
-		var ok bool
-		ok, err = session.Envelope.unmarshalJSONField(k, v)
-		if !ok {
-			ok, err = session.unmarshalJSONField(k, v)
-		}
-
-		if !ok {
-			return fmt.Errorf(`unknown session field '%v'`, k)
-		}
-
-		if err != nil {
-			return err
-		}
-	}
-
-	if v, ok := sessionMap["authentication"]; ok {
-		if session.Scheme == "" {
-			return errors.New("scheme is required when authentication is present")
-		}
-		factory, ok := authFactories[session.Scheme]
-		if !ok {
-			return fmt.Errorf(`unknown authentication scheme '%v'`, session.Scheme)
-		}
-		auth := factory()
-		err := json.Unmarshal(v, &auth)
-		if err != nil {
-			return err
-		}
-		session.Authentication = auth
-	}
-
-	*s = session
-	return nil
-}
+//
+//func (s *Session) UnmarshalJSON(b []byte) error {
+//	var sessionMap map[string]json.RawMessage
+//	err := json.Unmarshal(b, &sessionMap)
+//	if err != nil {
+//		return err
+//	}
+//	session := Session{}
+//
+//	for k, v := range sessionMap {
+//		var ok bool
+//		ok, err = session.Envelope.unmarshalJSONField(k, v)
+//		if !ok {
+//			ok, err = session.unmarshalJSONField(k, v)
+//		}
+//
+//		if !ok {
+//			return fmt.Errorf(`unknown session field '%v'`, k)
+//		}
+//
+//		if err != nil {
+//			return err
+//		}
+//	}
+//
+//	if v, ok := sessionMap["authentication"]; ok {
+//		if session.Scheme == "" {
+//			return errors.New("scheme is required when authentication is present")
+//		}
+//		factory, ok := authFactories[session.Scheme]
+//		if !ok {
+//			return fmt.Errorf(`unknown authentication scheme '%v'`, session.Scheme)
+//		}
+//		auth := factory()
+//		err := json.Unmarshal(v, &auth)
+//		if err != nil {
+//			return err
+//		}
+//		session.Authentication = auth
+//	}
+//
+//	*s = session
+//	return nil
+//}
 
 func (s *Session) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
 	switch n {
@@ -115,7 +115,7 @@ func (s *Session) unmarshalJSONField(n string, v json.RawMessage) (bool, error) 
 		err := json.Unmarshal(v, &s.Reason)
 		return true, err
 	case "authentication":
-		// authentication requires scheme to be present so should be handled outside this
+		// authentication requires scheme To be present so should be handled outside this
 		return true, nil
 	}
 
@@ -127,33 +127,33 @@ type SessionState string
 
 const (
 	// The session is new and doesn't exists an established context.
-	// It is sent by a client node to start a session with a server.
+	// It is sent by a client node To start a session with a server.
 	SessionStateNew = SessionState("new")
 	// The server and the client are negotiating the session options,
 	// like cryptography and compression.
-	// The server sends to the client the options (if available) and
+	// The server sends To the client the options (if available) and
 	// the client chooses the desired options. If there's no options
 	// (for instance, if the connection is already encrypted or the
 	// transport protocol doesn't support these options), the server
 	// SHOULD skip the negotiation.
 	SessionStateNegotiating = SessionState("negotiating")
-	// The session is being authenticated. The server sends to
+	// The session is being authenticated. The server sends To
 	// the client the available authentication schemes list and
 	// the client must choose one and send the specific authentication
 	// data. The authentication can occurs in multiple round trips,
-	// according to the selected schema.
+	// according To the selected schema.
 	SessionStateAuthenticating = SessionState("authenticating")
-	// The session is active and it is possible to send and receive
+	// The session is active and it is possible To send and receive
 	// messages and commands. The server sends this state
 	// after the session was authenticated.
 	SessionStateEstablished = SessionState("established")
-	// The client node is requesting to the server to finish the session.
+	// The client node is requesting To the server To finish the session.
 	SessionStateFinishing = SessionState("finishing")
 	// The session was gracefully finished by the server.
 	SessionStateFinished = SessionState("finished")
 	// A problem occurred while the session was established, under
 	// negotiation or authentication and it was closed by the server.
-	// In this case, the property reason MUST be present to provide
+	// In this case, the property reason MUST be present To provide
 	// more details about the problem.
 	SessionStateFailed = SessionState("failed")
 )
@@ -209,8 +209,8 @@ type AuthenticationScheme string
 
 const (
 	// The server doesn't requires a client credential, and provides a temporary
-	// identity to the node. Some restriction may apply to guest sessions, like
-	// the inability of sending some commands or other nodes may want to block
+	// identity To the node. Some restriction may apply To guest sessions, like
+	// the inability of sending some commands or other nodes may want To block
 	// messages originated by guest identities.
 	AuthenticationSchemeGuest = AuthenticationScheme("guest")
 	// Username and password authentication.

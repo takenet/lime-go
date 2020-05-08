@@ -2,16 +2,15 @@ package lime
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 )
 
 // Allows the manipulation of node resources, like server session parameters or
-// information related to the network nodes.
+// information related To the network nodes.
 type Command struct {
 	Envelope
-	// Action to be taken to the resource.
+	// Action To be taken To the resource.
 	Method CommandMethod `json:"method"`
 	// The universal identifier of the resource.
 	Uri *LimeUri `json:"uri,omitempty"`
@@ -19,7 +18,7 @@ type Command struct {
 	Type *MediaType `json:"type,omitempty"`
 	// Node resource that is subject of the command.
 	Resource Document `json:"resource,omitempty"`
-	// Indicates the status of the action taken to the resource, in case of
+	// Indicates the status of the action taken To the resource, in case of
 	// a response command.
 	Status CommandStatus `json:"status,omitempty"`
 	// Indicates the reason for a failure response command.
@@ -37,54 +36,55 @@ func (c *Command) SetStatusFailure(r *Reason) {
 	c.Reason = r
 }
 
-func (c *Command) UnmarshalJSON(b []byte) error {
-	var commandMap map[string]json.RawMessage
-	err := json.Unmarshal(b, &commandMap)
-	if err != nil {
-		return err
-	}
-	command := Command{}
-
-	for k, v := range commandMap {
-		var ok bool
-		ok, err = command.Envelope.unmarshalJSONField(k, v)
-		if !ok {
-			ok, err = command.unmarshalJSONField(k, v)
-		}
-
-		if !ok {
-			return fmt.Errorf(`unknown command field '%v'`, k)
-		}
-
-		if err != nil {
-			return err
-		}
-	}
-
-	// Handle the content
-	v, ok := commandMap["resource"]
-	if ok {
-		if command.Type == nil {
-			return errors.New("type is required when resource is present")
-		}
-
-		factory, err := GetDocumentFactory(*command.Type)
-		if err != nil {
-			return err
-		}
-
-		// Create the document type instance and unmarshal the json to it
-		document := factory()
-		err = json.Unmarshal(v, &document)
-		if err != nil {
-			return err
-		}
-		command.Resource = document
-	}
-
-	*c = command
-	return nil
-}
+//
+//func (c *Command) UnmarshalJSON(b []byte) error {
+//	var commandMap map[string]json.RawMessage
+//	err := json.Unmarshal(b, &commandMap)
+//	if err != nil {
+//		return err
+//	}
+//	command := Command{}
+//
+//	for k, v := range commandMap {
+//		var ok bool
+//		ok, err = command.Envelope.unmarshalJSONField(k, v)
+//		if !ok {
+//			ok, err = command.unmarshalJSONField(k, v)
+//		}
+//
+//		if !ok {
+//			return fmt.Errorf(`unknown command field '%v'`, k)
+//		}
+//
+//		if err != nil {
+//			return err
+//		}
+//	}
+//
+//	// Handle the Content
+//	v, ok := commandMap["resource"]
+//	if ok {
+//		if command.Type == nil {
+//			return errors.New("type is required when resource is present")
+//		}
+//
+//		factory, err := GetDocumentFactory(*command.Type)
+//		if err != nil {
+//			return err
+//		}
+//
+//		// Create the document type instance and unmarshal the json To it
+//		document := factory()
+//		err = json.Unmarshal(v, &document)
+//		if err != nil {
+//			return err
+//		}
+//		command.Resource = document
+//	}
+//
+//	*c = command
+//	return nil
+//}
 
 func (c *Command) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
 	switch n {
@@ -119,16 +119,16 @@ const (
 	CommandMethodSet = CommandMethod("set")
 	// Delete a value of the resource or the resource itself.
 	CommandMethodDelete = CommandMethod("delete")
-	// Subscribe to a resource, allowing the originator to be notified when the
+	// Subscribe To a resource, allowing the originator To be notified when the
 	// value of the resource changes in the destination.
 	CommandMethodSubscribe = CommandMethod("subscribe")
-	// Unsubscribe to the resource, signaling to the destination that the
-	// originator do not want to receive further notifications about the resource.
+	// Unsubscribe To the resource, signaling To the destination that the
+	// originator do not want To receive further notifications about the resource.
 	CommandMethodUnsubscribe = CommandMethod("unsubscribe")
 	// Notify the destination about a change in a resource value of the sender.
 	// If the resource value is absent, it represent that the resource in the specified URI was deleted in the originator.
 	// This method can be one way and the destination may not send a response for it.
-	// Because of that, a command envelope with this method may not have an id.
+	// Because of that, a command envelope with this method may not have an Id.
 	CommandMethodObserve = CommandMethod("observe")
 	// Merge a resource document with an existing one. If the resource doesn't exists, it is created.
 	CommandMethodMerge = CommandMethod("merge")

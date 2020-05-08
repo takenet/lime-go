@@ -10,7 +10,7 @@ func TestCommand_MarshalJSON_GetPingRequest(t *testing.T) {
 	// Arrange
 	c := Command{}
 	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	c.To = &Node{}
+	c.To = Node{}
 	c.To.Name = "postmaster"
 	c.To.Domain = "limeprotocol.org"
 	c.Method = CommandMethodGet
@@ -31,11 +31,11 @@ func TestCommand_MarshalJSON_GetAccountResponse(t *testing.T) {
 	// Arrange
 	c := Command{}
 	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	c.From = &Node{}
+	c.From = Node{}
 	c.From.Name = "postmaster"
 	c.From.Domain = "limeprotocol.org"
 	c.From.Instance = "#server1"
-	c.To = &Node{}
+	c.To = Node{}
 	c.To.Name = "golang"
 	c.To.Domain = "limeprotocol.org"
 	c.To.Instance = "default"

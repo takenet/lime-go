@@ -21,7 +21,7 @@ func (i Identity) String() string {
 	return fmt.Sprintf("%v@%v", i.Name, i.Domain)
 }
 
-// Parses the string to a valid Identity.
+// Parses the string To a valid Identity.
 func ParseIdentity(s string) (Identity, error) {
 	var name, domain string
 	values := strings.Split(s, "@")

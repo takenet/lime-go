@@ -26,7 +26,7 @@ func TestSession_MarshalJSON_NegotiatingOptions(t *testing.T) {
 	// Arrange
 	s := Session{}
 	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = &Node{
+	s.From = Node{
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "#server1",
 	}
@@ -66,7 +66,7 @@ func TestSession_MarshalJSON_AuthenticatingOptions(t *testing.T) {
 	// Arrange
 	s := Session{}
 	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = &Node{
+	s.From = Node{
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "#server1",
 	}
@@ -87,11 +87,11 @@ func TestSession_MarshalJSON_AuthenticatingPlain(t *testing.T) {
 	// Arrange
 	s := Session{}
 	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = &Node{
+	s.From = Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "default",
 	}
-	s.To = &Node{
+	s.To = Node{
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "#server1",
 	}
@@ -112,11 +112,11 @@ func TestSession_MarshalJSON_AuthenticatingKey(t *testing.T) {
 	// Arrange
 	s := Session{}
 	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = &Node{
+	s.From = Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "default",
 	}
-	s.To = &Node{
+	s.To = Node{
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "#server1",
 	}
@@ -137,11 +137,11 @@ func TestSession_MarshalJSON_AuthenticatingTransport(t *testing.T) {
 	// Arrange
 	s := Session{}
 	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = &Node{
+	s.From = Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "default",
 	}
-	s.To = &Node{
+	s.To = Node{
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "#server1",
 	}
@@ -162,11 +162,11 @@ func TestSession_MarshalJSON_AuthenticatingExternal(t *testing.T) {
 	// Arrange
 	s := Session{}
 	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = &Node{
+	s.From = Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "default",
 	}
-	s.To = &Node{
+	s.To = Node{
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "#server1",
 	}
@@ -187,11 +187,11 @@ func TestSession_MarshalJSON_Established(t *testing.T) {
 	// Arrange
 	s := Session{}
 	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = &Node{
+	s.From = Node{
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "#server1",
 	}
-	s.To = &Node{
+	s.To = Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "default",
 	}
@@ -211,11 +211,11 @@ func TestSession_MarshalJSON_Finishing(t *testing.T) {
 	// Arrange
 	s := Session{}
 	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = &Node{
+	s.From = Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "default",
 	}
-	s.To = &Node{
+	s.To = Node{
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "#server1",
 	}
@@ -235,11 +235,11 @@ func TestSession_MarshalJSON_Finished(t *testing.T) {
 	// Arrange
 	s := Session{}
 	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = &Node{
+	s.From = Node{
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "#server1",
 	}
-	s.To = &Node{
+	s.To = Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "default",
 	}
@@ -259,11 +259,11 @@ func TestSession_MarshalJSON_Failed(t *testing.T) {
 	// Arrange
 	s := Session{}
 	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = &Node{
+	s.From = Node{
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "#server1",
 	}
-	s.To = &Node{
+	s.To = Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "default",
 	}
