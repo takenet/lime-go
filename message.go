@@ -10,14 +10,15 @@ import (
 type Message struct {
 	Envelope
 	// MIME declaration of the content type of the message.
-	Type MediaType `json:"type"`
+	Type *MediaType `json:"type"`
 	// Message body content
 	Content Document `json:"content"`
 }
 
 func (m *Message) SetContent(d Document) {
 	m.Content = d
-	m.Type = d.GetMediaType()
+	t := d.GetMediaType()
+	m.Type = &t
 }
 
 func (m *Message) UnmarshalJSON(b []byte) error {
@@ -49,11 +50,11 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 	if !ok {
 		return errors.New("content is required")
 	}
-	if message.Type == (MediaType{}) {
+	if message.Type == nil {
 		return errors.New("type is required")
 	}
 
-	factory, err := GetDocumentFactory(message.Type)
+	factory, err := GetDocumentFactory(*message.Type)
 	if err != nil {
 		return err
 	}

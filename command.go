@@ -14,9 +14,9 @@ type Command struct {
 	// Action to be taken to the resource.
 	Method CommandMethod `json:"method"`
 	// The universal identifier of the resource.
-	Uri LimeUri `json:"uri,omitempty"`
+	Uri *LimeUri `json:"uri,omitempty"`
 	// MIME declaration of the resource type of the command.
-	Type MediaType `json:"type,omitempty"`
+	Type *MediaType `json:"type,omitempty"`
 	// Node resource that is subject of the command.
 	Resource Document `json:"resource,omitempty"`
 	// Indicates the status of the action taken to the resource, in case of
@@ -28,7 +28,8 @@ type Command struct {
 
 func (c *Command) SetResource(d Document) {
 	c.Resource = d
-	c.Type = d.GetMediaType()
+	t := d.GetMediaType()
+	c.Type = &t
 }
 
 func (c *Command) SetStatusFailure(r *Reason) {
@@ -63,11 +64,11 @@ func (c *Command) UnmarshalJSON(b []byte) error {
 	// Handle the content
 	v, ok := commandMap["resource"]
 	if ok {
-		if command.Type == (MediaType{}) {
+		if command.Type == nil {
 			return errors.New("type is required when resource is present")
 		}
 
-		factory, err := GetDocumentFactory(command.Type)
+		factory, err := GetDocumentFactory(*command.Type)
 		if err != nil {
 			return err
 		}
