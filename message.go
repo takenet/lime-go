@@ -16,15 +16,14 @@ type Message struct {
 
 func (m *Message) SetContent(d Document) {
 	m.Content = d
-	t := d.GetMediaType()
-	m.Type = t
+	m.Type = d.GetMediaType()
 }
 
 // Wrapper for custom marshalling
 type MessageWrapper struct {
 	EnvelopeWrapper
-	Type    *MediaType      `json:"type"`
-	Content json.RawMessage `json:"content"`
+	Type    *MediaType       `json:"type"`
+	Content *json.RawMessage `json:"content"`
 }
 
 func (m Message) MarshalJSON() ([]byte, error) {
@@ -36,19 +35,14 @@ func (m Message) MarshalJSON() ([]byte, error) {
 }
 
 func (m *Message) UnmarshalJSON(b []byte) error {
-	mj := MessageWrapper{}
-	err := json.Unmarshal(b, &mj)
+	mw := MessageWrapper{}
+	err := json.Unmarshal(b, &mw)
 	if err != nil {
 		return err
 	}
 
 	message := Message{}
-	err = message.Envelope.populate(&mj.EnvelopeWrapper)
-	if err != nil {
-		return err
-	}
-
-	err = message.populate(&mj)
+	err = message.populate(&mw)
 	if err != nil {
 		return err
 	}
@@ -58,46 +52,54 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 }
 
 func (m *Message) toWrapper() (MessageWrapper, error) {
-	if m.Content == nil {
-		return MessageWrapper{}, errors.New("message Content is required")
+	ew, err := m.Envelope.toWrapper()
+	if err != nil {
+		return MessageWrapper{}, err
 	}
 
+	if m.Content == nil {
+		return MessageWrapper{}, errors.New("message content is required")
+	}
 	b, err := json.Marshal(m.Content)
 	if err != nil {
 		return MessageWrapper{}, err
 	}
 	r := json.RawMessage(b)
 
-	ew, err := m.Envelope.toWrapper()
-	if err != nil {
-		return MessageWrapper{}, err
-	}
-
 	return MessageWrapper{
 		EnvelopeWrapper: ew,
 		Type:            &m.Type,
-		Content:         r,
+		Content:         &r,
 	}, nil
 }
 
-func (m *Message) populate(mj *MessageWrapper) error {
-	// Create the document type instance and unmarshal the json To it
-	if mj.Type == nil {
-		return errors.New("type is required")
+func (m *Message) populate(mw *MessageWrapper) error {
+	err := m.Envelope.populate(&mw.EnvelopeWrapper)
+	if err != nil {
+		return err
 	}
 
-	factory, err := GetDocumentFactory(*mj.Type)
+	// Create the document type instance and unmarshal the json To it
+	if mw.Type == nil {
+		return errors.New("message type is required")
+	}
+
+	if mw.Content == nil {
+		return errors.New("message content is required")
+	}
+
+	factory, err := GetDocumentFactory(*mw.Type)
 	if err != nil {
 		return err
 	}
 
 	document := factory()
-	err = json.Unmarshal(mj.Content, &document)
+	err = json.Unmarshal(*mw.Content, &document)
 	if err != nil {
 		return err
 	}
 
-	m.Type = *mj.Type
+	m.Type = *mw.Type
 	m.Content = document
 	return nil
 }

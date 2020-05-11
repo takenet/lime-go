@@ -2,6 +2,7 @@ package lime
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 )
@@ -13,78 +14,63 @@ type Command struct {
 	// Action To be taken To the resource.
 	Method CommandMethod `json:"method"`
 	// The universal identifier of the resource.
-	Uri *LimeUri `json:"uri,omitempty"`
+	Uri LimeUri `json:"uri,omitempty"`
 	// MIME declaration of the resource type of the command.
-	Type *MediaType `json:"type,omitempty"`
+	Type MediaType `json:"type,omitempty"`
 	// Node resource that is subject of the command.
 	Resource Document `json:"resource,omitempty"`
 	// Indicates the status of the action taken To the resource, in case of
 	// a response command.
 	Status CommandStatus `json:"status,omitempty"`
 	// Indicates the reason for a failure response command.
-	Reason *Reason `json:"reason,omitempty"`
+	Reason Reason `json:"reason,omitempty"`
 }
 
 func (c *Command) SetResource(d Document) {
 	c.Resource = d
-	t := d.GetMediaType()
-	c.Type = &t
+	c.Type = d.GetMediaType()
 }
 
-func (c *Command) SetStatusFailure(r *Reason) {
+func (c *Command) SetStatusFailure(r Reason) {
 	c.Status = CommandStatusFailure
 	c.Reason = r
 }
 
-//
-//func (c *Command) UnmarshalJSON(b []byte) error {
-//	var commandMap map[string]json.RawMessage
-//	err := json.Unmarshal(b, &commandMap)
-//	if err != nil {
-//		return err
-//	}
-//	command := Command{}
-//
-//	for k, v := range commandMap {
-//		var ok bool
-//		ok, err = command.Envelope.unmarshalJSONField(k, v)
-//		if !ok {
-//			ok, err = command.unmarshalJSONField(k, v)
-//		}
-//
-//		if !ok {
-//			return fmt.Errorf(`unknown command field '%v'`, k)
-//		}
-//
-//		if err != nil {
-//			return err
-//		}
-//	}
-//
-//	// Handle the Content
-//	v, ok := commandMap["resource"]
-//	if ok {
-//		if command.Type == nil {
-//			return errors.New("type is required when resource is present")
-//		}
-//
-//		factory, err := GetDocumentFactory(*command.Type)
-//		if err != nil {
-//			return err
-//		}
-//
-//		// Create the document type instance and unmarshal the json To it
-//		document := factory()
-//		err = json.Unmarshal(v, &document)
-//		if err != nil {
-//			return err
-//		}
-//		command.Resource = document
-//	}
-//
-//	*c = command
-//	return nil
-//}
+// Wrapper for custom marshalling
+type CommandWrapper struct {
+	EnvelopeWrapper
+	Method   CommandMethod    `json:"method"`
+	Uri      *LimeUri         `json:"uri,omitempty"`
+	Type     *MediaType       `json:"type,omitempty"`
+	Resource *json.RawMessage `json:"resource,omitempty"`
+	Status   CommandStatus    `json:"status,omitempty"`
+	Reason   *Reason          `json:"reason,omitempty"`
+}
+
+func (c Command) MarshalJSON() ([]byte, error) {
+	cw, err := c.toWrapper()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(cw)
+}
+
+func (c *Command) UnmarshalJSON(b []byte) error {
+	cw := CommandWrapper{}
+	err := json.Unmarshal(b, &cw)
+	if err != nil {
+		return err
+	}
+
+	command := Command{}
+	err = command.populate(&cw)
+	if err != nil {
+		return err
+	}
+
+	*c = command
+	return nil
+}
 
 func (c *Command) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
 	switch n {
@@ -107,6 +93,76 @@ func (c *Command) unmarshalJSONField(n string, v json.RawMessage) (bool, error) 
 		return true, nil // Handled externally
 	}
 	return false, nil
+}
+
+func (c *Command) toWrapper() (CommandWrapper, error) {
+	ew, err := c.Envelope.toWrapper()
+	if err != nil {
+		return CommandWrapper{}, err
+	}
+
+	cw := CommandWrapper{
+		EnvelopeWrapper: ew,
+	}
+
+	if c.Resource != nil {
+		b, err := json.Marshal(c.Resource)
+		if err != nil {
+			return CommandWrapper{}, err
+		}
+		r := json.RawMessage(b)
+		cw.Resource = &r
+		cw.Type = &c.Type
+	}
+
+	cw.Method = c.Method
+	cw.Status = c.Status
+	if c.Uri != (LimeUri{}) {
+		cw.Uri = &c.Uri
+	}
+	if c.Reason != (Reason{}) {
+		cw.Reason = &c.Reason
+	}
+
+	return cw, nil
+}
+
+func (c *Command) populate(cw *CommandWrapper) error {
+	err := c.Envelope.populate(&cw.EnvelopeWrapper)
+	if err != nil {
+		return err
+	}
+
+	// Create the document type instance and unmarshal the json to it
+	if cw.Resource != nil {
+		if cw.Type == nil {
+			return errors.New("command resource type is required when resource is present")
+		}
+
+		factory, err := GetDocumentFactory(*cw.Type)
+		if err != nil {
+			return err
+		}
+
+		document := factory()
+		err = json.Unmarshal(*cw.Resource, &document)
+		if err != nil {
+			return err
+		}
+		c.Resource = document
+		c.Type = *cw.Type
+	}
+
+	c.Method = cw.Method
+	c.Status = cw.Status
+	if cw.Uri != nil {
+		c.Uri = *cw.Uri
+	}
+	if cw.Reason != nil {
+		c.Reason = *cw.Reason
+	}
+
+	return nil
 }
 
 // Defines methods for the manipulation of resources.

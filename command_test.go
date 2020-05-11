@@ -15,7 +15,7 @@ func TestCommand_MarshalJSON_GetPingRequest(t *testing.T) {
 	c.To.Domain = "limeprotocol.org"
 	c.Method = CommandMethodGet
 	u, _ := ParseLimeUri("/ping")
-	c.Uri = &u
+	c.Uri = u
 
 	// Act
 	b, err := json.Marshal(c)
@@ -44,7 +44,7 @@ func TestCommand_MarshalJSON_GetAccountResponse(t *testing.T) {
 	a := JsonDocument{"name": "John Doe", "address": "Main street", "city": "Belo Horizonte", "extras": map[string]interface{}{"plan": "premium"}}
 	c.Resource = &a
 	m, _ := ParseMediaType("application/vnd.lime.account+json")
-	c.Type = &m
+	c.Type = m
 
 	// Act
 	b, err := json.Marshal(c)
@@ -69,10 +69,10 @@ func TestCommand_UnmarshalJSON_GetPingRequest(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", c.ID)
-	assert.Nil(t, c.From)
-	assert.Equal(t, &Node{Identity{"golang", "limeprotocol.org"}, "default"}, c.To)
+	assert.Zero(t, c.From)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, c.To)
 	assert.Equal(t, CommandMethodGet, c.Method)
 	u, _ := ParseLimeUri("/ping")
-	assert.Equal(t, u, *c.Uri)
+	assert.Equal(t, u, c.Uri)
 	assert.Nil(t, c.Resource)
 }

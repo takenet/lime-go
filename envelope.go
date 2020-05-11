@@ -1,6 +1,7 @@
 package lime
 
 import (
+	"encoding/json"
 	"github.com/google/uuid"
 )
 
@@ -57,6 +58,28 @@ func (e *Envelope) populate(ew *EnvelopeWrapper) error {
 	}
 
 	return nil
+}
+
+func (e *Envelope) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
+	switch n {
+	// envelope fields
+	case "id":
+		err := json.Unmarshal(v, &e.ID)
+		return true, err
+	case "from":
+		err := json.Unmarshal(v, &e.From)
+		return true, err
+	case "pp":
+		err := json.Unmarshal(v, &e.Pp)
+		return true, err
+	case "to":
+		err := json.Unmarshal(v, &e.To)
+		return true, err
+	case "metadata":
+		err := json.Unmarshal(v, &e.Metadata)
+		return true, err
+	}
+	return false, nil
 }
 
 // Wrapper for custom marshalling
