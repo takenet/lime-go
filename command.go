@@ -12,18 +12,18 @@ import (
 type Command struct {
 	Envelope
 	// Action To be taken To the resource.
-	Method CommandMethod `json:"method"`
+	Method CommandMethod
 	// The universal identifier of the resource.
-	Uri LimeUri `json:"uri,omitempty"`
+	Uri LimeUri
 	// MIME declaration of the resource type of the command.
-	Type MediaType `json:"type,omitempty"`
+	Type MediaType
 	// Node resource that is subject of the command.
-	Resource Document `json:"resource,omitempty"`
+	Resource Document
 	// Indicates the status of the action taken To the resource, in case of
 	// a response command.
-	Status CommandStatus `json:"status,omitempty"`
+	Status CommandStatus
 	// Indicates the reason for a failure response command.
-	Reason Reason `json:"reason,omitempty"`
+	Reason Reason
 }
 
 func (c *Command) SetResource(d Document) {

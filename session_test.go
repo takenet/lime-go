@@ -267,7 +267,7 @@ func TestSession_MarshalJSON_Failed(t *testing.T) {
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "default",
 	}
-	s.Reason = &Reason{
+	s.Reason = Reason{
 		Code:        13,
 		Description: "The session authentication failed",
 	}
@@ -296,8 +296,8 @@ func TestSession_UnmarshalJSON_New(t *testing.T) {
 
 	// Assert
 	assert.Zero(t, s.ID)
-	assert.Nil(t, s.From)
-	assert.Nil(t, s.To)
+	assert.Zero(t, s.From)
+	assert.Zero(t, s.To)
 	assert.Equal(t, SessionStateNew, s.State)
 }
 
@@ -314,8 +314,8 @@ func TestSession_UnmarshalJSON_NegotiatingOptions(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Equal(t, &Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
-	assert.Nil(t, s.To)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
+	assert.Zero(t, s.To)
 	assert.Equal(t, SessionStateNegotiating, s.State)
 	assert.Equal(t, []SessionEncryption{SessionEncryptionNone, SessionEncryptionTLS}, s.EncryptionOptions)
 	assert.Equal(t, []SessionCompression{SessionCompressionNone}, s.CompressionOptions)
@@ -334,8 +334,8 @@ func TestSession_UnmarshalJSON_Negotiating(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Nil(t, s.From)
-	assert.Nil(t, s.To)
+	assert.Zero(t, s.From)
+	assert.Zero(t, s.To)
 	assert.Equal(t, SessionStateNegotiating, s.State)
 	assert.Equal(t, SessionEncryptionTLS, s.Encryption)
 	assert.Equal(t, SessionCompressionNone, s.Compression)
@@ -354,8 +354,8 @@ func TestSession_UnmarshalJSON_AuthenticatingOptions(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Equal(t, &Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
-	assert.Nil(t, s.To)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
+	assert.Zero(t, s.To)
 	assert.Equal(t, SessionStateAuthenticating, s.State)
 	assert.Equal(t, []AuthenticationScheme{AuthenticationSchemeGuest, AuthenticationSchemePlain, AuthenticationSchemeTransport, AuthenticationSchemeKey, AuthenticationSchemeExternal}, s.SchemeOptions)
 }
@@ -373,8 +373,8 @@ func TestSession_UnmarshalJSON_AuthenticatingPlain(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Equal(t, &Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
-	assert.Equal(t, &Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
 	assert.Equal(t, SessionStateAuthenticating, s.State)
 	assert.Equal(t, AuthenticationSchemePlain, s.Scheme)
 	assert.IsType(t, &PlainAuthentication{}, s.Authentication)
@@ -395,8 +395,8 @@ func TestSession_UnmarshalJSON_AuthenticatingKey(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Equal(t, &Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
-	assert.Equal(t, &Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
 	assert.Equal(t, SessionStateAuthenticating, s.State)
 	assert.Equal(t, AuthenticationSchemeKey, s.Scheme)
 	assert.IsType(t, &KeyAuthentication{}, s.Authentication)
@@ -418,8 +418,8 @@ func TestSession_UnmarshalJSON_AuthenticatingTransport(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Equal(t, &Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
-	assert.Equal(t, &Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
 	assert.Equal(t, SessionStateAuthenticating, s.State)
 	assert.Equal(t, AuthenticationSchemeTransport, s.Scheme)
 	assert.IsType(t, &TransportAuthentication{}, s.Authentication)
@@ -438,8 +438,8 @@ func TestSession_UnmarshalJSON_AuthenticatingExternal(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Equal(t, &Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
-	assert.Equal(t, &Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
 	assert.Equal(t, SessionStateAuthenticating, s.State)
 	assert.Equal(t, AuthenticationSchemeExternal, s.Scheme)
 	assert.IsType(t, &ExternalAuthentication{}, s.Authentication)
@@ -473,8 +473,8 @@ func TestSession_UnmarshalJSON_Established(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Equal(t, &Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
-	assert.Equal(t, &Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.To)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.To)
 	assert.Equal(t, SessionStateEstablished, s.State)
 }
 
@@ -491,8 +491,8 @@ func TestSession_UnmarshalJSON_Finishing(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Equal(t, &Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
-	assert.Equal(t, &Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
 	assert.Equal(t, SessionStateFinishing, s.State)
 }
 
@@ -509,8 +509,8 @@ func TestSession_UnmarshalJSON_Finished(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Equal(t, &Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
-	assert.Equal(t, &Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.To)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.To)
 	assert.Equal(t, SessionStateFinished, s.State)
 }
 
@@ -527,8 +527,8 @@ func TestSession_UnmarshalJSON_Failed(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
-	assert.Equal(t, &Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
-	assert.Equal(t, &Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.To)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.To)
 	assert.Equal(t, SessionStateFailed, s.State)
-	assert.Equal(t, &Reason{13, "The session authentication failed"}, s.Reason)
+	assert.Equal(t, Reason{13, "The session authentication failed"}, s.Reason)
 }

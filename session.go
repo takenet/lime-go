@@ -2,6 +2,7 @@ package lime
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -11,31 +12,31 @@ type Session struct {
 	// Informs or changes the state of a session.
 	// Only the server can change the session state, but the client can request
 	// the state transition.
-	State SessionState `json:"state"`
+	State SessionState
 	// Encryption options provided by the server during the session negotiation.
-	EncryptionOptions []SessionEncryption `json:"encryptionOptions,omitempty"`
+	EncryptionOptions []SessionEncryption
 	// The encryption option selected for the session.
 	// This property is provided by the client in the  negotiation and by the
 	// server in the confirmation after that.
-	Encryption SessionEncryption `json:"encryption,omitempty"`
+	Encryption SessionEncryption
 	// Compression options provided by the server during the session negotiation.
-	CompressionOptions []SessionCompression `json:"compressionOptions,omitempty"`
+	CompressionOptions []SessionCompression
 	// The compression option selected for the session.
 	// This property is provided by the client in the negotiation and by the
 	// server in the confirmation after that.
-	Compression SessionCompression `json:"compression,omitempty"`
+	Compression SessionCompression
 	// List of available authentication schemas for session authentication provided
 	// by the server.
-	SchemeOptions []AuthenticationScheme `json:"schemeOptions,omitempty"`
+	SchemeOptions []AuthenticationScheme
 	// The authentication scheme option selected for the session.
 	// This property must be present if the property authentication is defined.
-	Scheme AuthenticationScheme `json:"scheme,omitempty"`
+	Scheme AuthenticationScheme
 	// RawAuthentication data, related To the selected schema.
 	// Information like password sent by the client or roundtrip data sent by the server.
-	Authentication Authentication `json:"authentication,omitempty"`
+	Authentication Authentication
 	// In cases where the client receives a session with failed state,
 	// this property should provide more details about the problem.
-	Reason *Reason `json:"reason,omitempty"`
+	Reason Reason
 }
 
 func (s *Session) SetAuthentication(a Authentication) {
@@ -43,50 +44,44 @@ func (s *Session) SetAuthentication(a Authentication) {
 	s.Scheme = a.GetAuthenticationScheme()
 }
 
-//
-//func (s *Session) UnmarshalJSON(b []byte) error {
-//	var sessionMap map[string]json.RawMessage
-//	err := json.Unmarshal(b, &sessionMap)
-//	if err != nil {
-//		return err
-//	}
-//	session := Session{}
-//
-//	for k, v := range sessionMap {
-//		var ok bool
-//		ok, err = session.Envelope.unmarshalJSONField(k, v)
-//		if !ok {
-//			ok, err = session.unmarshalJSONField(k, v)
-//		}
-//
-//		if !ok {
-//			return fmt.Errorf(`unknown session field '%v'`, k)
-//		}
-//
-//		if err != nil {
-//			return err
-//		}
-//	}
-//
-//	if v, ok := sessionMap["authentication"]; ok {
-//		if session.Scheme == "" {
-//			return errors.New("scheme is required when authentication is present")
-//		}
-//		factory, ok := authFactories[session.Scheme]
-//		if !ok {
-//			return fmt.Errorf(`unknown authentication scheme '%v'`, session.Scheme)
-//		}
-//		auth := factory()
-//		err := json.Unmarshal(v, &auth)
-//		if err != nil {
-//			return err
-//		}
-//		session.Authentication = auth
-//	}
-//
-//	*s = session
-//	return nil
-//}
+// Wrapper for custom marshalling
+type SessionWrapper struct {
+	EnvelopeWrapper
+	State              SessionState           `json:"state"`
+	EncryptionOptions  []SessionEncryption    `json:"encryptionOptions,omitempty"`
+	Encryption         SessionEncryption      `json:"encryption,omitempty"`
+	CompressionOptions []SessionCompression   `json:"compressionOptions,omitempty"`
+	Compression        SessionCompression     `json:"compression,omitempty"`
+	SchemeOptions      []AuthenticationScheme `json:"schemeOptions,omitempty"`
+	Scheme             AuthenticationScheme   `json:"scheme,omitempty"`
+	Authentication     *json.RawMessage       `json:"authentication,omitempty"`
+	Reason             *Reason                `json:"reason,omitempty"`
+}
+
+func (s Session) MarshalJSON() ([]byte, error) {
+	cw, err := s.toWrapper()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(cw)
+}
+
+func (s *Session) UnmarshalJSON(b []byte) error {
+	cw := SessionWrapper{}
+	err := json.Unmarshal(b, &cw)
+	if err != nil {
+		return err
+	}
+
+	command := Session{}
+	err = command.populate(&cw)
+	if err != nil {
+		return err
+	}
+
+	*s = command
+	return nil
+}
 
 func (s *Session) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
 	switch n {
@@ -120,6 +115,82 @@ func (s *Session) unmarshalJSONField(n string, v json.RawMessage) (bool, error) 
 	}
 
 	return false, nil
+}
+
+func (s *Session) toWrapper() (SessionWrapper, error) {
+	ew, err := s.Envelope.toWrapper()
+	if err != nil {
+		return SessionWrapper{}, err
+	}
+
+	sw := SessionWrapper{
+		EnvelopeWrapper: ew,
+	}
+
+	if s.Authentication != nil {
+		b, err := json.Marshal(s.Authentication)
+		if err != nil {
+			return SessionWrapper{}, err
+		}
+		a := json.RawMessage(b)
+		sw.Authentication = &a
+		sw.Scheme = s.Scheme
+	}
+
+	sw.State = s.State
+	sw.EncryptionOptions = s.EncryptionOptions
+	sw.Encryption = s.Encryption
+	sw.CompressionOptions = s.CompressionOptions
+	sw.Compression = s.Compression
+	sw.SchemeOptions = s.SchemeOptions
+	sw.Scheme = s.Scheme
+
+	if s.Reason != (Reason{}) {
+		sw.Reason = &s.Reason
+	}
+
+	return sw, nil
+}
+
+func (s *Session) populate(sw *SessionWrapper) error {
+	err := s.Envelope.populate(&sw.EnvelopeWrapper)
+	if err != nil {
+		return err
+	}
+
+	// Create the auth type instance and unmarshal the json to it
+	if sw.Authentication != nil {
+		if sw.Scheme == "" {
+			return errors.New("session scheme is required when authentication is present")
+		}
+
+		factory, ok := authFactories[sw.Scheme]
+		if !ok {
+			return fmt.Errorf(`unknown authentication scheme '%v'`, sw.Scheme)
+		}
+		a := factory()
+		err := json.Unmarshal(*sw.Authentication, &a)
+		if err != nil {
+			return err
+		}
+
+		s.Authentication = a
+		s.Scheme = sw.Scheme
+	}
+
+	s.State = sw.State
+	s.EncryptionOptions = sw.EncryptionOptions
+	s.Encryption = sw.Encryption
+	s.CompressionOptions = sw.CompressionOptions
+	s.Compression = sw.Compression
+	s.SchemeOptions = sw.SchemeOptions
+	s.Scheme = sw.Scheme
+
+	if sw.Reason != nil {
+		s.Reason = *sw.Reason
+	}
+
+	return nil
 }
 
 // Defines the supported session states
