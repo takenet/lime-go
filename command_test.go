@@ -140,6 +140,42 @@ func TestCommand_UnmarshalJSON_GetPingRequest(t *testing.T) {
 	assert.Nil(t, c.Resource)
 }
 
+func TestCommand_UnmarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
+	// Arrange
+	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"postmaster@limeprotocol.org","method":"merge","uri":"/documentContainer/john.doe%40limeprotocol.org","type":"application/vnd.lime.container+json","resource":{"type":"application/vnd.lime.account+json","value":{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}}}}`)
+	var c Command
+
+	// Act
+	err := json.Unmarshal(j, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", c.ID)
+	assert.Zero(t, c.From)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, ""}, c.To)
+	assert.Equal(t, CommandMethodMerge, c.Method)
+	u, _ := ParseLimeUri("/documentContainer/john.doe%40limeprotocol.org")
+	assert.Equal(t, u, c.Uri)
+	assert.Zero(t, c.Status)
+	assert.Equal(t, MediaType{"application", "vnd.lime.container", "json"}, c.Type)
+	assert.NotNil(t, c.Resource)
+	dc, ok := c.Resource.(*DocumentContainer)
+	if !assert.True(t, ok) {
+		t.Fatal()
+	}
+	documentContainer := *dc
+	assert.Equal(t, MediaType{"application", "vnd.lime.account", "json"}, documentContainer.Type)
+	d, ok := documentContainer.Value.(*JsonDocument)
+	assert.True(t, ok)
+	document := *d
+	assert.Equal(t, "John Doe", document["name"])
+	assert.Equal(t, "Main street", document["address"])
+	assert.Equal(t, "Belo Horizonte", document["city"])
+	assert.Equal(t, map[string]interface{}{"plan": "premium"}, document["extras"])
+}
+
 func TestCommand_UnmarshalJSON_GetAccountResponse(t *testing.T) {
 	// Arrange
 	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"get","status":"success","type":"application/vnd.lime.account+json","resource":{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}}}`)
@@ -158,8 +194,11 @@ func TestCommand_UnmarshalJSON_GetAccountResponse(t *testing.T) {
 	assert.Equal(t, CommandMethodGet, c.Method)
 	assert.Equal(t, CommandStatusSuccess, c.Status)
 	assert.Equal(t, MediaType{"application", "vnd.lime.account", "json"}, c.Type)
+	assert.NotNil(t, c.Resource)
 	d, ok := c.Resource.(*JsonDocument)
-	assert.True(t, ok)
+	if !assert.True(t, ok) {
+		t.Fatal()
+	}
 	document := *d
 	assert.Equal(t, "John Doe", document["name"])
 	assert.Equal(t, "Main street", document["address"])

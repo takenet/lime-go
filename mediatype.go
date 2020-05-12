@@ -75,16 +75,6 @@ var mediaTypeApplicationJson MediaType = MediaType{MediaTypeApplication, "json",
 var mediaTypeTextPlain MediaType = MediaType{MediaTypeText, "plain", ""}
 var documentFactories = map[MediaType]func() Document{}
 
-func init() {
-	RegisterDocumentFactory(func() Document {
-		d := PlainDocument("")
-		return &d
-	})
-	RegisterDocumentFactory(func() Document {
-		return &JsonDocument{}
-	})
-}
-
 func GetTextPlainMediaType() MediaType {
 	return mediaTypeTextPlain
 }

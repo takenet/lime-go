@@ -98,3 +98,16 @@ func (d *DocumentContainer) populate(dw *DocumentContainerWrapper) error {
 	d.Value = document
 	return nil
 }
+
+func init() {
+	RegisterDocumentFactory(func() Document {
+		d := PlainDocument("")
+		return &d
+	})
+	RegisterDocumentFactory(func() Document {
+		return &JsonDocument{}
+	})
+	RegisterDocumentFactory(func() Document {
+		return &DocumentContainer{}
+	})
+}

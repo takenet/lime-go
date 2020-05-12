@@ -107,9 +107,11 @@ func TestMessage_UnmarshalJSON_TextPlain(t *testing.T) {
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", m.ID)
 	assert.Zero(t, m.From)
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, m.To)
-	d, ok := m.Content.(*PlainDocument)
-	assert.True(t, ok)
 	assert.Equal(t, mediaTypeTextPlain, m.Type)
+	d, ok := m.Content.(*PlainDocument)
+	if !assert.True(t, ok) {
+		t.Fatal()
+	}
 	assert.Equal(t, PlainDocument("Hello world"), *d)
 }
 
@@ -128,9 +130,11 @@ func TestMessage_UnmarshalJSON_TextUnknownPlain(t *testing.T) {
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", m.ID)
 	assert.Zero(t, m.From)
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, m.To)
-	d, ok := m.Content.(*PlainDocument)
-	assert.True(t, ok)
 	assert.Equal(t, MediaType{"text", "unknown", ""}, m.Type)
+	d, ok := m.Content.(*PlainDocument)
+	if !assert.True(t, ok) {
+		t.Fatal()
+	}
 	assert.Equal(t, PlainDocument("Hello world"), *d)
 }
 
@@ -149,8 +153,10 @@ func TestMessage_UnmarshalJSON_ApplicationUnknownJson(t *testing.T) {
 	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", m.ID)
 	assert.Zero(t, m.From)
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, m.To)
-	d, ok := m.Content.(*JsonDocument)
-	assert.True(t, ok)
 	assert.Equal(t, MediaType{"application", "x-unknown", "json"}, m.Type)
+	d, ok := m.Content.(*JsonDocument)
+	if !assert.True(t, ok) {
+		t.Fatal()
+	}
 	assert.Equal(t, JsonDocument{"property1": "value1", "property2": 2.0, "property3": map[string]interface{}{"subproperty1": "subvalue1"}, "property4": false, "property5": 12.3}, *d)
 }
