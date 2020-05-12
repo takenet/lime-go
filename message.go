@@ -88,13 +88,7 @@ func (m *Message) populate(mw *MessageWrapper) error {
 		return errors.New("message content is required")
 	}
 
-	factory, err := GetDocumentFactory(*mw.Type)
-	if err != nil {
-		return err
-	}
-
-	document := factory()
-	err = json.Unmarshal(*mw.Content, &document)
+	document, err := UnmarshalDocument(mw.Content, *mw.Type)
 	if err != nil {
 		return err
 	}

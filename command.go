@@ -139,16 +139,11 @@ func (c *Command) populate(cw *CommandWrapper) error {
 			return errors.New("command resource type is required when resource is present")
 		}
 
-		factory, err := GetDocumentFactory(*cw.Type)
+		document, err := UnmarshalDocument(cw.Resource, *cw.Type)
 		if err != nil {
 			return err
 		}
 
-		document := factory()
-		err = json.Unmarshal(*cw.Resource, &document)
-		if err != nil {
-			return err
-		}
 		c.Resource = document
 		c.Type = *cw.Type
 	}

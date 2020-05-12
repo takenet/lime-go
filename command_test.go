@@ -27,6 +27,39 @@ func TestCommand_MarshalJSON_GetPingRequest(t *testing.T) {
 	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"postmaster@limeprotocol.org","method":"get","uri":"/ping"}`, string(b))
 }
 
+func TestCommand_MarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
+	// Arrange
+	c := Command{}
+	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
+	c.To = Node{}
+	c.To.Name = "postmaster"
+	c.To.Domain = "limeprotocol.org"
+	c.Method = CommandMethodMerge
+	u, _ := ParseLimeUri("/document/john.doe%40limeprotocol.org")
+	c.Uri = u
+	d := DocumentContainer{
+		Type: MediaType{"application", "vnd.lime.account", "json"},
+		Value: &JsonDocument{
+			"name":    "John Doe",
+			"address": "Main street",
+			"city":    "Belo Horizonte",
+			"extras": map[string]interface{}{
+				"plan": "premium",
+			},
+		},
+	}
+	c.SetResource(&d)
+
+	// Act
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"postmaster@limeprotocol.org","method":"merge","uri":"/document/john.doe%40limeprotocol.org","type":"application/vnd.lime.container+json","resource":{"type":"application/vnd.lime.account+json","value":{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}}}}`, string(b))
+}
+
 func TestCommand_MarshalJSON_GetAccountResponse(t *testing.T) {
 	// Arrange
 	c := Command{}
@@ -56,6 +89,35 @@ func TestCommand_MarshalJSON_GetAccountResponse(t *testing.T) {
 	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"get","status":"success","type":"application/vnd.lime.account+json","resource":{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}}}`, string(b))
 }
 
+func TestCommand_MarshalJSON_SetFailureResponse(t *testing.T) {
+	// Arrange
+	c := Command{}
+	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
+	c.From = Node{}
+	c.From.Name = "postmaster"
+	c.From.Domain = "limeprotocol.org"
+	c.From.Instance = "#server1"
+	c.To = Node{}
+	c.To.Name = "golang"
+	c.To.Domain = "limeprotocol.org"
+	c.To.Instance = "default"
+	c.Method = CommandMethodSet
+	c.Status = CommandStatusFailure
+	c.Reason = Reason{
+		Code:        101,
+		Description: "The resource was not found",
+	}
+
+	// Act
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"set","status":"failure","reason":{"code":101,"description":"The resource was not found"}}`, string(b))
+}
+
 func TestCommand_UnmarshalJSON_GetPingRequest(t *testing.T) {
 	// Arrange
 	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"golang@limeprotocol.org/default","type":"text/plain","method":"get","uri":"/ping"}`)
@@ -74,5 +136,55 @@ func TestCommand_UnmarshalJSON_GetPingRequest(t *testing.T) {
 	assert.Equal(t, CommandMethodGet, c.Method)
 	u, _ := ParseLimeUri("/ping")
 	assert.Equal(t, u, c.Uri)
+	assert.Zero(t, c.Status)
+	assert.Nil(t, c.Resource)
+}
+
+func TestCommand_UnmarshalJSON_GetAccountResponse(t *testing.T) {
+	// Arrange
+	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"get","status":"success","type":"application/vnd.lime.account+json","resource":{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}}}`)
+	var c Command
+
+	// Act
+	err := json.Unmarshal(j, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", c.ID)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, c.From)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, c.To)
+	assert.Equal(t, CommandMethodGet, c.Method)
+	assert.Equal(t, CommandStatusSuccess, c.Status)
+	assert.Equal(t, MediaType{"application", "vnd.lime.account", "json"}, c.Type)
+	d, ok := c.Resource.(*JsonDocument)
+	assert.True(t, ok)
+	document := *d
+	assert.Equal(t, "John Doe", document["name"])
+	assert.Equal(t, "Main street", document["address"])
+	assert.Equal(t, "Belo Horizonte", document["city"])
+	assert.Equal(t, map[string]interface{}{"plan": "premium"}, document["extras"])
+}
+
+func TestCommand_UnmarshalJSON_SetFailureResponse(t *testing.T) {
+	// Arrange
+	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"set","status":"failure","reason":{"code":101,"description":"The resource was not found"}}`)
+	var c Command
+
+	// Act
+	err := json.Unmarshal(j, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", c.ID)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, c.From)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, c.To)
+	assert.Equal(t, CommandMethodSet, c.Method)
+	assert.Equal(t, CommandStatusFailure, c.Status)
+	assert.Equal(t, Reason{101, "The resource was not found"}, c.Reason)
+	assert.Zero(t, c.Type)
 	assert.Nil(t, c.Resource)
 }

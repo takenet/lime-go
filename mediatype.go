@@ -1,6 +1,7 @@
 package lime
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -92,17 +93,17 @@ func GetApplicationJsonMediaType() MediaType {
 	return mediaTypeApplicationJson
 }
 
-func RegisterDocumentFactory(factory func() Document) {
-	d := factory()
-	documentFactories[d.GetMediaType()] = factory
+func RegisterDocumentFactory(f func() Document) {
+	d := f()
+	documentFactories[d.GetMediaType()] = f
 }
 
-func GetDocumentFactory(mediaType MediaType) (func() Document, error) {
+func GetDocumentFactory(t MediaType) (func() Document, error) {
 	// Check for a specific document factory for the media type
-	factory, ok := documentFactories[mediaType]
+	factory, ok := documentFactories[t]
 	if !ok {
 		// Use the default ones
-		if mediaType.IsJson() {
+		if t.IsJson() {
 			factory = documentFactories[mediaTypeApplicationJson]
 		} else {
 			factory = documentFactories[mediaTypeTextPlain]
@@ -110,8 +111,23 @@ func GetDocumentFactory(mediaType MediaType) (func() Document, error) {
 	}
 
 	if factory == nil {
-		return nil, fmt.Errorf("no document factory found for media type %v", mediaType)
+		return nil, fmt.Errorf("no document factory found for media type %v", t)
 	}
 
 	return factory, nil
+}
+
+func UnmarshalDocument(d *json.RawMessage, t MediaType) (Document, error) {
+	factory, err := GetDocumentFactory(t)
+	if err != nil {
+		return nil, err
+	}
+
+	document := factory()
+	err = json.Unmarshal(*d, &document)
+	if err != nil {
+		return nil, err
+	}
+
+	return document, nil
 }

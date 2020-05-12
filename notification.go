@@ -1,15 +1,83 @@
 package lime
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // Transport information about events associated To a message in a session.
 // Can be originated by a server or by the message destination node.
 type Notification struct {
 	Envelope
 	// Related event To the notification
-	Event NotificationEvent `json:"event,omitempty"`
+	Event NotificationEvent
 	// In the case of a failed event, brings more details about the problem.
-	Reason *Reason `json:"reason,omitempty"`
+	Reason Reason
+}
+
+// Wrapper for custom marshalling
+type NotificationWrapper struct {
+	EnvelopeWrapper
+	Event  NotificationEvent `json:"event,omitempty"`
+	Reason *Reason           `json:"reason,omitempty"`
+}
+
+func (n Notification) MarshalJSON() ([]byte, error) {
+	nw, err := n.toWrapper()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(nw)
+}
+
+func (n *Notification) UnmarshalJSON(b []byte) error {
+	nw := NotificationWrapper{}
+	err := json.Unmarshal(b, &nw)
+	if err != nil {
+		return err
+	}
+
+	command := Notification{}
+	err = command.populate(&nw)
+	if err != nil {
+		return err
+	}
+
+	*n = command
+	return nil
+}
+
+func (n *Notification) toWrapper() (NotificationWrapper, error) {
+	ew, err := n.Envelope.toWrapper()
+	if err != nil {
+		return NotificationWrapper{}, err
+	}
+
+	nw := NotificationWrapper{
+		EnvelopeWrapper: ew,
+		Event:           n.Event,
+	}
+
+	if n.Reason != (Reason{}) {
+		nw.Reason = &n.Reason
+	}
+
+	return nw, nil
+}
+
+func (n *Notification) populate(nw *NotificationWrapper) error {
+	err := n.Envelope.populate(&nw.EnvelopeWrapper)
+	if err != nil {
+		return err
+	}
+
+	n.Event = nw.Event
+
+	if nw.Reason != nil {
+		n.Reason = *nw.Reason
+	}
+
+	return nil
 }
 
 // Events that can happen in the message pipeline.
