@@ -9,7 +9,7 @@ import (
 func main() {
 	session := lime.Session{}
 	session.ID = "1"
-	session.To = &lime.Node{
+	session.To = lime.Node{
 		Identity: lime.Identity{Name: "postmaster", Domain: "msging.net"},
 		Instance: "#az-iris1",
 	}
