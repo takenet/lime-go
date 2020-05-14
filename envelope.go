@@ -8,11 +8,11 @@ import (
 
 // Base interface for envelopes types.
 type Envelope interface {
-	getID() string
-	getFrom() Node
-	getPP() Node
-	getTo() Node
-	getMetadata() map[string]string
+	GetID() string
+	GetFrom() Node
+	GetPP() Node
+	GetTo() Node
+	GetMetadata() map[string]string
 }
 
 // Base struct to all communication envelopes.
@@ -33,23 +33,23 @@ type EnvelopeBase struct {
 	Metadata map[string]string
 }
 
-func (e *EnvelopeBase) getID() string {
+func (e *EnvelopeBase) GetID() string {
 	return e.ID
 }
 
-func (e *EnvelopeBase) getFrom() Node {
+func (e *EnvelopeBase) GetFrom() Node {
 	return e.From
 }
 
-func (e *EnvelopeBase) getPP() Node {
+func (e *EnvelopeBase) GetPP() Node {
 	return e.PP
 }
 
-func (e *EnvelopeBase) getTo() Node {
+func (e *EnvelopeBase) GetTo() Node {
 	return e.To
 }
 
-func (e *EnvelopeBase) getMetadata() map[string]string {
+func (e *EnvelopeBase) GetMetadata() map[string]string {
 	return e.Metadata
 }
 

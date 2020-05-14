@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/takenet/lime-go"
 	"net"
+	"os"
 )
 
 func main() {
@@ -25,19 +28,19 @@ func main() {
 		return nil
 	}
 
-	receiver := func(t lime.Transport) error {
+	receiver := func(t lime.Transport) (lime.Envelope, error) {
 		e, err := t.Receive()
 		if err != nil {
 			fmt.Println("Receive error:", err)
-			return err
+			return nil, err
 		}
 		b, err := json.Marshal(e)
 		if err != nil {
 			fmt.Println("Marshalling error:", err)
-			return err
+			return nil, err
 		}
 		fmt.Println("Receive:", string(b))
-		return nil
+		return e, nil
 	}
 
 	whileNotError := func(fs ...func() error) error {
@@ -63,17 +66,62 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+	var sessionId string
 
 	_ = whileNotError(
 		func() error {
 			return sender(&t, &lime.Session{State: lime.SessionStateNew})
 		},
 		func() error {
-			return receiver(&t)
+			// Negotiating
+			e, err := receiver(&t)
+			if e != nil {
+				sessionId = e.GetID()
+			}
+			return err
 		},
 		func() error {
-			return sender(&t, &lime.Session{})
+			s := lime.Session{}
+			s.ID = sessionId
+			s.State = lime.SessionStateNegotiating
+			s.Compression = lime.SessionCompressionNone
+			s.Encryption = lime.SessionEncryptionNone
+			return sender(&t, &s)
+		},
+		func() error {
+			// Negotiation ack
+			_, err := receiver(&t)
+			return err
+		},
+		func() error {
+			// Authenticating
+			_, err := receiver(&t)
+			return err
+		},
+		func() error {
+			s := lime.Session{}
+			s.ID = sessionId
+			s.From = lime.Node{
+				Identity: lime.Identity{
+					Name:   "andreb",
+					Domain: "msging.net",
+				},
+				Instance: "default",
+			}
+
+			s.State = lime.SessionStateAuthenticating
+			s.SetAuthentication(&lime.PlainAuthentication{Password: base64.StdEncoding.EncodeToString([]byte("123456"))})
+			return sender(&t, &s)
+		},
+		func() error {
+			// Established
+			_, err := receiver(&t)
+			return err
 		})
+
+	fmt.Println("Press ENTER key to exit")
+	reader := bufio.NewReader(os.Stdin)
+	reader.ReadString('\n')
 
 	//s := lime.Session{State: lime.SessionStateNew}
 	//err = t.Send(&s)
