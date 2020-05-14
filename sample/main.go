@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/takenet/lime-go"
@@ -53,6 +54,7 @@ func main() {
 	}
 
 	t := lime.TcpTransport{}
+	t.TlsConfig = &tls.Config{ServerName: "msging.net"}
 
 	add, err := net.ResolveTCPAddr("tcp", "tcp.msging.net:443")
 	if err != nil {
@@ -84,12 +86,13 @@ func main() {
 			s.ID = sessionId
 			s.State = lime.SessionStateNegotiating
 			s.Compression = lime.SessionCompressionNone
-			s.Encryption = lime.SessionEncryptionNone
+			s.Encryption = lime.SessionEncryptionTLS
 			return sender(&t, &s)
 		},
 		func() error {
 			// Negotiation ack
 			_, err := receiver(&t)
+			err = t.SetEncryption(lime.SessionEncryptionTLS)
 			return err
 		},
 		func() error {

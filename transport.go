@@ -2,28 +2,13 @@ package lime
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 )
-
-//
-//func (e *Envelope) ToEnvelope() interface{} {
-//	if e.Message != nil {
-//		return *e.Message
-//	}
-//}
-//
-//func (e EnvelopeUnion) MarshalJSON() ([]byte, error) {
-//
-//	return json.Marshal(sw)
-//}
-
-//func (e *EnvelopeUnion) UnmarshalJSON(b []byte) error {
-//
-//	return nil
-//}
 
 type Transport interface {
 	// Sends an envelope to the remote node.
@@ -77,6 +62,9 @@ type JsonTransport struct {
 
 func (t *JsonTransport) setConn(conn net.Conn) {
 	t.conn = conn
+
+	// TODO: Should we use a buffer here?
+	//bufio.NewReaderSize(conn, 100)
 	t.encoder = json.NewEncoder(t.conn)
 	t.decoder = json.NewDecoder(t.conn)
 }
@@ -91,11 +79,13 @@ func (t *JsonTransport) ensureOpen() error {
 
 type TcpTransport struct {
 	JsonTransport
+	encryption SessionEncryption
+	server     bool
+	TlsConfig  *tls.Config
 }
 
 func (t *TcpTransport) Send(e Envelope) error {
-	err := t.ensureOpen()
-	if err != nil {
+	if err := t.ensureOpen(); err != nil {
 		return err
 	}
 
@@ -103,14 +93,13 @@ func (t *TcpTransport) Send(e Envelope) error {
 }
 
 func (t *TcpTransport) Receive() (Envelope, error) {
-	err := t.ensureOpen()
-	if err != nil {
+	if err := t.ensureOpen(); err != nil {
 		return nil, err
 	}
 
 	var m map[string]*json.RawMessage
-	err = t.decoder.Decode(&m)
-	if err != nil {
+
+	if err := t.decoder.Decode(&m); err != nil {
 		return nil, err
 	}
 
@@ -145,31 +134,58 @@ func (t *TcpTransport) Close() error {
 }
 
 func (t *TcpTransport) GetSupportedCompression() []SessionCompression {
-	panic("implement me")
+	return []SessionCompression{SessionCompressionNone}
 }
 
 func (t *TcpTransport) GetCompression() SessionCompression {
-	panic("implement me")
+	return SessionCompressionNone
 }
 
 func (t *TcpTransport) SetCompression(c SessionCompression) error {
-	panic("implement me")
+	return fmt.Errorf("compression '%v' is not supported", c)
 }
 
 func (t *TcpTransport) GetSupportedEncryption() []SessionEncryption {
-	panic("implement me")
+	return []SessionEncryption{SessionEncryptionNone, SessionEncryptionTLS}
 }
 
 func (t *TcpTransport) GetEncryption() SessionEncryption {
-	panic("implement me")
+	return t.encryption
 }
 
-func (t *TcpTransport) SetEncryption(c SessionEncryption) error {
-	panic("implement me")
+func (t *TcpTransport) SetEncryption(e SessionEncryption) error {
+	if e == t.encryption {
+		return nil
+	}
+
+	if e == SessionEncryptionNone {
+		return errors.New("cannot downgrade from tls to none encryption")
+	}
+
+	if e == SessionEncryptionTLS && t.TlsConfig == nil {
+		return errors.New("tls config must be defined")
+	}
+
+	var tlsConn *tls.Conn
+
+	// https://github.com/FluuxIO/go-xmpp/blob/master/xmpp_transport.go#L80
+	if t.server {
+		tlsConn = tls.Server(t.conn, t.TlsConfig)
+	} else {
+		tlsConn = tls.Client(t.conn, t.TlsConfig)
+	}
+	// We convert existing connection to TLS
+	if err := tlsConn.Handshake(); err != nil {
+		return err
+	}
+
+	t.setConn(tlsConn)
+	t.encryption = SessionEncryptionTLS
+	return nil
 }
 
 func (t *TcpTransport) OK() bool {
-	panic("implement me")
+	return t.conn != nil
 }
 
 func (t *TcpTransport) LocalAdd() net.Addr {
@@ -181,5 +197,8 @@ func (t *TcpTransport) RemoteAdd() net.Addr {
 }
 
 func (t *TcpTransport) SetDeadline(time time.Time) error {
-	panic("implement me")
+	if err := t.ensureOpen(); err != nil {
+		return err
+	}
+	return t.conn.SetDeadline(time)
 }
