@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/takenet/lime-go"
@@ -110,7 +109,9 @@ func main() {
 			}
 
 			s.State = lime.SessionStateAuthenticating
-			s.SetAuthentication(&lime.PlainAuthentication{Password: base64.StdEncoding.EncodeToString([]byte("123456"))})
+			auth := lime.PlainAuthentication{}
+			auth.SetPasswordAsBase64("123456")
+			s.SetAuthentication(&auth)
 			return sender(&t, &s)
 		},
 		func() error {

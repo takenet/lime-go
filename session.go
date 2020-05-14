@@ -1,6 +1,7 @@
 package lime
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -292,6 +293,10 @@ func (a *PlainAuthentication) GetAuthenticationScheme() AuthenticationScheme {
 	return AuthenticationSchemePlain
 }
 
+func (a *PlainAuthentication) SetPasswordAsBase64(password string) {
+	a.Password = base64.StdEncoding.EncodeToString([]byte(password))
+}
+
 // Defines a plain authentication scheme, that uses a key for authentication.
 // Should be used only with encrypted sessions.
 type KeyAuthentication struct {
@@ -301,6 +306,10 @@ type KeyAuthentication struct {
 
 func (a *KeyAuthentication) GetAuthenticationScheme() AuthenticationScheme {
 	return AuthenticationSchemeKey
+}
+
+func (a *KeyAuthentication) SetKeyAsBase64(key string) {
+	a.Key = base64.StdEncoding.EncodeToString([]byte(key))
 }
 
 // Defines a transport layer authentication scheme.
