@@ -7,7 +7,7 @@ import (
 
 // Provides the transport of a Content between nodes in a network.
 type Message struct {
-	Envelope
+	EnvelopeBase
 	// MIME declaration of the Content type of the message.
 	Type MediaType `json:"type"`
 	// Message body Content
@@ -21,7 +21,7 @@ func (m *Message) SetContent(d Document) {
 
 // Wrapper for custom marshalling
 type MessageWrapper struct {
-	EnvelopeWrapper
+	EnvelopeBaseWrapper
 	Type    *MediaType       `json:"type"`
 	Content *json.RawMessage `json:"content"`
 }
@@ -52,7 +52,7 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 }
 
 func (m *Message) toWrapper() (MessageWrapper, error) {
-	ew, err := m.Envelope.toWrapper()
+	ew, err := m.EnvelopeBase.toWrapper()
 	if err != nil {
 		return MessageWrapper{}, err
 	}
@@ -67,14 +67,14 @@ func (m *Message) toWrapper() (MessageWrapper, error) {
 	r := json.RawMessage(b)
 
 	return MessageWrapper{
-		EnvelopeWrapper: ew,
-		Type:            &m.Type,
-		Content:         &r,
+		EnvelopeBaseWrapper: ew,
+		Type:                &m.Type,
+		Content:             &r,
 	}, nil
 }
 
 func (m *Message) populate(mw *MessageWrapper) error {
-	err := m.Envelope.populate(&mw.EnvelopeWrapper)
+	err := m.EnvelopeBase.populate(&mw.EnvelopeBaseWrapper)
 	if err != nil {
 		return err
 	}

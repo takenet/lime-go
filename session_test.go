@@ -19,7 +19,7 @@ func TestSession_MarshalJSON_New(t *testing.T) {
 	}
 
 	// Assert
-	assert.JSONEq(t, `{"state":"new"}`, string(b))
+	assert.Equal(t, `{"state":"new"}`, string(b))
 }
 
 func TestSession_MarshalJSON_NegotiatingOptions(t *testing.T) {
@@ -59,7 +59,7 @@ func TestSession_MarshalJSON_Negotiating(t *testing.T) {
 	}
 
 	// Assert
-	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","state":"negotiating","encryption":"tls","compression":"none"}`, string(b))
+	assert.Equal(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","state":"negotiating","encryption":"tls","compression":"none"}`, string(b))
 }
 
 func TestSession_MarshalJSON_AuthenticatingOptions(t *testing.T) {

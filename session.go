@@ -8,7 +8,7 @@ import (
 
 // Allows the configuration and establishment of the communication channel between nodes.
 type Session struct {
-	Envelope
+	EnvelopeBase
 	// Informs or changes the state of a session.
 	// Only the server can change the session state, but the client can request
 	// the state transition.
@@ -46,7 +46,7 @@ func (s *Session) SetAuthentication(a Authentication) {
 
 // Wrapper for custom marshalling
 type SessionWrapper struct {
-	EnvelopeWrapper
+	EnvelopeBaseWrapper
 	State              SessionState           `json:"state"`
 	EncryptionOptions  []SessionEncryption    `json:"encryptionOptions,omitempty"`
 	Encryption         SessionEncryption      `json:"encryption,omitempty"`
@@ -59,11 +59,11 @@ type SessionWrapper struct {
 }
 
 func (s Session) MarshalJSON() ([]byte, error) {
-	cw, err := s.toWrapper()
+	sw, err := s.toWrapper()
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(cw)
+	return json.Marshal(sw)
 }
 
 func (s *Session) UnmarshalJSON(b []byte) error {
@@ -83,48 +83,14 @@ func (s *Session) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (s *Session) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
-	switch n {
-	case "state":
-		err := json.Unmarshal(v, &s.State)
-		return true, err
-	case "encryption":
-		err := json.Unmarshal(v, &s.Encryption)
-		return true, err
-	case "encryptionOptions":
-		err := json.Unmarshal(v, &s.EncryptionOptions)
-		return true, err
-	case "compression":
-		err := json.Unmarshal(v, &s.Compression)
-		return true, err
-	case "compressionOptions":
-		err := json.Unmarshal(v, &s.CompressionOptions)
-		return true, err
-	case "scheme":
-		err := json.Unmarshal(v, &s.Scheme)
-		return true, err
-	case "schemeOptions":
-		err := json.Unmarshal(v, &s.SchemeOptions)
-		return true, err
-	case "reason":
-		err := json.Unmarshal(v, &s.Reason)
-		return true, err
-	case "authentication":
-		// authentication requires scheme To be present so should be handled outside this
-		return true, nil
-	}
-
-	return false, nil
-}
-
 func (s *Session) toWrapper() (SessionWrapper, error) {
-	ew, err := s.Envelope.toWrapper()
+	ew, err := s.EnvelopeBase.toWrapper()
 	if err != nil {
 		return SessionWrapper{}, err
 	}
 
 	sw := SessionWrapper{
-		EnvelopeWrapper: ew,
+		EnvelopeBaseWrapper: ew,
 	}
 
 	if s.Authentication != nil {
@@ -153,7 +119,7 @@ func (s *Session) toWrapper() (SessionWrapper, error) {
 }
 
 func (s *Session) populate(sw *SessionWrapper) error {
-	err := s.Envelope.populate(&sw.EnvelopeWrapper)
+	err := s.EnvelopeBase.populate(&sw.EnvelopeBaseWrapper)
 	if err != nil {
 		return err
 	}
@@ -266,6 +232,7 @@ const (
 	SessionEncryptionTLS = SessionEncryption("tls")
 )
 
+// Defines the valid session compression values.
 type SessionCompression string
 
 const (

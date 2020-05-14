@@ -2,11 +2,21 @@ package lime
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/google/uuid"
 )
 
-// Base struct To all communication envelopes.
-type Envelope struct {
+// Base interface for envelopes types.
+type Envelope interface {
+	getID() string
+	getFrom() Node
+	getPP() Node
+	getTo() Node
+	getMetadata() map[string]string
+}
+
+// Base struct to all communication envelopes.
+type EnvelopeBase struct {
 	// The envelope identifier
 	ID string
 	// The identifier of the sender node of the envelope.
@@ -15,23 +25,42 @@ type Envelope struct {
 	// The delegation node. Its an acronym for 'per procurationem'.
 	// Identifier of a delegate node (a node that received a permission To send on behalf of another).
 	// Allows a node To send an envelope on behalf of another identity.
-	Pp Node
+	PP Node
 	// The identifier of the destination node of the envelope.
 	// If a node receives an envelope without this value, it means that the envelope is addressed To itself.
 	To Node
-	// Additional information To be delivered with the envelope.
+	// Additional information to be delivered with the envelope.
 	Metadata map[string]string
 }
 
-func (e *Envelope) toWrapper() (EnvelopeWrapper, error) {
+func (e *EnvelopeBase) getID() string {
+	return e.ID
+}
 
-	ew := EnvelopeWrapper{}
-	ew.Id = e.ID
+func (e *EnvelopeBase) getFrom() Node {
+	return e.From
+}
+
+func (e *EnvelopeBase) getPP() Node {
+	return e.PP
+}
+
+func (e *EnvelopeBase) getTo() Node {
+	return e.To
+}
+
+func (e *EnvelopeBase) getMetadata() map[string]string {
+	return e.Metadata
+}
+
+func (e *EnvelopeBase) toWrapper() (EnvelopeBaseWrapper, error) {
+	ew := EnvelopeBaseWrapper{}
+	ew.ID = e.ID
 	if e.From != (Node{}) {
 		ew.From = &e.From
 	}
-	if e.Pp != (Node{}) {
-		ew.Pp = &e.Pp
+	if e.PP != (Node{}) {
+		ew.PP = &e.PP
 	}
 	if e.To != (Node{}) {
 		ew.To = &e.To
@@ -40,18 +69,17 @@ func (e *Envelope) toWrapper() (EnvelopeWrapper, error) {
 	return ew, nil
 }
 
-func (e *Envelope) populate(ew *EnvelopeWrapper) error {
+func (e *EnvelopeBase) populate(ew *EnvelopeBaseWrapper) error {
 	if ew == nil || e == nil {
 		return nil
 	}
-
-	e.ID = ew.Id
+	e.ID = ew.ID
 	e.Metadata = ew.Metadata
 	if ew.From != nil {
 		e.From = *ew.From
 	}
-	if ew.Pp != nil {
-		e.Pp = *ew.Pp
+	if ew.PP != nil {
+		e.PP = *ew.PP
 	}
 	if ew.To != nil {
 		e.To = *ew.To
@@ -60,35 +88,46 @@ func (e *Envelope) populate(ew *EnvelopeWrapper) error {
 	return nil
 }
 
-func (e *Envelope) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
-	switch n {
-	// envelope fields
-	case "id":
-		err := json.Unmarshal(v, &e.ID)
-		return true, err
-	case "from":
-		err := json.Unmarshal(v, &e.From)
-		return true, err
-	case "pp":
-		err := json.Unmarshal(v, &e.Pp)
-		return true, err
-	case "to":
-		err := json.Unmarshal(v, &e.To)
-		return true, err
-	case "metadata":
-		err := json.Unmarshal(v, &e.Metadata)
-		return true, err
-	}
-	return false, nil
-}
-
 // Wrapper for custom marshalling
-type EnvelopeWrapper struct {
-	Id       string            `json:"id,omitempty"`
+type EnvelopeBaseWrapper struct {
+	ID       string            `json:"id,omitempty"`
 	From     *Node             `json:"from,omitempty"`
-	Pp       *Node             `json:"pp,omitempty"`
+	PP       *Node             `json:"pp,omitempty"`
 	To       *Node             `json:"to,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+func UnmarshalJSONMap(m map[string]*json.RawMessage) (Envelope, error) {
+	var e Envelope
+
+	if _, ok := m["method"]; ok {
+		e = &Command{}
+	}
+
+	if _, ok := m["event"]; ok {
+		e = &Notification{}
+	}
+
+	if _, ok := m["content"]; ok {
+		e = &Message{}
+	}
+
+	if _, ok := m["state"]; ok {
+		e = &Session{}
+	}
+
+	if e == nil {
+		return nil, errors.New("could not determine the envelope type")
+	}
+
+	// TODO: This is inefficient since we are allocating twice for the envelope.
+	data, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(data, e)
+	return e, err
 }
 
 // Represents a known reason for events occurred during the client-server
@@ -100,7 +139,7 @@ type Reason struct {
 	Description string `json:"description,omitempty"`
 }
 
-// Generates a new unique envelope Id.
+// Generates a new unique envelope ID.
 func NewEnvelopeId() string {
 	return uuid.New().String()
 }

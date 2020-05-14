@@ -10,7 +10,7 @@ import (
 // Allows the manipulation of node resources, like server session parameters or
 // information related To the network nodes.
 type Command struct {
-	Envelope
+	EnvelopeBase
 	// Action To be taken To the resource.
 	Method CommandMethod
 	// The universal identifier of the resource.
@@ -38,7 +38,7 @@ func (c *Command) SetStatusFailure(r Reason) {
 
 // Wrapper for custom marshalling
 type CommandWrapper struct {
-	EnvelopeWrapper
+	EnvelopeBaseWrapper
 	Method   CommandMethod    `json:"method"`
 	Uri      *LimeUri         `json:"uri,omitempty"`
 	Type     *MediaType       `json:"type,omitempty"`
@@ -72,37 +72,14 @@ func (c *Command) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (c *Command) unmarshalJSONField(n string, v json.RawMessage) (bool, error) {
-	switch n {
-	case "method":
-		err := json.Unmarshal(v, &c.Method)
-		return true, err
-	case "uri":
-		err := json.Unmarshal(v, &c.Uri)
-		return true, err
-	case "type":
-		err := json.Unmarshal(v, &c.Type)
-		return true, err
-	case "status":
-		err := json.Unmarshal(v, &c.Status)
-		return true, err
-	case "reason":
-		err := json.Unmarshal(v, &c.Reason)
-		return true, err
-	case "resource":
-		return true, nil // Handled externally
-	}
-	return false, nil
-}
-
 func (c *Command) toWrapper() (CommandWrapper, error) {
-	ew, err := c.Envelope.toWrapper()
+	ew, err := c.EnvelopeBase.toWrapper()
 	if err != nil {
 		return CommandWrapper{}, err
 	}
 
 	cw := CommandWrapper{
-		EnvelopeWrapper: ew,
+		EnvelopeBaseWrapper: ew,
 	}
 
 	if c.Resource != nil {
@@ -128,7 +105,7 @@ func (c *Command) toWrapper() (CommandWrapper, error) {
 }
 
 func (c *Command) populate(cw *CommandWrapper) error {
-	err := c.Envelope.populate(&cw.EnvelopeWrapper)
+	err := c.EnvelopeBase.populate(&cw.EnvelopeBaseWrapper)
 	if err != nil {
 		return err
 	}
@@ -179,7 +156,7 @@ const (
 	// Notify the destination about a change in a resource value of the sender.
 	// If the resource value is absent, it represent that the resource in the specified URI was deleted in the originator.
 	// This method can be one way and the destination may not send a response for it.
-	// Because of that, a command envelope with this method may not have an Id.
+	// Because of that, a command envelope with this method may not have an ID.
 	CommandMethodObserve = CommandMethod("observe")
 	// Merge a resource document with an existing one. If the resource doesn't exists, it is created.
 	CommandMethodMerge = CommandMethod("merge")

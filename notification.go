@@ -8,7 +8,7 @@ import (
 // Transport information about events associated To a message in a session.
 // Can be originated by a server or by the message destination node.
 type Notification struct {
-	Envelope
+	EnvelopeBase
 	// Related event To the notification
 	Event NotificationEvent
 	// In the case of a failed event, brings more details about the problem.
@@ -17,7 +17,7 @@ type Notification struct {
 
 // Wrapper for custom marshalling
 type NotificationWrapper struct {
-	EnvelopeWrapper
+	EnvelopeBaseWrapper
 	Event  NotificationEvent `json:"event,omitempty"`
 	Reason *Reason           `json:"reason,omitempty"`
 }
@@ -48,14 +48,14 @@ func (n *Notification) UnmarshalJSON(b []byte) error {
 }
 
 func (n *Notification) toWrapper() (NotificationWrapper, error) {
-	ew, err := n.Envelope.toWrapper()
+	ew, err := n.EnvelopeBase.toWrapper()
 	if err != nil {
 		return NotificationWrapper{}, err
 	}
 
 	nw := NotificationWrapper{
-		EnvelopeWrapper: ew,
-		Event:           n.Event,
+		EnvelopeBaseWrapper: ew,
+		Event:               n.Event,
 	}
 
 	if n.Reason != (Reason{}) {
@@ -66,7 +66,7 @@ func (n *Notification) toWrapper() (NotificationWrapper, error) {
 }
 
 func (n *Notification) populate(nw *NotificationWrapper) error {
-	err := n.Envelope.populate(&nw.EnvelopeWrapper)
+	err := n.EnvelopeBase.populate(&nw.EnvelopeBaseWrapper)
 	if err != nil {
 		return err
 	}
