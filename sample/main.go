@@ -53,16 +53,16 @@ func main() {
 		return nil
 	}
 
-	t := lime.TcpTransport{}
+	t := lime.TCPTransport{}
 	t.TlsConfig = &tls.Config{ServerName: "msging.net"}
 
-	add, err := net.ResolveTCPAddr("tcp", "tcp.msging.net:443")
+	addr, err := net.ResolveTCPAddr("tcp", "tcp.msging.net:443")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	err = t.Open(context.Background(), add)
+	err = t.Open(context.Background(), addr)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -207,4 +207,31 @@ func main() {
 	//
 	////auth, err := session2.GetAuthentication()
 	////fmt.Printf("authentication: %+v\n", auth)
+}
+
+func listen() {
+	listener := lime.TCPTransportListener{}
+
+	addr, err := net.ResolveTCPAddr("tcp", ":55321")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = listener.Open(context.Background(), addr)
+	if err != nil {
+		fmt.Println("Listener error:", err)
+	}
+
+	for {
+		t, err := listener.Accept()
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		err = t.Send(&lime.Session{State: lime.SessionStateFailed})
+		if err != nil {
+			fmt.Println(err)
+		}
+		_ = t.Close()
+	}
 }

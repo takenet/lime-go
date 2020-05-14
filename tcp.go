@@ -10,14 +10,14 @@ import (
 	"time"
 )
 
-type TcpTransport struct {
+type TCPTransport struct {
 	JsonTransport
 	encryption SessionEncryption
 	server     bool
 	TlsConfig  *tls.Config
 }
 
-func (t *TcpTransport) Send(e Envelope) error {
+func (t *TCPTransport) Send(e Envelope) error {
 	if err := t.ensureOpen(); err != nil {
 		return err
 	}
@@ -25,7 +25,7 @@ func (t *TcpTransport) Send(e Envelope) error {
 	return t.encoder.Encode(e)
 }
 
-func (t *TcpTransport) Receive() (Envelope, error) {
+func (t *TCPTransport) Receive() (Envelope, error) {
 	if err := t.ensureOpen(); err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (t *TcpTransport) Receive() (Envelope, error) {
 	return UnmarshalJSONMap(m)
 }
 
-func (t *TcpTransport) Open(ctx context.Context, addr net.Addr) error {
+func (t *TCPTransport) Open(ctx context.Context, addr net.Addr) error {
 	if t.conn != nil {
 		return errors.New("transport already open")
 	}
@@ -58,7 +58,7 @@ func (t *TcpTransport) Open(ctx context.Context, addr net.Addr) error {
 	return nil
 }
 
-func (t *TcpTransport) Close() error {
+func (t *TCPTransport) Close() error {
 	if t.conn == nil {
 		return errors.New("transport is not open")
 	}
@@ -66,27 +66,27 @@ func (t *TcpTransport) Close() error {
 	return t.conn.Close()
 }
 
-func (t *TcpTransport) GetSupportedCompression() []SessionCompression {
+func (t *TCPTransport) GetSupportedCompression() []SessionCompression {
 	return []SessionCompression{SessionCompressionNone}
 }
 
-func (t *TcpTransport) GetCompression() SessionCompression {
+func (t *TCPTransport) GetCompression() SessionCompression {
 	return SessionCompressionNone
 }
 
-func (t *TcpTransport) SetCompression(c SessionCompression) error {
+func (t *TCPTransport) SetCompression(c SessionCompression) error {
 	return fmt.Errorf("compression '%v' is not supported", c)
 }
 
-func (t *TcpTransport) GetSupportedEncryption() []SessionEncryption {
+func (t *TCPTransport) GetSupportedEncryption() []SessionEncryption {
 	return []SessionEncryption{SessionEncryptionNone, SessionEncryptionTLS}
 }
 
-func (t *TcpTransport) GetEncryption() SessionEncryption {
+func (t *TCPTransport) GetEncryption() SessionEncryption {
 	return t.encryption
 }
 
-func (t *TcpTransport) SetEncryption(e SessionEncryption) error {
+func (t *TCPTransport) SetEncryption(e SessionEncryption) error {
 	if e == t.encryption {
 		return nil
 	}
@@ -117,27 +117,71 @@ func (t *TcpTransport) SetEncryption(e SessionEncryption) error {
 	return nil
 }
 
-func (t *TcpTransport) OK() bool {
+func (t *TCPTransport) OK() bool {
 	return t.conn != nil
 }
 
-func (t *TcpTransport) LocalAdd() net.Addr {
+func (t *TCPTransport) LocalAdd() net.Addr {
 	if t.conn == nil {
 		return nil
 	}
 	return t.conn.LocalAddr()
 }
 
-func (t *TcpTransport) RemoteAdd() net.Addr {
+func (t *TCPTransport) RemoteAdd() net.Addr {
 	if t.conn == nil {
 		return nil
 	}
 	return t.conn.RemoteAddr()
 }
 
-func (t *TcpTransport) SetDeadline(time time.Time) error {
+func (t *TCPTransport) SetDeadline(time time.Time) error {
 	if err := t.ensureOpen(); err != nil {
 		return err
 	}
 	return t.conn.SetDeadline(time)
+}
+
+type TCPTransportListener struct {
+	listener net.Listener
+}
+
+func (t *TCPTransportListener) Open(ctx context.Context, addr net.Addr) error {
+	if t.listener != nil {
+		return errors.New("listener is already started")
+	}
+
+	var lc net.ListenConfig
+	l, err := lc.Listen(ctx, "tcp", addr.String())
+	if err != nil {
+		return err
+	}
+
+	t.listener = l
+	return nil
+}
+
+func (t *TCPTransportListener) Close() error {
+	if t.listener == nil {
+		return errors.New("listener is not started")
+	}
+
+	return t.listener.Close()
+}
+
+func (t *TCPTransportListener) Accept() (Transport, error) {
+	if t.listener == nil {
+		return nil, errors.New("listener is not started")
+	}
+
+	conn, err := t.listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+
+	transport := TCPTransport{}
+	transport.setConn(conn)
+	transport.server = true
+
+	return &transport, nil
 }

@@ -74,3 +74,11 @@ func (t *JsonTransport) ensureOpen() error {
 
 	return nil
 }
+
+type TransportListener interface {
+	Open(ctx context.Context, addr net.Addr) error
+
+	Close() error
+
+	Accept() (Transport, error)
+}
