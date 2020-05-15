@@ -11,10 +11,10 @@ import (
 )
 
 type TCPTransport struct {
-	JsonTransport
+	JSONTransport
 	encryption SessionEncryption
 	server     bool
-	TlsConfig  *tls.Config
+	TLSConfig  *tls.Config
 }
 
 func (t *TCPTransport) Send(e Envelope) error {
@@ -95,7 +95,7 @@ func (t *TCPTransport) SetEncryption(e SessionEncryption) error {
 		return errors.New("cannot downgrade from tls to none encryption")
 	}
 
-	if e == SessionEncryptionTLS && t.TlsConfig == nil {
+	if e == SessionEncryptionTLS && t.TLSConfig == nil {
 		return errors.New("tls config must be defined")
 	}
 
@@ -103,9 +103,9 @@ func (t *TCPTransport) SetEncryption(e SessionEncryption) error {
 
 	// https://github.com/FluuxIO/go-xmpp/blob/master/xmpp_transport.go#L80
 	if t.server {
-		tlsConn = tls.Server(t.conn, t.TlsConfig)
+		tlsConn = tls.Server(t.conn, t.TLSConfig)
 	} else {
-		tlsConn = tls.Client(t.conn, t.TlsConfig)
+		tlsConn = tls.Client(t.conn, t.TLSConfig)
 	}
 	// We convert existing connection to TLS
 	if err := tlsConn.Handshake(); err != nil {

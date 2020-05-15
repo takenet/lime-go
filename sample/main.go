@@ -54,7 +54,7 @@ func main() {
 	}
 
 	t := lime.TCPTransport{}
-	t.TlsConfig = &tls.Config{ServerName: "msging.net"}
+	t.TLSConfig = &tls.Config{ServerName: "msging.net"}
 
 	addr, err := net.ResolveTCPAddr("tcp", "tcp.msging.net:443")
 	if err != nil {

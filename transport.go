@@ -52,13 +52,13 @@ type Transport interface {
 	SetDeadline(time time.Time) error
 }
 
-type JsonTransport struct {
+type JSONTransport struct {
 	conn    net.Conn
 	decoder *json.Decoder
 	encoder *json.Encoder
 }
 
-func (t *JsonTransport) setConn(conn net.Conn) {
+func (t *JSONTransport) setConn(conn net.Conn) {
 	t.conn = conn
 
 	// TODO: Should we use a buffer here?
@@ -67,7 +67,7 @@ func (t *JsonTransport) setConn(conn net.Conn) {
 	t.decoder = json.NewDecoder(t.conn)
 }
 
-func (t *JsonTransport) ensureOpen() error {
+func (t *JSONTransport) ensureOpen() error {
 	if t.conn == nil {
 		return errors.New("transport is not open")
 	}

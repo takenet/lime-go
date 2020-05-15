@@ -2,25 +2,48 @@ package lime
 
 import (
 	"context"
+	"errors"
 	"net"
 	"time"
 )
 
 type InMemoryTransport struct {
+	BufferSize int
 	localChan  chan Envelope
-	remoteChan chan Envelope
+	server     bool
+	remote     *InMemoryTransport
+}
+
+func NewInMemoryTransportPair(bufferSize int) (client InMemoryTransport, server InMemoryTransport) {
+	client = InMemoryTransport{BufferSize: bufferSize, server: false}
+	server = InMemoryTransport{BufferSize: bufferSize, server: true}
+	client.remote = &server
+	return
 }
 
 func (t *InMemoryTransport) Send(e Envelope) error {
-	panic("implement me")
+	if t.remote.localChan == nil {
+		return errors.New("remote transport is not open")
+	}
+
+	t.remote.localChan <- e
+	return nil
 }
 
 func (t *InMemoryTransport) Receive() (Envelope, error) {
-	panic("implement me")
+	if t.localChan == nil {
+		return nil, errors.New("transport is not open")
+	}
+	e, ok := <-t.localChan
+	if !ok {
+		return nil, errors.New("the transport is closed")
+	}
+	return e, nil
 }
 
 func (t *InMemoryTransport) Open(ctx context.Context, addr net.Addr) error {
-	panic("implement me")
+	t.localChan = make(chan Envelope, t.BufferSize)
+	return nil
 }
 
 func (t *InMemoryTransport) Close() error {
