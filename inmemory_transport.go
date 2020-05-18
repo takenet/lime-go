@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// Implements an InMemory transport type
 type InMemoryTransport struct {
 	BufferSize int
 	localChan  chan Envelope
@@ -14,10 +15,10 @@ type InMemoryTransport struct {
 	remote     *InMemoryTransport
 }
 
-func NewInMemoryTransportPair(bufferSize int) (client InMemoryTransport, server InMemoryTransport) {
-	client = InMemoryTransport{BufferSize: bufferSize, server: false}
-	server = InMemoryTransport{BufferSize: bufferSize, server: true}
-	client.remote = &server
+func NewInMemoryTransportPair(bufferSize int) (client *InMemoryTransport, server *InMemoryTransport) {
+	client = &InMemoryTransport{BufferSize: bufferSize, server: false}
+	server = &InMemoryTransport{BufferSize: bufferSize, server: true}
+	client.remote = server
 	return
 }
 
@@ -47,39 +48,46 @@ func (t *InMemoryTransport) Open(ctx context.Context, addr net.Addr) error {
 }
 
 func (t *InMemoryTransport) Close() error {
-	panic("implement me")
+	close(t.localChan)
+	t.localChan = nil
+	return nil
 }
 
 func (t *InMemoryTransport) GetSupportedCompression() []SessionCompression {
-	panic("implement me")
+	return []SessionCompression{SessionCompressionNone}
 }
 
 func (t *InMemoryTransport) GetCompression() SessionCompression {
-	panic("implement me")
+	return SessionCompressionNone
 }
 
 func (t *InMemoryTransport) SetCompression(c SessionCompression) error {
-	panic("implement me")
+	if c != SessionCompressionNone {
+		return errors.New("unsupported compression")
+	}
+	return nil
 }
 
 func (t *InMemoryTransport) GetSupportedEncryption() []SessionEncryption {
-	panic("implement me")
+	return []SessionEncryption{SessionEncryptionTLS}
 }
 
 func (t *InMemoryTransport) GetEncryption() SessionEncryption {
-	panic("implement me")
+	return SessionEncryptionTLS
 }
 
-func (t *InMemoryTransport) SetEncryption(c SessionEncryption) error {
-	panic("implement me")
+func (t *InMemoryTransport) SetEncryption(e SessionEncryption) error {
+	if e != SessionEncryptionNone {
+		return errors.New("unsupported encryption")
+	}
 }
 
 func (t *InMemoryTransport) OK() bool {
-	panic("implement me")
+	return t.localChan != nil
 }
 
 func (t *InMemoryTransport) LocalAdd() net.Addr {
-	panic("implement me")
+	return net.Addr("")
 }
 
 func (t *InMemoryTransport) RemoteAdd() net.Addr {
@@ -88,4 +96,14 @@ func (t *InMemoryTransport) RemoteAdd() net.Addr {
 
 func (t *InMemoryTransport) SetDeadline(time time.Time) error {
 	panic("implement me")
+}
+
+type InProcessAddr string
+
+func (i InProcessAddr) Network() string {
+	return "in.process"
+}
+
+func (i InProcessAddr) String() string {
+	return string(i)
 }

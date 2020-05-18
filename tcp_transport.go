@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -144,9 +145,13 @@ func (t *TCPTransport) SetDeadline(time time.Time) error {
 
 type TCPTransportListener struct {
 	listener net.Listener
+	mux      sync.Mutex
 }
 
 func (t *TCPTransportListener) Open(ctx context.Context, addr net.Addr) error {
+	t.mux.Lock()
+	defer t.mux.Unlock()
+
 	if t.listener != nil {
 		return errors.New("listener is already started")
 	}
@@ -162,11 +167,17 @@ func (t *TCPTransportListener) Open(ctx context.Context, addr net.Addr) error {
 }
 
 func (t *TCPTransportListener) Close() error {
+	t.mux.Lock()
+	defer t.mux.Unlock()
+
 	if t.listener == nil {
 		return errors.New("listener is not started")
 	}
 
-	return t.listener.Close()
+	err := t.listener.Close()
+	t.listener = nil
+
+	return err
 }
 
 func (t *TCPTransportListener) Accept() (Transport, error) {

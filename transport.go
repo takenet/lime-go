@@ -37,7 +37,7 @@ type Transport interface {
 	GetEncryption() SessionEncryption
 
 	// Defines the encryption mode for the transport.
-	SetEncryption(c SessionEncryption) error
+	SetEncryption(e SessionEncryption) error
 
 	// Indicates if the transport is connected.
 	OK() bool
@@ -75,10 +75,14 @@ func (t *JSONTransport) ensureOpen() error {
 	return nil
 }
 
+// Defines a listener interface for the transports.
 type TransportListener interface {
+	// Start the listener.
 	Open(ctx context.Context, addr net.Addr) error
 
+	// Stop listening.
 	Close() error
 
+	// Accept a new transport connection.
 	Accept() (Transport, error)
 }
