@@ -3,41 +3,17 @@ package lime
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"sync"
-	"time"
 )
 
 type TCPTransport struct {
-	JSONTransport
+	ConnTransport
 	encryption SessionEncryption
 	server     bool
 	TLSConfig  *tls.Config
-}
-
-func (t *TCPTransport) Send(e Envelope) error {
-	if err := t.ensureOpen(); err != nil {
-		return err
-	}
-
-	return t.encoder.Encode(e)
-}
-
-func (t *TCPTransport) Receive() (Envelope, error) {
-	if err := t.ensureOpen(); err != nil {
-		return nil, err
-	}
-
-	var m map[string]*json.RawMessage
-
-	if err := t.decoder.Decode(&m); err != nil {
-		return nil, err
-	}
-
-	return UnmarshalJSONMap(m)
 }
 
 func (t *TCPTransport) Open(ctx context.Context, addr net.Addr) error {
@@ -46,7 +22,7 @@ func (t *TCPTransport) Open(ctx context.Context, addr net.Addr) error {
 	}
 
 	if addr.Network() != "tcp" {
-		return errors.New("network should be tcp")
+		return errors.New("address network should be tcp")
 	}
 
 	var d net.Dialer
@@ -57,14 +33,6 @@ func (t *TCPTransport) Open(ctx context.Context, addr net.Addr) error {
 
 	t.setConn(conn)
 	return nil
-}
-
-func (t *TCPTransport) Close() error {
-	if t.conn == nil {
-		return errors.New("transport is not open")
-	}
-
-	return t.conn.Close()
 }
 
 func (t *TCPTransport) GetSupportedCompression() []SessionCompression {
@@ -118,37 +86,16 @@ func (t *TCPTransport) SetEncryption(e SessionEncryption) error {
 	return nil
 }
 
-func (t *TCPTransport) OK() bool {
-	return t.conn != nil
-}
-
-func (t *TCPTransport) LocalAdd() net.Addr {
-	if t.conn == nil {
-		return nil
-	}
-	return t.conn.LocalAddr()
-}
-
-func (t *TCPTransport) RemoteAdd() net.Addr {
-	if t.conn == nil {
-		return nil
-	}
-	return t.conn.RemoteAddr()
-}
-
-func (t *TCPTransport) SetDeadline(time time.Time) error {
-	if err := t.ensureOpen(); err != nil {
-		return err
-	}
-	return t.conn.SetDeadline(time)
-}
-
 type TCPTransportListener struct {
 	listener net.Listener
 	mux      sync.Mutex
 }
 
 func (t *TCPTransportListener) Open(ctx context.Context, addr net.Addr) error {
+	if addr.Network() != "tcp" {
+		return errors.New("address network should be tcp")
+	}
+
 	t.mux.Lock()
 	defer t.mux.Unlock()
 

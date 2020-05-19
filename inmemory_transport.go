@@ -3,6 +3,7 @@ package lime
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 )
@@ -12,6 +13,7 @@ type InMemoryTransport struct {
 	BufferSize int
 	localChan  chan Envelope
 	server     bool
+	addr       net.Addr
 	remote     *InMemoryTransport
 }
 
@@ -43,7 +45,16 @@ func (t *InMemoryTransport) Receive() (Envelope, error) {
 }
 
 func (t *InMemoryTransport) Open(ctx context.Context, addr net.Addr) error {
+	if t.localChan != nil {
+		return errors.New("transport already open")
+	}
+
+	if addr.Network() != InProcessNetwork {
+		return fmt.Errorf("address network should be %v", InProcessNetwork)
+	}
+
 	t.localChan = make(chan Envelope, t.BufferSize)
+	t.addr = addr
 	return nil
 }
 
@@ -80,6 +91,7 @@ func (t *InMemoryTransport) SetEncryption(e SessionEncryption) error {
 	if e != SessionEncryptionNone {
 		return errors.New("unsupported encryption")
 	}
+	return nil
 }
 
 func (t *InMemoryTransport) OK() bool {
@@ -87,21 +99,23 @@ func (t *InMemoryTransport) OK() bool {
 }
 
 func (t *InMemoryTransport) LocalAdd() net.Addr {
-	return net.Addr("")
+	return t.addr
 }
 
 func (t *InMemoryTransport) RemoteAdd() net.Addr {
-	panic("implement me")
+	return t.remote.addr
 }
 
 func (t *InMemoryTransport) SetDeadline(time time.Time) error {
-	panic("implement me")
+	return nil
 }
+
+const InProcessNetwork = "in.process"
 
 type InProcessAddr string
 
 func (i InProcessAddr) Network() string {
-	return "in.process"
+	return InProcessNetwork
 }
 
 func (i InProcessAddr) String() string {

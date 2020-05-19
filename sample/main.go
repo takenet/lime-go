@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"github.com/takenet/lime-go"
 	"net"
@@ -19,12 +18,6 @@ func main() {
 			fmt.Println("Send error:", err)
 			return err
 		}
-		b, err := json.Marshal(e)
-		if err != nil {
-			fmt.Println("Marshalling error:", err)
-			return err
-		}
-		fmt.Println("Send:", string(b))
 		return nil
 	}
 
@@ -34,12 +27,6 @@ func main() {
 			fmt.Println("Receive error:", err)
 			return nil, err
 		}
-		b, err := json.Marshal(e)
-		if err != nil {
-			fmt.Println("Marshalling error:", err)
-			return nil, err
-		}
-		fmt.Println("Receive:", string(b))
 		return e, nil
 	}
 
@@ -55,6 +42,9 @@ func main() {
 
 	t := lime.TCPTransport{}
 	t.TLSConfig = &tls.Config{ServerName: "msging.net"}
+
+	//tw := lime.NewStdoutTraceWriter()
+	//t.TraceWriter = tw
 
 	addr, err := net.ResolveTCPAddr("tcp", "tcp.msging.net:443")
 	if err != nil {
@@ -119,13 +109,19 @@ func main() {
 		},
 		func() error {
 			// Established
-			_, err := receiver(&t)
+			s, err := receiver(&t)
+			if s != nil {
+				fmt.Printf("Session %v established\n", s.GetID())
+			}
 			return err
 		})
 
 	fmt.Println("Press ENTER key to exit")
 	reader := bufio.NewReader(os.Stdin)
 	reader.ReadString('\n')
+
+	_ = sender(&t, &lime.Session{EnvelopeBase: lime.EnvelopeBase{ID: sessionId}, State: lime.SessionStateFinishing})
+	receiver(&t)
 
 	//s := lime.Session{State: lime.SessionStateNew}
 	//err = t.Send(&s)

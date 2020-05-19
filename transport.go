@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"time"
 )
@@ -52,22 +54,107 @@ type Transport interface {
 	SetDeadline(time time.Time) error
 }
 
-type JSONTransport struct {
-	conn    net.Conn
-	decoder *json.Decoder
-	encoder *json.Encoder
+const DefaultReadLimit int64 = 8192 * 1024
+
+// Base type for net.Conn based transports.
+type ConnTransport struct {
+	// The limit for buffered data in read operations.
+	ReadLimit int64
+	// The trace writer for tracing connection envelopes
+	TraceWriter   TraceWriter
+	conn          net.Conn
+	encoder       *json.Encoder
+	decoder       *json.Decoder
+	limitedReader io.LimitedReader
 }
 
-func (t *JSONTransport) setConn(conn net.Conn) {
+func (t *ConnTransport) Send(e Envelope) error {
+	if err := t.ensureOpen(); err != nil {
+		return err
+	}
+
+	return t.encoder.Encode(e)
+}
+
+func (t *ConnTransport) Receive() (Envelope, error) {
+	if err := t.ensureOpen(); err != nil {
+		return nil, err
+	}
+
+	// Decode as a map of raw JSON to be unmarshalled
+	var m map[string]*json.RawMessage
+	if err := t.decoder.Decode(&m); err != nil {
+		return nil, err
+	}
+
+	// Reset the read limit
+	t.limitedReader.N = t.ReadLimit
+
+	return UnmarshalJSONMap(m)
+}
+
+func (t *ConnTransport) Close() error {
+	if t.conn == nil {
+		return errors.New("transport is not open")
+	}
+
+	return t.conn.Close()
+}
+
+func (t *ConnTransport) OK() bool {
+	return t.conn != nil
+}
+
+func (t *ConnTransport) LocalAdd() net.Addr {
+	if t.conn == nil {
+		return nil
+	}
+	return t.conn.LocalAddr()
+}
+
+func (t *ConnTransport) RemoteAdd() net.Addr {
+	if t.conn == nil {
+		return nil
+	}
+	return t.conn.RemoteAddr()
+}
+
+func (t *ConnTransport) SetDeadline(time time.Time) error {
+	if err := t.ensureOpen(); err != nil {
+		return err
+	}
+	return t.conn.SetDeadline(time)
+}
+
+func (t *ConnTransport) setConn(conn net.Conn) {
 	t.conn = conn
 
-	// TODO: Should we use a buffer here?
-	//bufio.NewReaderSize(conn, 100)
-	t.encoder = json.NewEncoder(t.conn)
-	t.decoder = json.NewDecoder(t.conn)
+	var writer io.Writer = t.conn
+	var reader io.Reader = t.conn
+
+	tw := t.TraceWriter
+	if tw != nil {
+		writer = io.MultiWriter(writer, *tw.getSendWriter())
+		reader = io.TeeReader(reader, *tw.getReceiveWriter())
+	}
+
+	t.encoder = json.NewEncoder(writer)
+
+	if t.ReadLimit == 0 {
+		t.ReadLimit = DefaultReadLimit
+	}
+
+	// Using a LimitedReader to avoid the connection be
+	// flooded with a very large JSON which can cause
+	// high memory usage.
+	t.limitedReader = io.LimitedReader{
+		R: reader,
+		N: t.ReadLimit,
+	}
+	t.decoder = json.NewDecoder(&t.limitedReader)
 }
 
-func (t *JSONTransport) ensureOpen() error {
+func (t *ConnTransport) ensureOpen() error {
 	if t.conn == nil {
 		return errors.New("transport is not open")
 	}
@@ -77,12 +164,62 @@ func (t *JSONTransport) ensureOpen() error {
 
 // Defines a listener interface for the transports.
 type TransportListener interface {
-	// Start the listener.
+	// Start listening for new transport connections.
 	Open(ctx context.Context, addr net.Addr) error
 
-	// Stop listening.
+	// Stop the listener.
 	Close() error
 
 	// Accept a new transport connection.
 	Accept() (Transport, error)
+}
+
+// Enable request tracing for network transports.
+type TraceWriter interface {
+	// Gets the sendWriter for the transport send operations
+	getSendWriter() *io.Writer
+
+	// Gets the sendWriter for the transport receive operations
+	getReceiveWriter() *io.Writer
+}
+
+type StdoutTraceWriter struct {
+	sendWriter    io.Writer
+	receiveWriter io.Writer
+}
+
+func (t StdoutTraceWriter) getSendWriter() *io.Writer {
+	return &t.sendWriter
+}
+
+func (t StdoutTraceWriter) getReceiveWriter() *io.Writer {
+	return &t.receiveWriter
+}
+
+func NewStdoutTraceWriter() *StdoutTraceWriter {
+	sendReader, sendWriter := io.Pipe()
+	receiveReader, receiveWriter := io.Pipe()
+	sendDecoder := json.NewDecoder(sendReader)
+	receiveDecoder := json.NewDecoder(receiveReader)
+
+	tw := StdoutTraceWriter{
+		sendWriter:    sendWriter,
+		receiveWriter: receiveWriter,
+	}
+	trace := func(dec *json.Decoder, action string) {
+		for {
+			var j json.RawMessage
+			err := dec.Decode(&j)
+			if err != nil {
+				break
+			}
+
+			fmt.Printf("%v: %v\n", action, string(j))
+		}
+	}
+
+	go trace(receiveDecoder, "receive")
+	go trace(sendDecoder, "send")
+
+	return &tw
 }
