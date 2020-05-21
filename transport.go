@@ -49,19 +49,27 @@ type Transport interface {
 
 	// Gets the remote endpoint address.
 	RemoteAdd() net.Addr
-
-	// Set the transport timeout.
-	SetDeadline(time time.Time) error
 }
 
 const DefaultReadLimit int64 = 8192 * 1024
+const DefaultWriteTimeout time.Duration = time.Second * 60
+const DefaultReadTimeout time.Duration = 0
+
+// Common configurations for net.Conn based transports.
+type ConnTransportConfig struct {
+	// The limit for buffered data in read operations.
+	ReadLimit int64
+	// The timeout for read operations
+	ReadTimeout time.Duration
+	// The timeout for write operations
+	WriteTimeout time.Duration
+	// The trace writer for tracing connection envelopes
+	TraceWriter TraceWriter
+}
 
 // Base type for net.Conn based transports.
 type ConnTransport struct {
-	// The limit for buffered data in read operations.
-	ReadLimit int64
-	// The trace writer for tracing connection envelopes
-	TraceWriter   TraceWriter
+	ConnTransportConfig
 	conn          net.Conn
 	encoder       *json.Encoder
 	decoder       *json.Decoder
@@ -73,11 +81,20 @@ func (t *ConnTransport) Send(e Envelope) error {
 		return err
 	}
 
+	// Sets the timeout for the next write operation
+	if err := t.conn.SetWriteDeadline(time.Now().Add(t.WriteTimeout)); err != nil {
+		return err
+	}
 	return t.encoder.Encode(e)
 }
 
 func (t *ConnTransport) Receive() (Envelope, error) {
 	if err := t.ensureOpen(); err != nil {
+		return nil, err
+	}
+
+	// Sets the timeout for the next read operation
+	if err := t.conn.SetReadDeadline(time.Now().Add(t.ReadTimeout)); err != nil {
 		return nil, err
 	}
 
@@ -121,16 +138,8 @@ func (t *ConnTransport) RemoteAdd() net.Addr {
 	return t.conn.RemoteAddr()
 }
 
-func (t *ConnTransport) SetDeadline(time time.Time) error {
-	if err := t.ensureOpen(); err != nil {
-		return err
-	}
-	return t.conn.SetDeadline(time)
-}
-
 func (t *ConnTransport) setConn(conn net.Conn) {
 	t.conn = conn
-
 	var writer io.Writer = t.conn
 	var reader io.Reader = t.conn
 

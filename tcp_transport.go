@@ -7,13 +7,15 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 )
 
 type TCPTransport struct {
 	ConnTransport
+	// The configuration for TLS session encryption
+	TLSConfig  *tls.Config
 	encryption SessionEncryption
 	server     bool
-	TLSConfig  *tls.Config
 }
 
 func (t *TCPTransport) Open(ctx context.Context, addr net.Addr) error {
@@ -32,6 +34,7 @@ func (t *TCPTransport) Open(ctx context.Context, addr net.Addr) error {
 	}
 
 	t.setConn(conn)
+	t.encryption = SessionEncryptionNone
 	return nil
 }
 
@@ -76,6 +79,10 @@ func (t *TCPTransport) SetEncryption(e SessionEncryption) error {
 	} else {
 		tlsConn = tls.Client(t.conn, t.TLSConfig)
 	}
+
+	tlsConn.SetWriteDeadline(time.Now().Add(t.WriteTimeout))
+	tlsConn.SetReadDeadline(time.Now().Add(t.ReadTimeout))
+
 	// We convert existing connection to TLS
 	if err := tlsConn.Handshake(); err != nil {
 		return err
@@ -87,8 +94,10 @@ func (t *TCPTransport) SetEncryption(e SessionEncryption) error {
 }
 
 type TCPTransportListener struct {
-	listener net.Listener
-	mux      sync.Mutex
+	ConnTransportConfig
+	TLSConfig *tls.Config
+	listener  net.Listener
+	mux       sync.Mutex
 }
 
 func (t *TCPTransportListener) Open(ctx context.Context, addr net.Addr) error {
@@ -140,6 +149,10 @@ func (t *TCPTransportListener) Accept() (Transport, error) {
 	transport := TCPTransport{}
 	transport.setConn(conn)
 	transport.server = true
+	transport.TLSConfig = t.TLSConfig
+	transport.ReadLimit = t.ReadLimit
+	transport.ReadTimeout = t.ReadTimeout
+	transport.WriteTimeout = t.WriteTimeout
 
 	return &transport, nil
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"time"
 )
 
 // Implements an InMemory transport type
@@ -104,10 +103,6 @@ func (t *InMemoryTransport) LocalAdd() net.Addr {
 
 func (t *InMemoryTransport) RemoteAdd() net.Addr {
 	return t.remote.addr
-}
-
-func (t *InMemoryTransport) SetDeadline(time time.Time) error {
-	return nil
 }
 
 const InProcessNetwork = "in.process"

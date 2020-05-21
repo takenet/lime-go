@@ -147,7 +147,7 @@ func (c *Channel) sendToBuffer(e Envelope) error {
 	return nil
 }
 func (c *Channel) receiveFromBuffer(buf chan Envelope) (Envelope, error) {
-
+	return nil, nil
 }
 
 func (c *Channel) ensureEstablished(action string) error {
