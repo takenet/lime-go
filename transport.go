@@ -42,7 +42,7 @@ type Transport interface {
 	SetEncryption(e SessionEncryption) error
 
 	// Indicates if the transport is connected.
-	OK() bool
+	IsConnected() bool
 
 	// Gets the local endpoint address.
 	LocalAdd() net.Addr
@@ -94,14 +94,16 @@ func (t *ConnTransport) Receive() (Envelope, error) {
 }
 
 func (t *ConnTransport) Close() error {
-	if t.conn == nil {
-		return errors.New("transport is not open")
+	if err := t.ensureOpen(); err != nil {
+		return err
 	}
 
-	return t.conn.Close()
+	err := t.conn.Close()
+	t.conn = nil
+	return err
 }
 
-func (t *ConnTransport) OK() bool {
+func (t *ConnTransport) IsConnected() bool {
 	return t.conn != nil
 }
 
@@ -188,14 +190,6 @@ type StdoutTraceWriter struct {
 	receiveWriter io.Writer
 }
 
-func (t StdoutTraceWriter) getSendWriter() *io.Writer {
-	return &t.sendWriter
-}
-
-func (t StdoutTraceWriter) getReceiveWriter() *io.Writer {
-	return &t.receiveWriter
-}
-
 func NewStdoutTraceWriter() *StdoutTraceWriter {
 	sendReader, sendWriter := io.Pipe()
 	receiveReader, receiveWriter := io.Pipe()
@@ -222,4 +216,12 @@ func NewStdoutTraceWriter() *StdoutTraceWriter {
 	go trace(sendDecoder, "send")
 
 	return &tw
+}
+
+func (t StdoutTraceWriter) getSendWriter() *io.Writer {
+	return &t.sendWriter
+}
+
+func (t StdoutTraceWriter) getReceiveWriter() *io.Writer {
+	return &t.receiveWriter
 }

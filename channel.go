@@ -7,39 +7,39 @@ import (
 )
 
 type MessageSender interface {
-	SendMessage(m Message) error
+	SendMessage(m *Message) error
 }
 
 type MessageReceiver interface {
-	ReceiveMessage() (Message, error)
+	ReceiveMessage() (*Message, error)
 }
 
 type NotificationSender interface {
-	SendNotification(n Notification) error
+	SendNotification(n *Notification) error
 }
 
 type NotificationReceiver interface {
-	ReceiveNotification() (Notification, error)
+	ReceiveNotification() (*Notification, error)
 }
 
 type CommandSender interface {
-	SendCommand(c Command) error
+	SendCommand(c *Command) error
 }
 
 type CommandReceiver interface {
-	ReceiveCommand() (Command, error)
+	ReceiveCommand() (*Command, error)
 }
 
 type CommandProcessor interface {
-	ProcessCommand(ctx context.Context, c Command) (Command, error)
+	ProcessCommand(ctx context.Context, c *Command) (*Command, error)
 }
 
 type SessionSender interface {
-	SendSession(s Session) error
+	SendSession(s *Session) error
 }
 
 type SessionReceiver interface {
-	ReceiveSession() (Session, error)
+	ReceiveSession() (*Session, error)
 }
 
 // Base type for the protocol communication channels.
@@ -59,48 +59,113 @@ type Channel struct {
 	// The current session state.
 	State SessionState
 
-	sendChan                chan Envelope
-	receiveMessageChan      chan Message
-	receiveNotificationChan chan Notification
-	receiveCommandChan      chan Command
-	receiveSessionChan      chan Session
+	outBuf            chan Envelope
+	inMessageBuf      chan Envelope
+	inNotificationBuf chan Envelope
+	inCommandBuf      chan Envelope
+	inSessionBuf      chan Envelope
 }
 
-func (c *Channel) SendSession(s Session) error {
+func (c *Channel) SendSession(s *Session) error {
 	// check the current channel state
 	if c.State == SessionStateFinished || c.State == SessionStateFailed {
 		return fmt.Errorf("cannot send a session in the %v state", c.State)
 	}
 
 	if s.State == SessionStateFinishing || s.State == SessionStateFinished || s.State == SessionStateFailed {
-		// TODO: send a signal to stop the listener goroutine
+		// TODO: signal to stop the listener goroutine
 	}
 
-	return c.Transport.Send(&s)
+	return c.Transport.Send(s)
 }
-func (c *Channel) ReceiveSession() (Session, error) {
+func (c *Channel) ReceiveSession() (*Session, error) {
+	if err := c.ensureTransportOK(); err != nil {
+		return nil, err
+	}
+
 	switch c.State {
 	case SessionStateFinished:
-		return Session{}, fmt.Errorf("cannot receive a session in the %v session state", c.State)
+		return nil, fmt.Errorf("cannot receive a session in the %v session state", c.State)
 	case SessionStateEstablished:
-		s, ok := <-c.receiveSessionChan
+		e, ok := <-c.inSessionBuf
 		if !ok {
-			return Session{}, errors.New("receiver channel is closed")
+			return nil, errors.New("receiver channel is closed")
 		}
+		s, ok := e.(*Session)
+		if !ok {
+			panic("unexpected envelope type was received from session buffer")
+		}
+
 		return s, nil
 	}
 
 	e, err := c.Transport.Receive()
 	if err != nil {
-		return Session{}, err
+		return nil, err
 	}
 
 	s, ok := e.(*Session)
 	if !ok {
-		return Session{}, errors.New("an unexpected envelope was received from the transport")
+		return nil, errors.New("an unexpected envelope was received from the transport")
 	}
 
-	return *s, nil
+	return s, nil
+}
+
+func (c *Channel) SendMessage(m *Message) error {
+	return c.sendToBuffer(m)
+}
+
+func (c *Channel) ReceiveMessage() (*Message, error) {
+	e, err := c.receiveFromBuffer(c.inMessageBuf)
+	if err != nil {
+		return nil, err
+	}
+
+	m, ok := e.(*Message)
+	if !ok {
+		panic(fmt.Errorf("unexpected envelope type received from buffer. expected *Message, received %T", e))
+	}
+
+	return m, nil
+}
+
+func (c *Channel) sendToBuffer(e Envelope) error {
+	if err := c.ensureEstablished("send"); err != nil {
+		return err
+	}
+
+	if err := c.ensureTransportOK(); err != nil {
+		return err
+	}
+
+	if c.outBuf == nil {
+		return errors.New("outBuf is not defined")
+	}
+
+	c.outBuf <- e
+	return nil
+}
+func (c *Channel) receiveFromBuffer(buf chan Envelope) (Envelope, error) {
+
+}
+
+func (c *Channel) ensureEstablished(action string) error {
+	if c.State != SessionStateEstablished {
+		return fmt.Errorf("cannot %v in the %v state", action, c.State)
+	}
+	return nil
+}
+
+func (c *Channel) ensureTransportOK() error {
+	if c.Transport == nil {
+		return errors.New("transport is not defined")
+	}
+
+	if !c.Transport.IsConnected() {
+		return errors.New("transport is not connected")
+	}
+	return nil
 }
 
 type ClientChannel struct {

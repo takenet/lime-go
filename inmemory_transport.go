@@ -94,7 +94,7 @@ func (t *InMemoryTransport) SetEncryption(e SessionEncryption) error {
 	return nil
 }
 
-func (t *InMemoryTransport) OK() bool {
+func (t *InMemoryTransport) IsConnected() bool {
 	return t.localChan != nil
 }
 
