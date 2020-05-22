@@ -52,7 +52,7 @@ func createClientTransport(addr net.Addr, t *testing.T) *TCPTransport {
 	return &client
 }
 
-func createAddress() net.Addr {
+func createTCPAddress() net.Addr {
 	return &net.TCPAddr{
 		IP:   net.IPv4(127, 0, 0, 1),
 		Port: 55321,
@@ -60,7 +60,7 @@ func createAddress() net.Addr {
 	}
 }
 
-func createMessage() Message {
+func createMessage() *Message {
 	m := Message{}
 	m.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
 	m.To = Node{}
@@ -69,7 +69,22 @@ func createMessage() Message {
 	m.To.Instance = "default"
 	var d PlainDocument = "Hello world"
 	m.SetContent(&d)
-	return m
+	return &m
+}
+
+func createSession() *Session {
+	s := Session{}
+	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
+	s.From = Node{}
+	s.From.Name = "postmaster"
+	s.From.Domain = "limeprotocol.org"
+	s.From.Instance = "#server1"
+	s.To = Node{}
+	s.To.Name = "golang"
+	s.To.Domain = "limeprotocol.org"
+	s.To.Instance = "default"
+	s.State = SessionStateEstablished
+	return &s
 }
 
 func publicKey(priv interface{}) interface{} {
@@ -130,7 +145,7 @@ func createCertificate(host string) (*tls.Certificate, error) {
 
 func TestTCPTransport_Open_WhenListening(t *testing.T) {
 	// Arrange
-	addr := createAddress()
+	addr := createTCPAddress()
 	listener := createListener(addr, nil, t)
 	defer listener.Close()
 
@@ -145,7 +160,7 @@ func TestTCPTransport_Open_WhenListening(t *testing.T) {
 
 func TestTCPTransport_Open_WhenNotListening(t *testing.T) {
 	// Arrange
-	addr := createAddress()
+	addr := createTCPAddress()
 	client := TCPTransport{}
 
 	// Act
@@ -158,10 +173,10 @@ func TestTCPTransport_Open_WhenNotListening(t *testing.T) {
 
 func TestTCPTransportListener_Close_WhenOpen(t *testing.T) {
 	// Arrange
-	addr := createAddress()
+	addr := createTCPAddress()
 	listener := createListener(addr, nil, t)
 	defer listener.Close()
-	client := createClientTransport(createAddress(), t)
+	client := createClientTransport(createTCPAddress(), t)
 
 	// Act
 	err := client.Close()
@@ -184,10 +199,10 @@ func TestTCPTransportListener_Close_WhenNotOpen(t *testing.T) {
 
 func TestTCPTransport_SetEncryption_None(t *testing.T) {
 	// Arrange
-	addr := createAddress()
+	addr := createTCPAddress()
 	listener := createListener(addr, nil, t)
 	defer listener.Close()
-	client := createClientTransport(createAddress(), t)
+	client := createClientTransport(createTCPAddress(), t)
 
 	// Act
 	err := client.SetEncryption(SessionEncryptionNone)
@@ -198,7 +213,7 @@ func TestTCPTransport_SetEncryption_None(t *testing.T) {
 
 func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	// Arrange
-	addr := createAddress()
+	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createListener(addr, transportChan, t)
 	defer listener.Close()
@@ -207,7 +222,7 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 			return createCertificate("127.0.0.1")
 		},
 	}
-	client := createClientTransport(createAddress(), t)
+	client := createClientTransport(createTCPAddress(), t)
 	client.TLSConfig = &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true}
 	var server Transport
 	select {
@@ -229,28 +244,28 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestTCPTransport_Send_Message(t *testing.T) {
+func TestTCPTransport_Send_Session(t *testing.T) {
 	// Arrange
-	addr := createAddress()
+	addr := createTCPAddress()
 	listener := createListener(addr, nil, t)
 	defer listener.Close()
-	client := createClientTransport(createAddress(), t)
-	m := createMessage()
+	client := createClientTransport(createTCPAddress(), t)
+	s := createSession()
 
 	// Act
-	err := client.Send(&m)
+	err := client.Send(s)
 
 	// Assert
 	assert.NoError(t, err)
 }
 
-func TestTCPTransport_Receive_Message(t *testing.T) {
+func TestTCPTransport_Receive_Session(t *testing.T) {
 	// Arrange
-	addr := createAddress()
+	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createListener(addr, transportChan, t)
 	defer listener.Close()
-	client := createClientTransport(createAddress(), t)
+	client := createClientTransport(createTCPAddress(), t)
 	var server Transport
 	select {
 	case s := <-transportChan:
@@ -258,8 +273,8 @@ func TestTCPTransport_Receive_Message(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Transport listener timeout")
 	}
-	m := createMessage()
-	if err := client.Send(&m); err != nil {
+	s := createSession()
+	if err := client.Send(s); err != nil {
 		t.Fatal(err)
 	}
 
@@ -270,5 +285,5 @@ func TestTCPTransport_Receive_Message(t *testing.T) {
 	assert.NoError(t, err)
 	received, ok := e.(*Message)
 	assert.True(t, ok)
-	assert.Equal(t, m, *received)
+	assert.Equal(t, s, *received)
 }
