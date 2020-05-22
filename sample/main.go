@@ -13,7 +13,7 @@ import (
 func main() {
 
 	sender := func(t lime.Transport, e lime.Envelope) error {
-		err := t.Send(e)
+		err := t.Send(context.Background(), e)
 		if err != nil {
 			fmt.Println("Send error:", err)
 			return err
@@ -22,7 +22,7 @@ func main() {
 	}
 
 	receiver := func(t lime.Transport) (lime.Envelope, error) {
-		e, err := t.Receive()
+		e, err := t.Receive(context.TODO())
 		if err != nil {
 			fmt.Println("Receive error:", err)
 			return nil, err
@@ -224,10 +224,10 @@ func listen() {
 			fmt.Println(err)
 		}
 
-		err = t.Send(&lime.Session{State: lime.SessionStateFailed})
+		err = t.Send(context.Background(), &lime.Session{State: lime.SessionStateFailed})
 		if err != nil {
 			fmt.Println(err)
 		}
-		_ = t.Close()
+		_ = t.Close(context.TODO())
 	}
 }

@@ -23,7 +23,7 @@ func NewInMemoryTransportPair(bufferSize int) (client *InMemoryTransport, server
 	return
 }
 
-func (t *InMemoryTransport) Send(e Envelope) error {
+func (t *InMemoryTransport) Send(ctx context.Context, e Envelope) error {
 	if t.remote.localChan == nil {
 		return errors.New("remote transport is not open")
 	}
@@ -32,7 +32,7 @@ func (t *InMemoryTransport) Send(e Envelope) error {
 	return nil
 }
 
-func (t *InMemoryTransport) Receive() (Envelope, error) {
+func (t *InMemoryTransport) Receive(context.Context) (Envelope, error) {
 	if t.localChan == nil {
 		return nil, errors.New("transport is not open")
 	}
@@ -57,7 +57,7 @@ func (t *InMemoryTransport) Open(ctx context.Context, addr net.Addr) error {
 	return nil
 }
 
-func (t *InMemoryTransport) Close() error {
+func (t *InMemoryTransport) Close(context.Context) error {
 	close(t.localChan)
 	t.localChan = nil
 	return nil

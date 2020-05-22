@@ -205,7 +205,7 @@ func TestTCPTransportListener_Close_WhenOpen(t *testing.T) {
 	client := createClientTransport(createTCPAddress(), t)
 
 	// Act
-	err := client.Close()
+	err := client.Close(context.TODO())
 
 	// Assert
 	assert.Nil(t, err)
@@ -216,7 +216,7 @@ func TestTCPTransportListener_Close_WhenNotOpen(t *testing.T) {
 	client := TCPTransport{}
 
 	// Act
-	err := client.Close()
+	err := client.Close(context.TODO())
 
 	// Assert
 	assert.NotNil(t, err)
@@ -267,7 +267,7 @@ func TestTCPTransport_Send_Session(t *testing.T) {
 	s := createSession()
 
 	// Act
-	err := client.Send(s)
+	err := client.Send(context.Background(), s)
 
 	// Assert
 	assert.NoError(t, err)
@@ -282,12 +282,12 @@ func TestTCPTransport_Receive_Session(t *testing.T) {
 	client := createClientTransport(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
 	s := createSession()
-	if err := client.Send(s); err != nil {
+	if err := client.Send(context.Background(), s); err != nil {
 		t.Fatal(err)
 	}
 
 	// Act
-	e, err := server.Receive()
+	e, err := server.Receive(context.Background())
 
 	// Assert
 	assert.NoError(t, err)
@@ -315,7 +315,7 @@ func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 	s := createSession()
 
 	// Act
-	err := client.Send(s)
+	err := client.Send(context.Background(), s)
 
 	// Assert
 	assert.NoError(t, err)
@@ -338,12 +338,12 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := createSession()
-	if err := client.Send(s); err != nil {
+	if err := client.Send(context.Background(), s); err != nil {
 		t.Fatal(err)
 	}
 
 	// Act
-	e, err := server.Receive()
+	e, err := server.Receive(context.Background())
 
 	// Assert
 	assert.NoError(t, err)

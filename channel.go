@@ -7,27 +7,27 @@ import (
 )
 
 type MessageSender interface {
-	SendMessage(m *Message) error
+	SendMessage(ctx context.Context, m *Message) error
 }
 
 type MessageReceiver interface {
-	ReceiveMessage() (*Message, error)
+	ReceiveMessage(ctx context.Context) (*Message, error)
 }
 
 type NotificationSender interface {
-	SendNotification(n *Notification) error
+	SendNotification(ctx context.Context, n *Notification) error
 }
 
 type NotificationReceiver interface {
-	ReceiveNotification() (*Notification, error)
+	ReceiveNotification(ctx context.Context) (*Notification, error)
 }
 
 type CommandSender interface {
-	SendCommand(c *Command) error
+	SendCommand(ctx context.Context, c *Command) error
 }
 
 type CommandReceiver interface {
-	ReceiveCommand() (*Command, error)
+	ReceiveCommand(ctx context.Context) (*Command, error)
 }
 
 type CommandProcessor interface {
@@ -35,59 +35,63 @@ type CommandProcessor interface {
 }
 
 type SessionSender interface {
-	SendSession(s *Session) error
+	SendSession(ctx context.Context, s *Session) error
 }
 
 type SessionReceiver interface {
-	ReceiveSession() (*Session, error)
+	ReceiveSession(ctx context.Context) (*Session, error)
+}
+
+type SessionInformation interface {
+	// Get the session ID.
+	getID() string
+
+	// Get the remote party identifier.
+	getRemoteNode() Node
+
+	// Get the local node identifier.
+	getLocalNode() Node
+
+	// Get the current session state.
+	getState() SessionState
 }
 
 // Base type for the protocol communication channels.
 type Channel struct {
-	// The current session transport.
-	Transport Transport
-
-	// The session ID.
-	SessionID string
-
-	// The remote party identifier.
-	RemoteNode Node
-
-	// The local node identifier.
-	LocalNode Node
-
-	// The current session state.
-	State SessionState
-
-	outBuf            chan Envelope
-	inMessageBuf      chan Envelope
-	inNotificationBuf chan Envelope
-	inCommandBuf      chan Envelope
-	inSessionBuf      chan Envelope
+	transport          Transport
+	sessionID          string
+	remoteNode         Node
+	localNode          Node
+	state              SessionState
+	outChan            chan Envelope
+	inMessageChan      chan Envelope
+	inNotificationChan chan Envelope
+	inCommandChan      chan Envelope
+	inSessionChan      chan Envelope
 }
 
-func (c *Channel) SendSession(s *Session) error {
+func (c *Channel) SendSession(ctx context.Context, s *Session) error {
 	// check the current channel state
-	if c.State == SessionStateFinished || c.State == SessionStateFailed {
-		return fmt.Errorf("cannot send a session in the %v state", c.State)
+	if c.state == SessionStateFinished || c.state == SessionStateFailed {
+		return fmt.Errorf("cannot send a session in the %v state", c.state)
 	}
 
 	if s.State == SessionStateFinishing || s.State == SessionStateFinished || s.State == SessionStateFailed {
 		// TODO: signal to stop the listener goroutine
 	}
 
-	return c.Transport.Send(s)
+	return c.transport.Send(context.TODO(), s)
 }
-func (c *Channel) ReceiveSession() (*Session, error) {
+func (c *Channel) ReceiveSession(ctx context.Context) (*Session, error) {
 	if err := c.ensureTransportOK(); err != nil {
 		return nil, err
 	}
 
-	switch c.State {
+	switch c.state {
 	case SessionStateFinished:
-		return nil, fmt.Errorf("cannot receive a session in the %v session state", c.State)
+		return nil, fmt.Errorf("cannot receive a session in the %v session state", c.state)
 	case SessionStateEstablished:
-		e, ok := <-c.inSessionBuf
+		e, ok := <-c.inSessionChan
 		if !ok {
 			return nil, errors.New("receiver channel is closed")
 		}
@@ -99,7 +103,7 @@ func (c *Channel) ReceiveSession() (*Session, error) {
 		return s, nil
 	}
 
-	e, err := c.Transport.Receive()
+	e, err := c.transport.Receive(context.TODO())
 	if err != nil {
 		return nil, err
 	}
@@ -112,12 +116,12 @@ func (c *Channel) ReceiveSession() (*Session, error) {
 	return s, nil
 }
 
-func (c *Channel) SendMessage(m *Message) error {
-	return c.sendToBuffer(m)
+func (c *Channel) SendMessage(ctx context.Context, m *Message) error {
+	return c.sendToBuffer(ctx, m)
 }
 
-func (c *Channel) ReceiveMessage() (*Message, error) {
-	e, err := c.receiveFromBuffer(c.inMessageBuf)
+func (c *Channel) ReceiveMessage(ctx context.Context) (*Message, error) {
+	e, err := c.receiveFromBuffer(ctx, c.inMessageChan)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +134,7 @@ func (c *Channel) ReceiveMessage() (*Message, error) {
 	return m, nil
 }
 
-func (c *Channel) sendToBuffer(e Envelope) error {
+func (c *Channel) sendToBuffer(ctx context.Context, e Envelope) error {
 	if err := c.ensureEstablished("send"); err != nil {
 		return err
 	}
@@ -139,35 +143,48 @@ func (c *Channel) sendToBuffer(e Envelope) error {
 		return err
 	}
 
-	if c.outBuf == nil {
-		return errors.New("outBuf is not defined")
+	if c.outChan == nil {
+		return errors.New("outChan is not defined")
 	}
 
-	c.outBuf <- e
-	return nil
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case c.outChan <- e:
+		return nil
+	}
 }
-func (c *Channel) receiveFromBuffer(buf chan Envelope) (Envelope, error) {
-	return nil, nil
+func (c *Channel) receiveFromBuffer(ctx context.Context, buf chan Envelope) (Envelope, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case e := <-buf:
+		return e, nil
+	}
 }
 
 func (c *Channel) ensureEstablished(action string) error {
-	if c.State != SessionStateEstablished {
-		return fmt.Errorf("cannot %v in the %v state", action, c.State)
+	if c.state != SessionStateEstablished {
+		return fmt.Errorf("cannot %v in the %v state", action, c.state)
 	}
 	return nil
 }
 
 func (c *Channel) ensureTransportOK() error {
-	if c.Transport == nil {
+	if c.transport == nil {
 		return errors.New("transport is not defined")
 	}
 
-	if !c.Transport.IsConnected() {
+	if !c.transport.IsConnected() {
 		return errors.New("transport is not connected")
 	}
 	return nil
 }
 
 type ClientChannel struct {
+	Channel
+}
+
+type ServerChannel struct {
 	Channel
 }

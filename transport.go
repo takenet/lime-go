@@ -12,16 +12,16 @@ import (
 
 type Transport interface {
 	// Sends an envelope to the remote node.
-	Send(e Envelope) error
+	Send(ctx context.Context, e Envelope) error
 
 	// Receives an envelope from the remote node.
-	Receive() (Envelope, error)
+	Receive(ctx context.Context) (Envelope, error)
 
 	// Opens the transport connection with the specified Uri.
 	Open(ctx context.Context, addr net.Addr) error
 
 	// Closes the connection.
-	Close() error
+	Close(ctx context.Context) error
 
 	// Enumerates the supported compression options for the transport.
 	GetSupportedCompression() []SessionCompression
@@ -79,7 +79,7 @@ type ConnTransport struct {
 	limitedReader io.LimitedReader
 }
 
-func (t *ConnTransport) Send(e Envelope) error {
+func (t *ConnTransport) Send(ctx context.Context, e Envelope) error {
 	if err := t.ensureOpen(); err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func (t *ConnTransport) Send(e Envelope) error {
 	return t.encoder.Encode(e)
 }
 
-func (t *ConnTransport) Receive() (Envelope, error) {
+func (t *ConnTransport) Receive(context.Context) (Envelope, error) {
 	if err := t.ensureOpen(); err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (t *ConnTransport) Receive() (Envelope, error) {
 	return UnmarshalJSONMap(m)
 }
 
-func (t *ConnTransport) Close() error {
+func (t *ConnTransport) Close(context.Context) error {
 	if err := t.ensureOpen(); err != nil {
 		return err
 	}
