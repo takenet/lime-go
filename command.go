@@ -11,17 +11,23 @@ import (
 // information related To the network nodes.
 type Command struct {
 	EnvelopeBase
+
 	// Action To be taken To the resource.
 	Method CommandMethod
+
 	// The universal identifier of the resource.
 	Uri LimeUri
+
 	// MIME declaration of the resource type of the command.
 	Type MediaType
+
 	// Node resource that is subject of the command.
 	Resource Document
+
 	// Indicates the status of the action taken To the resource, in case of
 	// a response command.
 	Status CommandStatus
+
 	// Indicates the reason for a failure response command.
 	Reason Reason
 }

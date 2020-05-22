@@ -59,10 +59,13 @@ const DefaultReadTimeout time.Duration = 0
 type ConnTransportConfig struct {
 	// The limit for buffered data in read operations.
 	ReadLimit int64
+
 	// The timeout for read operations
 	ReadTimeout time.Duration
+
 	// The timeout for write operations
 	WriteTimeout time.Duration
+
 	// The trace writer for tracing connection envelopes
 	TraceWriter TraceWriter
 }
@@ -143,12 +146,14 @@ func (t *ConnTransport) setConn(conn net.Conn) {
 	var writer io.Writer = t.conn
 	var reader io.Reader = t.conn
 
+	// Configure the trace writer, if defined
 	tw := t.TraceWriter
 	if tw != nil {
 		writer = io.MultiWriter(writer, *tw.getSendWriter())
 		reader = io.TeeReader(reader, *tw.getReceiveWriter())
 	}
 
+	// Sets the decoder to be used for sending envelopes
 	t.encoder = json.NewEncoder(writer)
 
 	if t.ReadLimit == 0 {
@@ -194,6 +199,8 @@ type TraceWriter interface {
 	getReceiveWriter() *io.Writer
 }
 
+// Implements a TraceWriter that uses the standard output for
+// writing send and received envelopes.
 type StdoutTraceWriter struct {
 	sendWriter    io.Writer
 	receiveWriter io.Writer

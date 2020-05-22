@@ -19,16 +19,20 @@ type Envelope interface {
 type EnvelopeBase struct {
 	// The envelope identifier
 	ID string
+
 	// The identifier of the sender node of the envelope.
 	// If a node receives an envelope without this value, it means that the envelope was originated by the remote party.
 	From Node
+
 	// The delegation node. Its an acronym for 'per procurationem'.
 	// Identifier of a delegate node (a node that received a permission To send on behalf of another).
 	// Allows a node To send an envelope on behalf of another identity.
 	PP Node
+
 	// The identifier of the destination node of the envelope.
 	// If a node receives an envelope without this value, it means that the envelope is addressed To itself.
 	To Node
+
 	// Additional information to be delivered with the envelope.
 	Metadata map[string]string
 }

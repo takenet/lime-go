@@ -9,8 +9,10 @@ import (
 // Can be originated by a server or by the message destination node.
 type Notification struct {
 	EnvelopeBase
+
 	// Related event To the notification
 	Event NotificationEvent
+
 	// In the case of a failed event, brings more details about the problem.
 	Reason Reason
 }

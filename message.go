@@ -8,8 +8,10 @@ import (
 // Provides the transport of a Content between nodes in a network.
 type Message struct {
 	EnvelopeBase
+
 	// MIME declaration of the Content type of the message.
 	Type MediaType `json:"type"`
+
 	// Message body Content
 	Content Document `json:"content"`
 }
