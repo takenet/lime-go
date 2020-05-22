@@ -8,10 +8,19 @@ import (
 
 // Base interface for envelopes types.
 type Envelope interface {
+	// Get the envelope identifier
 	GetID() string
+
+	// Get the identifier of the sender node of the envelope.
 	GetFrom() Node
+
+	// Get the delegation node. Its an acronym for 'per procurationem'.
 	GetPP() Node
+
+	// Get the identifier of the destination node of the envelope.
 	GetTo() Node
+
+	// Get additional information to be delivered with the envelope.
 	GetMetadata() map[string]string
 }
 
