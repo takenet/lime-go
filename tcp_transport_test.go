@@ -9,48 +9,47 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/pem"
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"net"
-	"os"
 	"strings"
 	"testing"
 	"time"
 )
 
-var listenerTransportChan = make(chan Transport, 1)
-
-func openListener(addr net.Addr) (*TCPTransportListener, error) {
+func createListener(addr net.Addr, transportChan chan Transport, t *testing.T) *TCPTransportListener {
 	listener := TCPTransportListener{}
 	if err := listener.Open(context.Background(), addr); err != nil {
-		return nil, err
+		t.Fatal(err)
+		return nil
 	}
 	listener.ReadTimeout = 5 * time.Second
 	listener.WriteTimeout = 5 * time.Second
 
-	go func() {
-		for {
-			t, err := listener.Accept()
-			if err != nil {
-				break
+	if transportChan != nil {
+		go func() {
+			for {
+				t, err := listener.Accept()
+				if err != nil {
+					break
+				}
+				transportChan <- t
 			}
-			listenerTransportChan <- t
-		}
-	}()
+		}()
+	}
 
-	return &listener, nil
+	return &listener
 }
 
-func openClient(addr net.Addr) (*TCPTransport, error) {
+func createClientTransport(addr net.Addr, t *testing.T) *TCPTransport {
 	client := TCPTransport{}
 	if err := client.Open(context.Background(), addr); err != nil {
-		return nil, err
+		t.Fatal(err)
+		return nil
 	}
 	client.WriteTimeout = 5 * time.Second
 	client.ReadTimeout = 5 * time.Second
-	return &client, nil
+	return &client
 }
 
 func createAddress() net.Addr {
@@ -61,28 +60,24 @@ func createAddress() net.Addr {
 	}
 }
 
+func createMessage() Message {
+	m := Message{}
+	m.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
+	m.To = Node{}
+	m.To.Name = "golang"
+	m.To.Domain = "limeprotocol.org"
+	m.To.Instance = "default"
+	var d PlainDocument = "Hello world"
+	m.SetContent(&d)
+	return m
+}
+
 func publicKey(priv interface{}) interface{} {
 	switch k := priv.(type) {
 	case *rsa.PrivateKey:
 		return &k.PublicKey
 	case *ecdsa.PrivateKey:
 		return &k.PublicKey
-	default:
-		return nil
-	}
-}
-
-func pemBlockForKey(priv interface{}) *pem.Block {
-	switch k := priv.(type) {
-	case *rsa.PrivateKey:
-		return &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}
-	case *ecdsa.PrivateKey:
-		b, err := x509.MarshalECPrivateKey(k)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Unable to marshal ECDSA private key: %v", err)
-			os.Exit(2)
-		}
-		return &pem.Block{Type: "EC PRIVATE KEY", Bytes: b}
 	default:
 		return nil
 	}
@@ -131,22 +126,18 @@ func createCertificate(host string) (*tls.Certificate, error) {
 		PrivateKey:  key,
 		Leaf:        cert,
 	}, nil
-
 }
 
 func TestTCPTransport_Open_WhenListening(t *testing.T) {
 	// Arrange
 	addr := createAddress()
-	listener, err := openListener(addr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	listener := createListener(addr, nil, t)
 	defer listener.Close()
 
 	client := TCPTransport{}
 
 	// Act
-	err = client.Open(context.Background(), addr)
+	err := client.Open(context.Background(), addr)
 
 	// Assert
 	assert.Nil(t, err)
@@ -168,18 +159,12 @@ func TestTCPTransport_Open_WhenNotListening(t *testing.T) {
 func TestTCPTransportListener_Close_WhenOpen(t *testing.T) {
 	// Arrange
 	addr := createAddress()
-	listener, err := openListener(addr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	listener := createListener(addr, nil, t)
 	defer listener.Close()
-	client, err := openClient(createAddress())
-	if err != nil {
-		t.Fatal(err)
-	}
+	client := createClientTransport(createAddress(), t)
 
 	// Act
-	err = client.Close()
+	err := client.Close()
 
 	// Assert
 	assert.Nil(t, err)
@@ -200,18 +185,12 @@ func TestTCPTransportListener_Close_WhenNotOpen(t *testing.T) {
 func TestTCPTransport_SetEncryption_None(t *testing.T) {
 	// Arrange
 	addr := createAddress()
-	listener, err := openListener(addr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	listener := createListener(addr, nil, t)
 	defer listener.Close()
-	client, err := openClient(createAddress())
-	if err != nil {
-		t.Fatal(err)
-	}
+	client := createClientTransport(createAddress(), t)
 
 	// Act
-	err = client.SetEncryption(SessionEncryptionNone)
+	err := client.SetEncryption(SessionEncryptionNone)
 
 	// Assert
 	assert.NoError(t, err)
@@ -220,38 +199,76 @@ func TestTCPTransport_SetEncryption_None(t *testing.T) {
 func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	// Arrange
 	addr := createAddress()
-	listener, err := openListener(addr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	var transportChan = make(chan Transport, 1)
+	listener := createListener(addr, transportChan, t)
 	defer listener.Close()
 	listener.TLSConfig = &tls.Config{
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return createCertificate("127.0.0.1")
 		},
 	}
-	client, err := openClient(createAddress())
-	if err != nil {
-		t.Fatal(err)
-	}
+	client := createClientTransport(createAddress(), t)
 	client.TLSConfig = &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true}
 	var server Transport
 	select {
-	case s := <-listenerTransportChan:
+	case s := <-transportChan:
 		server = s
 	case <-time.After(5 * time.Second):
 		t.Fatal("Transport listener timeout")
 	}
 	go func() {
-		err = server.SetEncryption(SessionEncryptionTLS)
-		if err != nil {
+		if err := server.SetEncryption(SessionEncryptionTLS); err != nil {
 			t.Fatal(err)
 		}
 	}()
 
 	// Act
-	err = client.SetEncryption(SessionEncryptionTLS)
+	err := client.SetEncryption(SessionEncryptionTLS)
 
 	// Assert
 	assert.NoError(t, err)
+}
+
+func TestTCPTransport_Send_Message(t *testing.T) {
+	// Arrange
+	addr := createAddress()
+	listener := createListener(addr, nil, t)
+	defer listener.Close()
+	client := createClientTransport(createAddress(), t)
+	m := createMessage()
+
+	// Act
+	err := client.Send(&m)
+
+	// Assert
+	assert.NoError(t, err)
+}
+
+func TestTCPTransport_Receive_Message(t *testing.T) {
+	// Arrange
+	addr := createAddress()
+	var transportChan = make(chan Transport, 1)
+	listener := createListener(addr, transportChan, t)
+	defer listener.Close()
+	client := createClientTransport(createAddress(), t)
+	var server Transport
+	select {
+	case s := <-transportChan:
+		server = s
+	case <-time.After(5 * time.Second):
+		t.Fatal("Transport listener timeout")
+	}
+	m := createMessage()
+	if err := client.Send(&m); err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	e, err := server.Receive()
+
+	// Assert
+	assert.NoError(t, err)
+	received, ok := e.(*Message)
+	assert.True(t, ok)
+	assert.Equal(t, m, *received)
 }
