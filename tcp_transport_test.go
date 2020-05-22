@@ -20,11 +20,26 @@ import (
 	"time"
 )
 
+var listenerTransportChan = make(chan Transport, 1)
+
 func openListener(addr net.Addr) (*TCPTransportListener, error) {
 	listener := TCPTransportListener{}
 	if err := listener.Open(context.Background(), addr); err != nil {
 		return nil, err
 	}
+	listener.ReadTimeout = 5 * time.Second
+	listener.WriteTimeout = 5 * time.Second
+
+	go func() {
+		for {
+			t, err := listener.Accept()
+			if err != nil {
+				break
+			}
+			listenerTransportChan <- t
+		}
+	}()
+
 	return &listener, nil
 }
 
@@ -35,7 +50,6 @@ func openClient(addr net.Addr) (*TCPTransport, error) {
 	}
 	client.WriteTimeout = 5 * time.Second
 	client.ReadTimeout = 5 * time.Second
-
 	return &client, nil
 }
 
@@ -100,10 +114,6 @@ func createCertificate(host string) (*tls.Certificate, error) {
 			template.DNSNames = append(template.DNSNames, h)
 		}
 	}
-	//if *isCA {
-	//	template.IsCA = true
-	//	template.KeyUsage |= x509.KeyUsageCertSign
-	//}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, publicKey(key), key)
 	if err != nil {
@@ -116,7 +126,11 @@ func createCertificate(host string) (*tls.Certificate, error) {
 
 	rawCertificate := [][]byte{cert.Raw}
 
-	return &tls.Certificate{Certificate: rawCertificate}, nil
+	return &tls.Certificate{
+		Certificate: rawCertificate,
+		PrivateKey:  key,
+		Leaf:        cert,
+	}, nil
 
 }
 
@@ -211,19 +225,29 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-
 	listener.TLSConfig = &tls.Config{
-
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return createCertificate("127.0.0.1")
 		},
 	}
-
 	client, err := openClient(createAddress())
 	if err != nil {
 		t.Fatal(err)
 	}
-	client.TLSConfig = &tls.Config{ServerName: "127.0.0.1"}
+	client.TLSConfig = &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true}
+	var server Transport
+	select {
+	case s := <-listenerTransportChan:
+		server = s
+	case <-time.After(5 * time.Second):
+		t.Fatal("Transport listener timeout")
+	}
+	go func() {
+		err = server.SetEncryption(SessionEncryptionTLS)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	// Act
 	err = client.SetEncryption(SessionEncryptionTLS)

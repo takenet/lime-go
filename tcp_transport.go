@@ -80,8 +80,13 @@ func (t *TCPTransport) SetEncryption(e SessionEncryption) error {
 		tlsConn = tls.Client(t.conn, t.TLSConfig)
 	}
 
-	tlsConn.SetWriteDeadline(time.Now().Add(t.WriteTimeout))
-	tlsConn.SetReadDeadline(time.Now().Add(t.ReadTimeout))
+	if err := tlsConn.SetWriteDeadline(time.Now().Add(t.WriteTimeout)); err != nil {
+		return err
+	}
+
+	if err := tlsConn.SetReadDeadline(time.Now().Add(t.ReadTimeout)); err != nil {
+		return err
+	}
 
 	// We convert existing connection to TLS
 	if err := tlsConn.Handshake(); err != nil {
