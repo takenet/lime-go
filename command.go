@@ -42,34 +42,23 @@ func (c *Command) SetStatusFailure(r Reason) {
 	c.Reason = r
 }
 
-// CommandWrapper Wrapper for custom marshalling
-type CommandWrapper struct {
-	EnvelopeBaseWrapper
-	Method   CommandMethod    `json:"method"`
-	Uri      *LimeUri         `json:"uri,omitempty"`
-	Type     *MediaType       `json:"type,omitempty"`
-	Resource *json.RawMessage `json:"resource,omitempty"`
-	Status   CommandStatus    `json:"status,omitempty"`
-	Reason   *Reason          `json:"reason,omitempty"`
-}
-
-func (c Command) MarshalJSON() ([]byte, error) {
-	cw, err := c.toWrapper()
+func (c *Command) MarshalJSON() ([]byte, error) {
+	raw, err := c.ToRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(cw)
+	return json.Marshal(raw)
 }
 
 func (c *Command) UnmarshalJSON(b []byte) error {
-	cw := CommandWrapper{}
-	err := json.Unmarshal(b, &cw)
+	raw := RawEnvelope{}
+	err := json.Unmarshal(b, &raw)
 	if err != nil {
 		return err
 	}
 
 	command := Command{}
-	err = command.populate(&cw)
+	err = command.Populate(&raw)
 	if err != nil {
 		return err
 	}
@@ -78,66 +67,73 @@ func (c *Command) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (c *Command) toWrapper() (CommandWrapper, error) {
-	ew, err := c.EnvelopeBase.toWrapper()
+func (c *Command) ToRawEnvelope() (*RawEnvelope, error) {
+	raw, err := c.EnvelopeBase.ToRawEnvelope()
 	if err != nil {
-		return CommandWrapper{}, err
-	}
-
-	cw := CommandWrapper{
-		EnvelopeBaseWrapper: ew,
+		return nil, err
 	}
 
 	if c.Resource != nil {
 		b, err := json.Marshal(c.Resource)
 		if err != nil {
-			return CommandWrapper{}, err
+			return nil, err
 		}
 		r := json.RawMessage(b)
-		cw.Resource = &r
-		cw.Type = &c.Type
+		raw.Resource = &r
+		raw.Type = &c.Type
+	}
+	if c.Method != "" {
+		raw.Method = &c.Method
 	}
 
-	cw.Method = c.Method
-	cw.Status = c.Status
+	if c.Status != "" {
+		raw.Status = &c.Status
+	}
+
 	if c.Uri != (LimeUri{}) {
-		cw.Uri = &c.Uri
+		raw.Uri = &c.Uri
 	}
 	if c.Reason != (Reason{}) {
-		cw.Reason = &c.Reason
+		raw.Reason = &c.Reason
 	}
 
-	return cw, nil
+	return raw, nil
 }
 
-func (c *Command) populate(cw *CommandWrapper) error {
-	err := c.EnvelopeBase.populate(&cw.EnvelopeBaseWrapper)
+func (c *Command) Populate(raw *RawEnvelope) error {
+	err := c.EnvelopeBase.Populate(raw)
 	if err != nil {
 		return err
 	}
 
 	// Create the document type instance and unmarshal the json to it
-	if cw.Resource != nil {
-		if cw.Type == nil {
+	if raw.Resource != nil {
+		if raw.Type == nil {
 			return errors.New("command resource type is required when resource is present")
 		}
 
-		document, err := UnmarshalDocument(cw.Resource, *cw.Type)
+		document, err := UnmarshalDocument(raw.Resource, *raw.Type)
 		if err != nil {
 			return err
 		}
 
 		c.Resource = document
-		c.Type = *cw.Type
+		c.Type = *raw.Type
 	}
 
-	c.Method = cw.Method
-	c.Status = cw.Status
-	if cw.Uri != nil {
-		c.Uri = *cw.Uri
+	if raw.Method == nil {
+		return errors.New("command method is required")
 	}
-	if cw.Reason != nil {
-		c.Reason = *cw.Reason
+	c.Method = *raw.Method
+
+	if raw.Status != nil {
+		c.Status = *raw.Status
+	}
+	if raw.Uri != nil {
+		c.Uri = *raw.Uri
+	}
+	if raw.Reason != nil {
+		c.Reason = *raw.Reason
 	}
 
 	return nil
@@ -226,6 +222,10 @@ func ParseLimeUri(s string) (LimeUri, error) {
 }
 
 func (u LimeUri) MarshalText() ([]byte, error) {
+	if u.url == nil {
+		return nil, nil
+	}
+
 	return []byte(u.url.String()), nil
 }
 

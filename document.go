@@ -61,7 +61,7 @@ type DocumentContainerWrapper struct {
 }
 
 func (d DocumentContainer) MarshalJSON() ([]byte, error) {
-	dw, err := d.toWrapper()
+	dw, err := d.ToRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (d *DocumentContainer) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (d *DocumentContainer) toWrapper() (DocumentContainerWrapper, error) {
+func (d *DocumentContainer) ToRawEnvelope() (DocumentContainerWrapper, error) {
 	dw := DocumentContainerWrapper{
 		Type: &d.Type,
 	}
@@ -139,7 +139,7 @@ type DocumentCollectionWrapper struct {
 }
 
 func (d DocumentCollection) MarshalJSON() ([]byte, error) {
-	dw, err := d.toWrapper()
+	dw, err := d.ToRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (d *DocumentCollection) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (d *DocumentCollection) toWrapper() (DocumentCollectionWrapper, error) {
+func (d *DocumentCollection) ToRawEnvelope() (DocumentCollectionWrapper, error) {
 	dw := DocumentCollectionWrapper{
 		ItemType: &d.ItemType,
 		Total:    d.Total,

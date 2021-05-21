@@ -22,6 +22,10 @@ type Envelope interface {
 
 	// GetMetadata Get additional information to be delivered with the envelope.
 	GetMetadata() map[string]string
+
+	Populate(raw *RawEnvelope) error
+
+	ToRawEnvelope() (*RawEnvelope, error)
 }
 
 // EnvelopeBase Base struct to all communication envelopes.
@@ -66,48 +70,39 @@ func (e *EnvelopeBase) GetMetadata() map[string]string {
 	return e.Metadata
 }
 
-func (e *EnvelopeBase) toWrapper() (EnvelopeBaseWrapper, error) {
-	ew := EnvelopeBaseWrapper{}
-	ew.ID = e.ID
+func (e *EnvelopeBase) ToRawEnvelope() (*RawEnvelope, error) {
+	raw := RawEnvelope{}
+	raw.ID = e.ID
 	if e.From != (Node{}) {
-		ew.From = &e.From
+		raw.From = &e.From
 	}
 	if e.PP != (Node{}) {
-		ew.PP = &e.PP
+		raw.PP = &e.PP
 	}
 	if e.To != (Node{}) {
-		ew.To = &e.To
+		raw.To = &e.To
 	}
 
-	return ew, nil
+	return &raw, nil
 }
 
-func (e *EnvelopeBase) populate(ew *EnvelopeBaseWrapper) error {
-	if ew == nil || e == nil {
+func (e *EnvelopeBase) Populate(raw *RawEnvelope) error {
+	if raw == nil || e == nil {
 		return nil
 	}
-	e.ID = ew.ID
-	e.Metadata = ew.Metadata
-	if ew.From != nil {
-		e.From = *ew.From
+	e.ID = raw.ID
+	e.Metadata = raw.Metadata
+	if raw.From != nil {
+		e.From = *raw.From
 	}
-	if ew.PP != nil {
-		e.PP = *ew.PP
+	if raw.PP != nil {
+		e.PP = *raw.PP
 	}
-	if ew.To != nil {
-		e.To = *ew.To
+	if raw.To != nil {
+		e.To = *raw.To
 	}
 
 	return nil
-}
-
-// EnvelopeBaseWrapper Wrapper for custom marshalling
-type EnvelopeBaseWrapper struct {
-	ID       string            `json:"id,omitempty"`
-	From     *Node             `json:"from,omitempty"`
-	PP       *Node             `json:"pp,omitempty"`
-	To       *Node             `json:"to,omitempty"`
-	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 func UnmarshalJSONMap(m map[string]*json.RawMessage) (Envelope, error) {
@@ -155,4 +150,96 @@ type Reason struct {
 // NewEnvelopeId Generates a new unique envelope ID.
 func NewEnvelopeId() string {
 	return uuid.New().String()
+}
+
+// RawEnvelope it is an intermediate type for marshalling.
+type RawEnvelope struct {
+	// Common envelope properties
+
+	ID       string            `json:"id,omitempty"`
+	From     *Node             `json:"from,omitempty"`
+	PP       *Node             `json:"pp,omitempty"`
+	To       *Node             `json:"to,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+
+	// Shared properties
+
+	Reason *Reason    `json:"reason,omitempty"` // Shared by Notification and Message
+	Type   *MediaType `json:"type,omitempty"`   // Shared by Message and Command
+
+	// Message properties
+
+	Content *json.RawMessage `json:"content,omitempty"`
+
+	// Notification properties
+
+	Event *NotificationEvent `json:"event,omitempty"`
+
+	// Command properties
+
+	Method   *CommandMethod   `json:"method,omitempty"`
+	Uri      *LimeUri         `json:"uri,omitempty"`
+	Resource *json.RawMessage `json:"resource,omitempty"`
+	Status   *CommandStatus   `json:"status,omitempty"`
+
+	// Session properties
+
+	State              *SessionState          `json:"state,omitempty"`
+	EncryptionOptions  []SessionEncryption    `json:"encryptionOptions,omitempty"`
+	Encryption         *SessionEncryption     `json:"encryption,omitempty"`
+	CompressionOptions []SessionCompression   `json:"compressionOptions,omitempty"`
+	Compression        *SessionCompression    `json:"compression,omitempty"`
+	SchemeOptions      []AuthenticationScheme `json:"schemeOptions,omitempty"`
+	Scheme             *AuthenticationScheme  `json:"scheme,omitempty"`
+	Authentication     *json.RawMessage       `json:"authentication,omitempty"`
+}
+
+func (re *RawEnvelope) EnvelopeType() (string, error) {
+	// Determine the envelope type
+	if re.Method != nil {
+		return "Command", nil
+	}
+	if re.Event != nil {
+		return "Notification", nil
+	}
+	if re.Content != nil {
+		return "Message", nil
+	}
+	if re.State != nil {
+		return "Session", nil
+	}
+
+	return "", errors.New("could not determine the envelope type")
+}
+
+func (re *RawEnvelope) ToEnvelope() (*Envelope, error) {
+	var e Envelope
+
+	t, err := re.EnvelopeType()
+	if err != nil {
+		return nil, err
+	}
+
+	switch t {
+	case "Command":
+		e = &Command{}
+		break
+	case "Notification":
+		e = &Notification{}
+		break
+	case "Message":
+		e = &Message{}
+		break
+	case "Session":
+		e = &Session{}
+		break
+	default:
+		return nil, errors.New("unknown or unsupported envelope type")
+	}
+
+	if err := e.Populate(re); err != nil {
+		return nil, err
+	}
+
+	return &e, nil
 }

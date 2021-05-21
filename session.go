@@ -45,116 +45,118 @@ func (s *Session) SetAuthentication(a Authentication) {
 	s.Scheme = a.GetAuthenticationScheme()
 }
 
-// SessionWrapper Wrapper for custom marshalling
-type SessionWrapper struct {
-	EnvelopeBaseWrapper
-	State              SessionState           `json:"state"`
-	EncryptionOptions  []SessionEncryption    `json:"encryptionOptions,omitempty"`
-	Encryption         SessionEncryption      `json:"encryption,omitempty"`
-	CompressionOptions []SessionCompression   `json:"compressionOptions,omitempty"`
-	Compression        SessionCompression     `json:"compression,omitempty"`
-	SchemeOptions      []AuthenticationScheme `json:"schemeOptions,omitempty"`
-	Scheme             AuthenticationScheme   `json:"scheme,omitempty"`
-	Authentication     *json.RawMessage       `json:"authentication,omitempty"`
-	Reason             *Reason                `json:"reason,omitempty"`
-}
-
-func (s Session) MarshalJSON() ([]byte, error) {
-	sw, err := s.toWrapper()
+func (s *Session) MarshalJSON() ([]byte, error) {
+	raw, err := s.ToRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(sw)
+	return json.Marshal(raw)
 }
 
 func (s *Session) UnmarshalJSON(b []byte) error {
-	cw := SessionWrapper{}
-	err := json.Unmarshal(b, &cw)
+	raw := RawEnvelope{}
+	err := json.Unmarshal(b, &raw)
 	if err != nil {
 		return err
 	}
 
-	command := Session{}
-	err = command.populate(&cw)
+	session := Session{}
+	err = session.Populate(&raw)
 	if err != nil {
 		return err
 	}
 
-	*s = command
+	*s = session
 	return nil
 }
 
-func (s *Session) toWrapper() (SessionWrapper, error) {
-	ew, err := s.EnvelopeBase.toWrapper()
+func (s *Session) ToRawEnvelope() (*RawEnvelope, error) {
+	raw, err := s.EnvelopeBase.ToRawEnvelope()
 	if err != nil {
-		return SessionWrapper{}, err
-	}
-
-	sw := SessionWrapper{
-		EnvelopeBaseWrapper: ew,
+		return nil, err
 	}
 
 	if s.Authentication != nil {
 		b, err := json.Marshal(s.Authentication)
 		if err != nil {
-			return SessionWrapper{}, err
+			return nil, err
 		}
 		a := json.RawMessage(b)
-		sw.Authentication = &a
-		sw.Scheme = s.Scheme
+		raw.Authentication = &a
+
+		if s.Scheme != "" {
+			raw.Scheme = &s.Scheme
+		}
 	}
 
-	sw.State = s.State
-	sw.EncryptionOptions = s.EncryptionOptions
-	sw.Encryption = s.Encryption
-	sw.CompressionOptions = s.CompressionOptions
-	sw.Compression = s.Compression
-	sw.SchemeOptions = s.SchemeOptions
-	sw.Scheme = s.Scheme
+	if s.State != "" {
+		raw.State = &s.State
+	}
+	raw.EncryptionOptions = s.EncryptionOptions
+	if s.Encryption != "" {
+		raw.Encryption = &s.Encryption
+	}
+	raw.CompressionOptions = s.CompressionOptions
+	if s.Compression != "" {
+		raw.Compression = &s.Compression
+	}
+	raw.SchemeOptions = s.SchemeOptions
+	if s.Scheme != "" {
+		raw.Scheme = &s.Scheme
+	}
 
 	if s.Reason != (Reason{}) {
-		sw.Reason = &s.Reason
+		raw.Reason = &s.Reason
 	}
 
-	return sw, nil
+	return raw, nil
 }
 
-func (s *Session) populate(sw *SessionWrapper) error {
-	err := s.EnvelopeBase.populate(&sw.EnvelopeBaseWrapper)
+func (s *Session) Populate(raw *RawEnvelope) error {
+	err := s.EnvelopeBase.Populate(raw)
 	if err != nil {
 		return err
 	}
 
 	// Create the auth type instance and unmarshal the json to it
-	if sw.Authentication != nil {
-		if sw.Scheme == "" {
+	if raw.Authentication != nil {
+		if raw.Scheme == nil {
 			return errors.New("session scheme is required when authentication is present")
 		}
 
-		factory, ok := authFactories[sw.Scheme]
+		factory, ok := authFactories[*raw.Scheme]
 		if !ok {
-			return fmt.Errorf(`unknown authentication scheme '%v'`, sw.Scheme)
+			return fmt.Errorf(`unknown authentication scheme '%v'`, raw.Scheme)
 		}
 		a := factory()
-		err := json.Unmarshal(*sw.Authentication, &a)
+		err := json.Unmarshal(*raw.Authentication, &a)
 		if err != nil {
 			return err
 		}
 
 		s.Authentication = a
-		s.Scheme = sw.Scheme
+		s.Scheme = *raw.Scheme
 	}
 
-	s.State = sw.State
-	s.EncryptionOptions = sw.EncryptionOptions
-	s.Encryption = sw.Encryption
-	s.CompressionOptions = sw.CompressionOptions
-	s.Compression = sw.Compression
-	s.SchemeOptions = sw.SchemeOptions
-	s.Scheme = sw.Scheme
+	if raw.State == nil {
+		return errors.New("session state is required")
+	}
 
-	if sw.Reason != nil {
-		s.Reason = *sw.Reason
+	s.State = *raw.State
+	s.EncryptionOptions = raw.EncryptionOptions
+	if raw.Encryption != nil {
+		s.Encryption = *raw.Encryption
+	}
+	s.CompressionOptions = raw.CompressionOptions
+	if raw.Compression != nil {
+		s.Compression = *raw.Compression
+	}
+	s.SchemeOptions = raw.SchemeOptions
+	if raw.Scheme != nil {
+		s.Scheme = *raw.Scheme
+	}
+	if raw.Reason != nil {
+		s.Reason = *raw.Reason
 	}
 
 	return nil

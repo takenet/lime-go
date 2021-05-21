@@ -21,30 +21,23 @@ func (m *Message) SetContent(d Document) {
 	m.Type = d.GetMediaType()
 }
 
-// MessageWrapper Wrapper for custom marshalling
-type MessageWrapper struct {
-	EnvelopeBaseWrapper
-	Type    *MediaType       `json:"type"`
-	Content *json.RawMessage `json:"content"`
-}
-
-func (m Message) MarshalJSON() ([]byte, error) {
-	mw, err := m.toWrapper()
+func (m *Message) MarshalJSON() ([]byte, error) {
+	raw, err := m.ToRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(mw)
+	return json.Marshal(raw)
 }
 
 func (m *Message) UnmarshalJSON(b []byte) error {
-	mw := MessageWrapper{}
-	err := json.Unmarshal(b, &mw)
+	raw := RawEnvelope{}
+	err := json.Unmarshal(b, &raw)
 	if err != nil {
 		return err
 	}
 
 	message := Message{}
-	err = message.populate(&mw)
+	err = message.Populate(&raw)
 	if err != nil {
 		return err
 	}
@@ -53,49 +46,48 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (m *Message) toWrapper() (MessageWrapper, error) {
-	ew, err := m.EnvelopeBase.toWrapper()
+func (m *Message) ToRawEnvelope() (*RawEnvelope, error) {
+	raw, err := m.EnvelopeBase.ToRawEnvelope()
 	if err != nil {
-		return MessageWrapper{}, err
+		return nil, err
 	}
 
 	if m.Content == nil {
-		return MessageWrapper{}, errors.New("message content is required")
+		return nil, errors.New("message content is required")
 	}
 	b, err := json.Marshal(m.Content)
 	if err != nil {
-		return MessageWrapper{}, err
+		return nil, err
 	}
-	r := json.RawMessage(b)
+	content := json.RawMessage(b)
 
-	return MessageWrapper{
-		EnvelopeBaseWrapper: ew,
-		Type:                &m.Type,
-		Content:             &r,
-	}, nil
+	raw.Type = &m.Type
+	raw.Content = &content
+
+	return raw, nil
 }
 
-func (m *Message) populate(mw *MessageWrapper) error {
-	err := m.EnvelopeBase.populate(&mw.EnvelopeBaseWrapper)
+func (m *Message) Populate(raw *RawEnvelope) error {
+	err := m.EnvelopeBase.Populate(raw)
 	if err != nil {
 		return err
 	}
 
 	// Create the document type instance and unmarshal the json To it
-	if mw.Type == nil {
+	if raw.Type == nil {
 		return errors.New("message type is required")
 	}
 
-	if mw.Content == nil {
+	if raw.Content == nil {
 		return errors.New("message content is required")
 	}
 
-	document, err := UnmarshalDocument(mw.Content, *mw.Type)
+	document, err := UnmarshalDocument(raw.Content, *raw.Type)
 	if err != nil {
 		return err
 	}
 
-	m.Type = *mw.Type
+	m.Type = *raw.Type
 	m.Content = document
 	return nil
 }

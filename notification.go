@@ -2,6 +2,7 @@ package lime
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -17,66 +18,61 @@ type Notification struct {
 	Reason Reason
 }
 
-// NotificationWrapper Wrapper for custom marshalling
-type NotificationWrapper struct {
-	EnvelopeBaseWrapper
-	Event  NotificationEvent `json:"event,omitempty"`
-	Reason *Reason           `json:"reason,omitempty"`
-}
-
 func (n Notification) MarshalJSON() ([]byte, error) {
-	nw, err := n.toWrapper()
+	raw, err := n.ToRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(nw)
+	return json.Marshal(raw)
 }
 
 func (n *Notification) UnmarshalJSON(b []byte) error {
-	nw := NotificationWrapper{}
-	err := json.Unmarshal(b, &nw)
+	raw := RawEnvelope{}
+	err := json.Unmarshal(b, &raw)
 	if err != nil {
 		return err
 	}
 
-	command := Notification{}
-	err = command.populate(&nw)
+	notification := Notification{}
+	err = notification.Populate(&raw)
 	if err != nil {
 		return err
 	}
 
-	*n = command
+	*n = notification
 	return nil
 }
 
-func (n *Notification) toWrapper() (NotificationWrapper, error) {
-	ew, err := n.EnvelopeBase.toWrapper()
+func (n *Notification) ToRawEnvelope() (*RawEnvelope, error) {
+	raw, err := n.EnvelopeBase.ToRawEnvelope()
 	if err != nil {
-		return NotificationWrapper{}, err
+		return nil, err
 	}
 
-	nw := NotificationWrapper{
-		EnvelopeBaseWrapper: ew,
-		Event:               n.Event,
+	if n.Event != "" {
+		raw.Event = &n.Event
 	}
 
 	if n.Reason != (Reason{}) {
-		nw.Reason = &n.Reason
+		raw.Reason = &n.Reason
 	}
 
-	return nw, nil
+	return raw, nil
 }
 
-func (n *Notification) populate(nw *NotificationWrapper) error {
-	err := n.EnvelopeBase.populate(&nw.EnvelopeBaseWrapper)
+func (n *Notification) Populate(raw *RawEnvelope) error {
+	err := n.EnvelopeBase.Populate(raw)
 	if err != nil {
 		return err
 	}
 
-	n.Event = nw.Event
+	if raw.Event == nil {
+		return errors.New("notification event is required")
+	}
 
-	if nw.Reason != nil {
-		n.Reason = *nw.Reason
+	n.Event = *raw.Event
+	if raw.Reason != nil {
+		n.Reason = *raw.Reason
 	}
 
 	return nil
