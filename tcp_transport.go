@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"time"
 )
 
 type TCPTransport struct {
@@ -46,7 +45,7 @@ func (t *TCPTransport) GetCompression() SessionCompression {
 	return SessionCompressionNone
 }
 
-func (t *TCPTransport) SetCompression(c SessionCompression) error {
+func (t *TCPTransport) SetCompression(ctx context.Context, c SessionCompression) error {
 	return fmt.Errorf("compression '%v' is not supported", c)
 }
 
@@ -58,7 +57,7 @@ func (t *TCPTransport) GetEncryption() SessionEncryption {
 	return t.encryption
 }
 
-func (t *TCPTransport) SetEncryption(e SessionEncryption) error {
+func (t *TCPTransport) SetEncryption(ctx context.Context, e SessionEncryption) error {
 	if e == t.encryption {
 		return nil
 	}
@@ -80,12 +79,14 @@ func (t *TCPTransport) SetEncryption(e SessionEncryption) error {
 		tlsConn = tls.Client(t.conn, t.TLSConfig)
 	}
 
-	if err := tlsConn.SetWriteDeadline(time.Now().Add(t.WriteTimeout)); err != nil {
-		return err
-	}
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := tlsConn.SetWriteDeadline(deadline); err != nil {
+			return err
+		}
 
-	if err := tlsConn.SetReadDeadline(time.Now().Add(t.ReadTimeout)); err != nil {
-		return err
+		if err := tlsConn.SetReadDeadline(deadline); err != nil {
+			return err
+		}
 	}
 
 	// We convert existing connection to TLS
@@ -156,8 +157,6 @@ func (t *TCPTransportListener) Accept() (Transport, error) {
 	transport.server = true
 	transport.TLSConfig = t.TLSConfig
 	transport.ReadLimit = t.ReadLimit
-	transport.ReadTimeout = t.ReadTimeout
-	transport.WriteTimeout = t.WriteTimeout
 
 	return &transport, nil
 }

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
 )
 
 type Transport interface {
@@ -30,7 +29,7 @@ type Transport interface {
 	GetCompression() SessionCompression
 
 	// SetCompression Defines the compression mode for the transport.
-	SetCompression(c SessionCompression) error
+	SetCompression(ctx context.Context, c SessionCompression) error
 
 	// GetSupportedEncryption Enumerates the supported encryption options for the transport.
 	GetSupportedEncryption() []SessionEncryption
@@ -39,7 +38,7 @@ type Transport interface {
 	GetEncryption() SessionEncryption
 
 	// SetEncryption Defines the encryption mode for the transport.
-	SetEncryption(e SessionEncryption) error
+	SetEncryption(ctx context.Context, e SessionEncryption) error
 
 	// IsConnected Indicates if the transport is connected.
 	IsConnected() bool
@@ -52,19 +51,11 @@ type Transport interface {
 }
 
 const DefaultReadLimit int64 = 8192 * 1024
-const DefaultWriteTimeout time.Duration = time.Second * 60
-const DefaultReadTimeout time.Duration = 0
 
 // ConnTransportConfig Common configurations for net.Conn based transports.
 type ConnTransportConfig struct {
 	// The limit for buffered data in read operations.
 	ReadLimit int64
-
-	// The timeout for read operations
-	ReadTimeout time.Duration
-
-	// The timeout for write operations
-	WriteTimeout time.Duration
 
 	// The trace writer for tracing connection envelopes
 	TraceWriter TraceWriter
@@ -85,22 +76,29 @@ func (t *ConnTransport) Send(ctx context.Context, e Envelope) error {
 	}
 
 	// Sets the timeout for the next write operation
-	if err := t.conn.SetWriteDeadline(time.Now().Add(t.WriteTimeout)); err != nil {
-		return err
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := t.conn.SetWriteDeadline(deadline); err != nil {
+			return err
+		}
 	}
+
+	// TODO: Encode writes a new line after each entry, how we can avoid this?
 	return t.encoder.Encode(e)
 }
 
-func (t *ConnTransport) Receive(context.Context) (Envelope, error) {
+func (t *ConnTransport) Receive(ctx context.Context) (Envelope, error) {
 	if err := t.ensureOpen(); err != nil {
 		return nil, err
 	}
 
 	// Sets the timeout for the next read operation
-	if err := t.conn.SetReadDeadline(time.Now().Add(t.ReadTimeout)); err != nil {
-		return nil, err
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := t.conn.SetReadDeadline(deadline); err != nil {
+			return nil, err
+		}
 	}
 
+	// TODO: Replace by a RawEnvelope instance
 	// Decode as a map of raw JSON to be unmarshalled
 	var m map[string]*json.RawMessage
 	if err := t.decoder.Decode(&m); err != nil {
