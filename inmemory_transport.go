@@ -7,7 +7,7 @@ import (
 	"net"
 )
 
-// Implements an InMemory transport type
+// InMemoryTransport Implements an InMemory transport type
 type InMemoryTransport struct {
 	BufferSize int
 	localChan  chan Envelope

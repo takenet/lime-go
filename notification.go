@@ -5,19 +5,19 @@ import (
 	"fmt"
 )
 
-// Transport information about events associated To a message in a session.
-// Can be originated by a server or by the message destination node.
+// Notification Information about events associated to a Message in a Session.
+// Can be originated by a server or by the Message destination Node.
 type Notification struct {
 	EnvelopeBase
 
-	// Related event To the notification
+	// Event Related event To the notification
 	Event NotificationEvent
 
-	// In the case of a failed event, brings more details about the problem.
+	// Reason In the case of a failed event, brings more details about the problem.
 	Reason Reason
 }
 
-// Wrapper for custom marshalling
+// NotificationWrapper Wrapper for custom marshalling
 type NotificationWrapper struct {
 	EnvelopeBaseWrapper
 	Event  NotificationEvent `json:"event,omitempty"`
@@ -82,21 +82,21 @@ func (n *Notification) populate(nw *NotificationWrapper) error {
 	return nil
 }
 
-// Events that can happen in the message pipeline.
+// NotificationEvent Events that can happen in the message pipeline.
 type NotificationEvent string
 
 const (
-	// The message was received and accepted by the server.
+	// NotificationEventAccepted The message was received and accepted by the server.
 	// This event is similar To 'received' but is emitted by an intermediate node (hop) and not by the message's final destination.
 	NotificationEventAccepted = NotificationEvent("accepted")
-	// The message was dispatched To the destination by the server.
+	// NotificationEventDispatched The message was dispatched To the destination by the server.
 	// This event is similar To the 'consumed' but is emitted by an intermediate node (hop) and not by the message's final destination.
 	NotificationEventDispatched = NotificationEvent("dispatched")
-	// The node has received the message.
+	// NotificationEventReceived The node has received the message.
 	NotificationEventReceived = NotificationEvent("received")
-	// The node has consumed the Content of the message.
+	// NotificationEventConsumed The node has consumed the Content of the message.
 	NotificationEventConsumed = NotificationEvent("consumed")
-	// A problem occurred during the processing of the message.
+	// NotificationEventFailed A problem occurred during the processing of the message.
 	// In this case, the reason property of the notification should be present.
 	NotificationEventFailed = NotificationEvent("failed")
 )

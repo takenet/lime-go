@@ -56,7 +56,7 @@ type SessionInformation interface {
 	getState() SessionState
 }
 
-// Base type for the protocol communication channels.
+// Channel Base type for the protocol communication channels.
 type Channel struct {
 	transport          Transport
 	sessionID          string

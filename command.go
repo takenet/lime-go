@@ -143,28 +143,28 @@ func (c *Command) populate(cw *CommandWrapper) error {
 	return nil
 }
 
-// Defines methods for the manipulation of resources.
+// CommandMethod Defines methods for the manipulation of resources.
 type CommandMethod string
 
 const (
-	// Get an existing value of a resource.
+	// CommandMethodGet Get an existing value of a resource.
 	CommandMethodGet = CommandMethod("get")
-	// Create or updates the value of a resource.
+	// CommandMethodSet Create or updates the value of a resource.
 	CommandMethodSet = CommandMethod("set")
-	// Delete a value of the resource or the resource itself.
+	// CommandMethodDelete Delete a value of the resource or the resource itself.
 	CommandMethodDelete = CommandMethod("delete")
-	// Subscribe To a resource, allowing the originator To be notified when the
+	// CommandMethodSubscribe Subscribe To a resource, allowing the originator To be notified when the
 	// value of the resource changes in the destination.
 	CommandMethodSubscribe = CommandMethod("subscribe")
-	// Unsubscribe To the resource, signaling To the destination that the
+	// CommandMethodUnsubscribe Unsubscribe To the resource, signaling To the destination that the
 	// originator do not want To receive further notifications about the resource.
 	CommandMethodUnsubscribe = CommandMethod("unsubscribe")
-	// Notify the destination about a change in a resource value of the sender.
+	// CommandMethodObserve Notify the destination about a change in a resource value of the sender.
 	// If the resource value is absent, it represent that the resource in the specified URI was deleted in the originator.
 	// This method can be one way and the destination may not send a response for it.
 	// Because of that, a command envelope with this method may not have an ID.
 	CommandMethodObserve = CommandMethod("observe")
-	// Merge a resource document with an existing one. If the resource doesn't exists, it is created.
+	// CommandMethodMerge Merge a resource document with an existing one. If the resource doesn't exists, it is created.
 	CommandMethodMerge = CommandMethod("merge")
 )
 

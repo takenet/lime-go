@@ -5,14 +5,14 @@ import (
 	"errors"
 )
 
-// Provides the transport of a Content between nodes in a network.
+// Message Provides the transport of a Content between nodes in a network.
 type Message struct {
 	EnvelopeBase
 
-	// MIME declaration of the Content type of the message.
+	// Type MIME declaration of the Content type of the message.
 	Type MediaType `json:"type"`
 
-	// Message body Content
+	// Content Message body content
 	Content Document `json:"content"`
 }
 
@@ -21,7 +21,7 @@ func (m *Message) SetContent(d Document) {
 	m.Type = d.GetMediaType()
 }
 
-// Wrapper for custom marshalling
+// MessageWrapper Wrapper for custom marshalling
 type MessageWrapper struct {
 	EnvelopeBaseWrapper
 	Type    *MediaType       `json:"type"`

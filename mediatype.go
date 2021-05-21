@@ -15,17 +15,17 @@ const (
 	MediaTypeVideo       = "video"
 )
 
-// MIME media type representation.
+// MediaType MIME media type representation.
 type MediaType struct {
-	// The top-level type identifier. The valid values are text, application, image, audio and video.
+	// Type The top-level type identifier. The valid values are text, application, image, audio and video.
 	Type string
-	// The media type subtype.
+	// Subtype The media type subtype.
 	Subtype string
-	// Media type suffix.
+	// Suffix Media type suffix.
 	Suffix string
 }
 
-// Indicates if the MIME represents a JSON type.
+// IsJson Indicates if the MIME represents a JSON type.
 func (m MediaType) IsJson() bool {
 	return m.Suffix == "json"
 }

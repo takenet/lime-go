@@ -11,16 +11,16 @@ import (
 )
 
 type Transport interface {
-	// Send Sends an envelope to the remote node.
+	// Send sends an envelope to the remote node.
 	Send(ctx context.Context, e Envelope) error
 
-	// Receive Receives an envelope from the remote node.
+	// Receive receives an envelope from the remote node.
 	Receive(ctx context.Context) (Envelope, error)
 
-	// Open Opens the transport connection with the specified Uri.
+	// Open opens the transport connection with the specified Uri.
 	Open(ctx context.Context, addr net.Addr) error
 
-	// Close Closes the connection.
+	// Close closes the connection.
 	Close(ctx context.Context) error
 
 	// GetSupportedCompression Enumerates the supported compression options for the transport.
