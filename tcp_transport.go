@@ -12,7 +12,7 @@ import (
 
 type TCPTransport struct {
 	ConnTransport
-	// The configuration for TLS session encryption
+	// TLSConfig The configuration for TLS session encryption
 	TLSConfig  *tls.Config
 	encryption SessionEncryption
 	server     bool

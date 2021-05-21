@@ -11,43 +11,43 @@ import (
 )
 
 type Transport interface {
-	// Sends an envelope to the remote node.
+	// Send Sends an envelope to the remote node.
 	Send(ctx context.Context, e Envelope) error
 
-	// Receives an envelope from the remote node.
+	// Receive Receives an envelope from the remote node.
 	Receive(ctx context.Context) (Envelope, error)
 
-	// Opens the transport connection with the specified Uri.
+	// Open Opens the transport connection with the specified Uri.
 	Open(ctx context.Context, addr net.Addr) error
 
-	// Closes the connection.
+	// Close Closes the connection.
 	Close(ctx context.Context) error
 
-	// Enumerates the supported compression options for the transport.
+	// GetSupportedCompression Enumerates the supported compression options for the transport.
 	GetSupportedCompression() []SessionCompression
 
-	// Gets the current transport compression option.
+	// GetCompression Gets the current transport compression option.
 	GetCompression() SessionCompression
 
-	// Defines the compression mode for the transport.
+	// SetCompression Defines the compression mode for the transport.
 	SetCompression(c SessionCompression) error
 
-	// Enumerates the supported encryption options for the transport.
+	// GetSupportedEncryption Enumerates the supported encryption options for the transport.
 	GetSupportedEncryption() []SessionEncryption
 
-	// Gets the current transport encryption option.
+	// GetEncryption Gets the current transport encryption option.
 	GetEncryption() SessionEncryption
 
-	// Defines the encryption mode for the transport.
+	// SetEncryption Defines the encryption mode for the transport.
 	SetEncryption(e SessionEncryption) error
 
-	// Indicates if the transport is connected.
+	// IsConnected Indicates if the transport is connected.
 	IsConnected() bool
 
-	// Gets the local endpoint address.
+	// LocalAdd Gets the local endpoint address.
 	LocalAdd() net.Addr
 
-	// Gets the remote endpoint address.
+	// RemoteAdd Gets the remote endpoint address.
 	RemoteAdd() net.Addr
 }
 
@@ -55,7 +55,7 @@ const DefaultReadLimit int64 = 8192 * 1024
 const DefaultWriteTimeout time.Duration = time.Second * 60
 const DefaultReadTimeout time.Duration = 0
 
-// Common configurations for net.Conn based transports.
+// ConnTransportConfig Common configurations for net.Conn based transports.
 type ConnTransportConfig struct {
 	// The limit for buffered data in read operations.
 	ReadLimit int64
@@ -70,7 +70,7 @@ type ConnTransportConfig struct {
 	TraceWriter TraceWriter
 }
 
-// Base type for net.Conn based transports.
+// ConnTransport Base type for net.Conn based transports.
 type ConnTransport struct {
 	ConnTransportConfig
 	conn          net.Conn
@@ -178,19 +178,19 @@ func (t *ConnTransport) ensureOpen() error {
 	return nil
 }
 
-// Defines a listener interface for the transports.
+// TransportListener Defines a listener interface for the transports.
 type TransportListener interface {
-	// Start listening for new transport connections.
+	// Open Start listening for new transport connections.
 	Open(ctx context.Context, addr net.Addr) error
 
-	// Stop the listener.
+	// Close Stop the listener.
 	Close() error
 
 	// Accept a new transport connection.
 	Accept() (Transport, error)
 }
 
-// Enable request tracing for network transports.
+// TraceWriter Enable request tracing for network transports.
 type TraceWriter interface {
 	// Gets the sendWriter for the transport send operations
 	getSendWriter() *io.Writer
@@ -199,7 +199,7 @@ type TraceWriter interface {
 	getReceiveWriter() *io.Writer
 }
 
-// Implements a TraceWriter that uses the standard output for
+// StdoutTraceWriter Implements a TraceWriter that uses the standard output for
 // writing send and received envelopes.
 type StdoutTraceWriter struct {
 	sendWriter    io.Writer

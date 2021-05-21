@@ -194,7 +194,7 @@ func TestTCPTransport_Open_WhenNotListening(t *testing.T) {
 
 	// Assert
 	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "connection refused")
+	assert.Contains(t, err.Error(), "refused")
 }
 
 func TestTCPTransportListener_Close_WhenOpen(t *testing.T) {

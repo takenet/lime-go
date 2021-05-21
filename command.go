@@ -7,8 +7,8 @@ import (
 	"net/url"
 )
 
-// Allows the manipulation of node resources, like server session parameters or
-// information related To the network nodes.
+// Command Allows the manipulation of node resources, like server session parameters or
+// information related to the network nodes.
 type Command struct {
 	EnvelopeBase
 
@@ -42,7 +42,7 @@ func (c *Command) SetStatusFailure(r Reason) {
 	c.Reason = r
 }
 
-// Wrapper for custom marshalling
+// CommandWrapper Wrapper for custom marshalling
 type CommandWrapper struct {
 	EnvelopeBaseWrapper
 	Method   CommandMethod    `json:"method"`
