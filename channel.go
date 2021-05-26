@@ -80,7 +80,7 @@ func (c *Channel) SendSession(ctx context.Context, s *Session) error {
 		// TODO: signal to stop the listener goroutine
 	}
 
-	return c.transport.Send(context.TODO(), s)
+	return c.transport.Send(ctx, s)
 }
 func (c *Channel) ReceiveSession(ctx context.Context) (*Session, error) {
 	if err := c.ensureTransportOK(); err != nil {
@@ -91,19 +91,22 @@ func (c *Channel) ReceiveSession(ctx context.Context) (*Session, error) {
 	case SessionStateFinished:
 		return nil, fmt.Errorf("cannot receive a session in the %v session state", c.state)
 	case SessionStateEstablished:
-		e, ok := <-c.inSessionChan
-		if !ok {
-			return nil, errors.New("receiver channel is closed")
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case e, ok := <-c.inSessionChan:
+			if !ok {
+				return nil, errors.New("receiver channel is closed")
+			}
+			s, ok := e.(*Session)
+			if !ok {
+				panic("unexpected envelope type was received from session buffer")
+			}
+			return s, nil
 		}
-		s, ok := e.(*Session)
-		if !ok {
-			panic("unexpected envelope type was received from session buffer")
-		}
-
-		return s, nil
 	}
 
-	e, err := c.transport.Receive(context.TODO())
+	e, err := c.transport.Receive(ctx)
 	if err != nil {
 		return nil, err
 	}

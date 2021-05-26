@@ -98,17 +98,15 @@ func (t *ConnTransport) Receive(ctx context.Context) (Envelope, error) {
 		}
 	}
 
-	// TODO: Replace by a RawEnvelope instance
-	// Decode as a map of raw JSON to be unmarshalled
-	var m map[string]*json.RawMessage
-	if err := t.decoder.Decode(&m); err != nil {
+	var raw RawEnvelope
+	if err := t.decoder.Decode(&raw); err != nil {
 		return nil, err
 	}
 
 	// Reset the read limit
 	t.limitedReader.N = t.ReadLimit
 
-	return UnmarshalJSONMap(m)
+	return raw.ToEnvelope()
 }
 
 func (t *ConnTransport) Close(context.Context) error {

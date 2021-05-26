@@ -6,21 +6,21 @@ import (
 	"github.com/google/uuid"
 )
 
-// Envelope Base interface for envelopes types.
+// Envelope is a base interface for envelopes types.
 type Envelope interface {
-	// GetID Get the envelope identifier
+	// GetID gets the envelope identifier
 	GetID() string
 
-	// GetFrom Get the identifier of the sender node of the envelope.
+	// GetFrom gets the identifier of the sender node of the envelope.
 	GetFrom() Node
 
-	// GetPP Get the delegation node. Its an acronym for 'per procurationem'.
+	// GetPP gets the delegation node. Its an acronym for 'per procurationem'.
 	GetPP() Node
 
-	// GetTo Get the identifier of the destination node of the envelope.
+	// GetTo gets the identifier of the destination node of the envelope.
 	GetTo() Node
 
-	// GetMetadata Get additional information to be delivered with the envelope.
+	// GetMetadata gets additional information to be delivered with the envelope.
 	GetMetadata() map[string]string
 
 	Populate(raw *RawEnvelope) error
@@ -28,25 +28,25 @@ type Envelope interface {
 	ToRawEnvelope() (*RawEnvelope, error)
 }
 
-// EnvelopeBase Base struct to all communication envelopes.
+// EnvelopeBase is a base struct to all communication envelopes.
 type EnvelopeBase struct {
-	// ID The envelope identifier
+	// The envelope identifier
 	ID string
 
-	// From The identifier of the sender node of the envelope.
+	// The identifier of the sender node of the envelope.
 	// If a node receives an envelope without this value, it means that the envelope was originated by the remote party.
 	From Node
 
-	// PP The delegation node. Its an acronym for 'per procurationem'.
+	// The delegation node. Its an acronym for 'per procurationem'.
 	// Identifier of a delegate node (a node that received a permission To send on behalf of another).
 	// Allows a node To send an envelope on behalf of another identity.
 	PP Node
 
-	// To The identifier of the destination node of the envelope.
+	// The identifier of the destination node of the envelope.
 	// If a node receives an envelope without this value, it means that the envelope is addressed To itself.
 	To Node
 
-	// Metadata Additional information to be delivered with the envelope.
+	// Additional information to be delivered with the envelope.
 	Metadata map[string]string
 }
 
@@ -105,40 +105,7 @@ func (e *EnvelopeBase) Populate(raw *RawEnvelope) error {
 	return nil
 }
 
-func UnmarshalJSONMap(m map[string]*json.RawMessage) (Envelope, error) {
-	var e Envelope
-
-	if _, ok := m["method"]; ok {
-		e = &Command{}
-	}
-
-	if _, ok := m["event"]; ok {
-		e = &Notification{}
-	}
-
-	if _, ok := m["content"]; ok {
-		e = &Message{}
-	}
-
-	if _, ok := m["state"]; ok {
-		e = &Session{}
-	}
-
-	if e == nil {
-		return nil, errors.New("could not determine the envelope type")
-	}
-
-	// TODO: This is inefficient since we are allocating twice for the envelope.
-	data, err := json.Marshal(m)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(data, e)
-	return e, err
-}
-
-// Reason Represents a known reason for events occurred during the client-server
+// Reason represents a known reason for events occurred during the client-server
 // interactions.
 type Reason struct {
 	// Code The reason code
@@ -147,7 +114,7 @@ type Reason struct {
 	Description string `json:"description,omitempty"`
 }
 
-// NewEnvelopeId Generates a new unique envelope ID.
+// NewEnvelopeId generates a new unique envelope ID.
 func NewEnvelopeId() string {
 	return uuid.New().String()
 }
@@ -212,7 +179,7 @@ func (re *RawEnvelope) EnvelopeType() (string, error) {
 	return "", errors.New("could not determine the envelope type")
 }
 
-func (re *RawEnvelope) ToEnvelope() (*Envelope, error) {
+func (re *RawEnvelope) ToEnvelope() (Envelope, error) {
 	var e Envelope
 
 	t, err := re.EnvelopeType()
@@ -241,5 +208,5 @@ func (re *RawEnvelope) ToEnvelope() (*Envelope, error) {
 		return nil, err
 	}
 
-	return &e, nil
+	return e, nil
 }
