@@ -22,37 +22,37 @@ type Transport interface {
 	// Close closes the connection.
 	Close(ctx context.Context) error
 
-	// GetSupportedCompression Enumerates the supported compression options for the transport.
+	// GetSupportedCompression enumerates the supported compression options for the transport.
 	GetSupportedCompression() []SessionCompression
 
-	// GetCompression Gets the current transport compression option.
+	// GetCompression gets the current transport compression option.
 	GetCompression() SessionCompression
 
-	// SetCompression Defines the compression mode for the transport.
+	// SetCompression defines the compression mode for the transport.
 	SetCompression(ctx context.Context, c SessionCompression) error
 
-	// GetSupportedEncryption Enumerates the supported encryption options for the transport.
+	// GetSupportedEncryption enumerates the supported encryption options for the transport.
 	GetSupportedEncryption() []SessionEncryption
 
-	// GetEncryption Gets the current transport encryption option.
+	// GetEncryption gets the current transport encryption option.
 	GetEncryption() SessionEncryption
 
-	// SetEncryption Defines the encryption mode for the transport.
+	// SetEncryption defines the encryption mode for the transport.
 	SetEncryption(ctx context.Context, e SessionEncryption) error
 
-	// IsConnected Indicates if the transport is connected.
+	// IsConnected indicates if the transport is connected.
 	IsConnected() bool
 
-	// LocalAdd Gets the local endpoint address.
+	// LocalAdd gets the local endpoint address.
 	LocalAdd() net.Addr
 
-	// RemoteAdd Gets the remote endpoint address.
+	// RemoteAdd gets the remote endpoint address.
 	RemoteAdd() net.Addr
 }
 
 const DefaultReadLimit int64 = 8192 * 1024
 
-// ConnTransportConfig Common configurations for net.Conn based transports.
+// ConnTransportConfig defines the common configurations for net.Conn based transports.
 type ConnTransportConfig struct {
 	// The limit for buffered data in read operations.
 	ReadLimit int64
@@ -61,7 +61,7 @@ type ConnTransportConfig struct {
 	TraceWriter TraceWriter
 }
 
-// ConnTransport Base type for net.Conn based transports.
+// ConnTransport implement a base type for net.Conn based transports.
 type ConnTransport struct {
 	ConnTransportConfig
 	conn          net.Conn

@@ -21,28 +21,28 @@ func init() {
 	})
 }
 
-// Document Defines an entity with a media type.
+// Document defines an entity with a media type.
 type Document interface {
-	// GetMediaType Gets the type of the media for the document.
+	// GetMediaType gets the type of the media for the document.
 	GetMediaType() MediaType
 }
 
-// JsonDocument Represents a generic JSON document.
+// JsonDocument represents a generic JSON document.
 type JsonDocument map[string]interface{}
 
 func (d *JsonDocument) GetMediaType() MediaType {
 	return mediaTypeApplicationJson
 }
 
-// PlainDocument Represents a plain document.
+// PlainDocument represents a plain document.
 type PlainDocument string
 
 func (d *PlainDocument) GetMediaType() MediaType {
 	return mediaTypeTextPlain
 }
 
-// DocumentContainer Represents a generic container for a document, providing a media type for the correct handling of its value by the nodes.
-// This class can be used along with DocumentCollection to traffic different document types in a single message.
+// DocumentContainer represents a generic container for a document, providing a media type for the correct handling of its value by the nodes.
+// This class can be used along with DocumentCollection to transport distinct document types in a single message.
 type DocumentContainer struct {
 	// The media type of the contained document.
 	Type MediaType
@@ -54,7 +54,7 @@ func (d *DocumentContainer) GetMediaType() MediaType {
 	return MediaType{MediaTypeApplication, "vnd.lime.container", "json"}
 }
 
-// DocumentContainerWrapper Wrapper for custom marshalling
+// DocumentContainerWrapper is a wrapper for custom marshalling
 type DocumentContainerWrapper struct {
 	Type  *MediaType       `json:"type"`
 	Value *json.RawMessage `json:"value"`
@@ -116,7 +116,7 @@ func (d *DocumentContainer) populate(dw *DocumentContainerWrapper) error {
 	return nil
 }
 
-// DocumentCollection Represents a collection of documents.
+// DocumentCollection represents a collection of documents.
 type DocumentCollection struct {
 	// The total of items in the collection.
 	// This value refers to the original source collection, without any applied filter that may exist in the items on this instance.
@@ -131,7 +131,7 @@ func (d *DocumentCollection) GetMediaType() MediaType {
 	return MediaType{MediaTypeApplication, "vnd.lime.collection", "json"}
 }
 
-// DocumentCollectionWrapper Wrapper for custom marshalling
+// DocumentCollectionWrapper is a wrapper for custom marshalling
 type DocumentCollectionWrapper struct {
 	Total    int                `json:"total,omitempty"`
 	ItemType *MediaType         `json:"itemType"`

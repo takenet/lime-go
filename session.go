@@ -279,12 +279,12 @@ var authFactories = map[AuthenticationScheme]func() Authentication{
 	},
 }
 
-// Authentication Defines a session authentications scheme container
+// Authentication defines a session authentications scheme container
 type Authentication interface {
 	GetAuthenticationScheme() AuthenticationScheme
 }
 
-// PlainAuthentication Defines a plain authentication scheme, that uses a password for authentication.
+// PlainAuthentication defines a plain authentication scheme, that uses a password for authentication.
 // Should be used only with encrypted sessions.
 type PlainAuthentication struct {
 	// Base64 representation of the password
@@ -299,7 +299,7 @@ func (a *PlainAuthentication) SetPasswordAsBase64(password string) {
 	a.Password = base64.StdEncoding.EncodeToString([]byte(password))
 }
 
-// KeyAuthentication Defines a plain authentication scheme, that uses a key for authentication.
+// KeyAuthentication defines a plain authentication scheme, that uses a key for authentication.
 // Should be used only with encrypted sessions.
 type KeyAuthentication struct {
 	// Base64 representation of the key
@@ -314,7 +314,7 @@ func (a *KeyAuthentication) SetKeyAsBase64(key string) {
 	a.Key = base64.StdEncoding.EncodeToString([]byte(key))
 }
 
-// TransportAuthentication Defines a transport layer authentication scheme.
+// TransportAuthentication defines a transport layer authentication scheme.
 type TransportAuthentication struct {
 }
 
@@ -322,7 +322,7 @@ func (a *TransportAuthentication) GetAuthenticationScheme() AuthenticationScheme
 	return AuthenticationSchemeTransport
 }
 
-// ExternalAuthentication Defines a external authentication scheme, that uses third-party validation.
+// ExternalAuthentication defines a external authentication scheme, that uses third-party validation.
 type ExternalAuthentication struct {
 	// The authentication token on base64 representation.
 	Token string `json:"token"`
