@@ -40,9 +40,9 @@ func main() {
 		return nil
 	}
 
-	t := lime.TCPTransport{}
-	t.TLSConfig = &tls.Config{ServerName: "msging.net"}
-
+	t := lime.TCPTransport{
+		TLSConfig: &tls.Config{ServerName: "msging.net"},
+	}
 	tw := lime.NewStdoutTraceWriter()
 	t.TraceWriter = tw
 

@@ -16,10 +16,10 @@ type Command struct {
 	Method CommandMethod
 
 	// The universal identifier of the resource.
-	Uri LimeUri
+	Uri *LimeUri
 
 	// MIME declaration of the resource type of the command.
-	Type MediaType
+	Type *MediaType
 
 	// Node resource that is subject of the command.
 	Resource Document
@@ -29,17 +29,18 @@ type Command struct {
 	Status CommandStatus
 
 	// Indicates the reason for a failure response command.
-	Reason Reason
+	Reason *Reason
 }
 
 func (c *Command) SetResource(d Document) {
 	c.Resource = d
-	c.Type = d.GetMediaType()
+	t := d.GetMediaType()
+	c.Type = &t
 }
 
 func (c *Command) SetStatusFailure(r Reason) {
 	c.Status = CommandStatusFailure
-	c.Reason = r
+	c.Reason = &r
 }
 
 func (c *Command) MarshalJSON() ([]byte, error) {
@@ -80,22 +81,15 @@ func (c *Command) ToRawEnvelope() (*RawEnvelope, error) {
 		}
 		r := json.RawMessage(b)
 		raw.Resource = &r
-		raw.Type = &c.Type
+		raw.Type = c.Type
 	}
 	if c.Method != "" {
 		raw.Method = &c.Method
 	}
 
-	if c.Status != "" {
-		raw.Status = &c.Status
-	}
-
-	if c.Uri != (LimeUri{}) {
-		raw.Uri = &c.Uri
-	}
-	if c.Reason != (Reason{}) {
-		raw.Reason = &c.Reason
-	}
+	raw.Status = &c.Status
+	raw.Uri = c.Uri
+	raw.Reason = c.Reason
 
 	return raw, nil
 }
@@ -118,23 +112,16 @@ func (c *Command) Populate(raw *RawEnvelope) error {
 		}
 
 		c.Resource = document
-		c.Type = *raw.Type
+		c.Type = raw.Type
 	}
 
 	if raw.Method == nil {
 		return errors.New("command method is required")
 	}
 	c.Method = *raw.Method
-
-	if raw.Status != nil {
-		c.Status = *raw.Status
-	}
-	if raw.Uri != nil {
-		c.Uri = *raw.Uri
-	}
-	if raw.Reason != nil {
-		c.Reason = *raw.Reason
-	}
+	c.Status = *raw.Status
+	c.Uri = raw.Uri
+	c.Reason = raw.Reason
 
 	return nil
 }

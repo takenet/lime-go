@@ -99,6 +99,7 @@ func (t *ConnTransport) Receive(ctx context.Context) (Envelope, error) {
 	}
 
 	var raw RawEnvelope
+
 	if err := t.decoder.Decode(&raw); err != nil {
 		return nil, err
 	}

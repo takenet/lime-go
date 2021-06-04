@@ -15,7 +15,7 @@ type Notification struct {
 	Event NotificationEvent
 
 	// Reason In the case of a failed event, brings more details about the problem.
-	Reason Reason
+	Reason *Reason
 }
 
 func (n Notification) MarshalJSON() ([]byte, error) {
@@ -53,9 +53,7 @@ func (n *Notification) ToRawEnvelope() (*RawEnvelope, error) {
 		raw.Event = &n.Event
 	}
 
-	if n.Reason != (Reason{}) {
-		raw.Reason = &n.Reason
-	}
+	raw.Reason = n.Reason
 
 	return raw, nil
 }
@@ -71,9 +69,7 @@ func (n *Notification) Populate(raw *RawEnvelope) error {
 	}
 
 	n.Event = *raw.Event
-	if raw.Reason != nil {
-		n.Reason = *raw.Reason
-	}
+	n.Reason = raw.Reason
 
 	return nil
 }

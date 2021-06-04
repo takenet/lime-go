@@ -8,23 +8,12 @@ import (
 
 // Envelope is a base interface for envelopes types.
 type Envelope interface {
-	// GetID gets the envelope identifier
-	GetID() string
-
-	// GetFrom gets the identifier of the sender node of the envelope.
-	GetFrom() Node
-
-	// GetPP gets the delegation node. Its an acronym for 'per procurationem'.
-	GetPP() Node
-
-	// GetTo gets the identifier of the destination node of the envelope.
-	GetTo() Node
-
-	// GetMetadata gets additional information to be delivered with the envelope.
-	GetMetadata() map[string]string
-
+	GetID() string                  // Gets the envelope identifier
+	GetFrom() Node                  // Gets the identifier of the sender node of the envelope.
+	GetPP() Node                    // Gets the delegation node. Its an acronym for 'per procurationem'.
+	GetTo() Node                    // Gets the identifier of the destination node of the envelope.
+	GetMetadata() map[string]string // Gets additional information to be delivered with the envelope.
 	Populate(raw *RawEnvelope) error
-
 	ToRawEnvelope() (*RawEnvelope, error)
 }
 
@@ -32,74 +21,70 @@ type Envelope interface {
 type EnvelopeBase struct {
 	// The envelope identifier
 	ID string
-
 	// The identifier of the sender node of the envelope.
 	// If a node receives an envelope without this value, it means that the envelope was originated by the remote party.
 	From Node
-
 	// The delegation node. Its an acronym for 'per procurationem'.
 	// Identifier of a delegate node (a node that received a permission To send on behalf of another).
-	// Allows a node To send an envelope on behalf of another identity.
+	// Allows a node to send an envelope on behalf of another identity.
 	PP Node
-
 	// The identifier of the destination node of the envelope.
 	// If a node receives an envelope without this value, it means that the envelope is addressed To itself.
 	To Node
-
 	// Additional information to be delivered with the envelope.
 	Metadata map[string]string
 }
 
-func (e *EnvelopeBase) GetID() string {
-	return e.ID
+func (env *EnvelopeBase) GetID() string {
+	return env.ID
 }
 
-func (e *EnvelopeBase) GetFrom() Node {
-	return e.From
+func (env *EnvelopeBase) GetFrom() Node {
+	return env.From
 }
 
-func (e *EnvelopeBase) GetPP() Node {
-	return e.PP
+func (env *EnvelopeBase) GetPP() Node {
+	return env.PP
 }
 
-func (e *EnvelopeBase) GetTo() Node {
-	return e.To
+func (env *EnvelopeBase) GetTo() Node {
+	return env.To
 }
 
-func (e *EnvelopeBase) GetMetadata() map[string]string {
-	return e.Metadata
+func (env *EnvelopeBase) GetMetadata() map[string]string {
+	return env.Metadata
 }
 
-func (e *EnvelopeBase) ToRawEnvelope() (*RawEnvelope, error) {
+func (env *EnvelopeBase) ToRawEnvelope() (*RawEnvelope, error) {
 	raw := RawEnvelope{}
-	raw.ID = e.ID
-	if e.From != (Node{}) {
-		raw.From = &e.From
+	raw.ID = env.ID
+	if env.From != (Node{}) {
+		raw.From = &env.From
 	}
-	if e.PP != (Node{}) {
-		raw.PP = &e.PP
+	if env.PP != (Node{}) {
+		raw.PP = &env.PP
 	}
-	if e.To != (Node{}) {
-		raw.To = &e.To
+	if env.To != (Node{}) {
+		raw.To = &env.To
 	}
 
 	return &raw, nil
 }
 
-func (e *EnvelopeBase) Populate(raw *RawEnvelope) error {
-	if raw == nil || e == nil {
+func (env *EnvelopeBase) Populate(raw *RawEnvelope) error {
+	if raw == nil || env == nil {
 		return nil
 	}
-	e.ID = raw.ID
-	e.Metadata = raw.Metadata
+	env.ID = raw.ID
+	env.Metadata = raw.Metadata
 	if raw.From != nil {
-		e.From = *raw.From
+		env.From = *raw.From
 	}
 	if raw.PP != nil {
-		e.PP = *raw.PP
+		env.PP = *raw.PP
 	}
 	if raw.To != nil {
-		e.To = *raw.To
+		env.To = *raw.To
 	}
 
 	return nil
@@ -108,10 +93,8 @@ func (e *EnvelopeBase) Populate(raw *RawEnvelope) error {
 // Reason represents a known reason for events occurred during the client-server
 // interactions.
 type Reason struct {
-	// Code The reason code
-	Code int `json:"code,omitempty"`
-	// Description The reason description
-	Description string `json:"description,omitempty"`
+	Code        int    `json:"code,omitempty"`        // The reason code
+	Description string `json:"description,omitempty"` // The reason description
 }
 
 // NewEnvelopeId generates a new unique envelope ID.
@@ -180,7 +163,7 @@ func (re *RawEnvelope) EnvelopeType() (string, error) {
 }
 
 func (re *RawEnvelope) ToEnvelope() (Envelope, error) {
-	var e Envelope
+	var env Envelope
 
 	t, err := re.EnvelopeType()
 	if err != nil {
@@ -189,24 +172,24 @@ func (re *RawEnvelope) ToEnvelope() (Envelope, error) {
 
 	switch t {
 	case "Command":
-		e = &Command{}
+		env = &Command{}
 		break
 	case "Notification":
-		e = &Notification{}
+		env = &Notification{}
 		break
 	case "Message":
-		e = &Message{}
+		env = &Message{}
 		break
 	case "Session":
-		e = &Session{}
+		env = &Session{}
 		break
 	default:
 		return nil, errors.New("unknown or unsupported envelope type")
 	}
 
-	if err := e.Populate(re); err != nil {
+	if err := env.Populate(re); err != nil {
 		return nil, err
 	}
 
-	return e, nil
+	return env, nil
 }
