@@ -21,28 +21,28 @@ func init() {
 	})
 }
 
-// Defines an entity with a media type.
+// Document defines an entity with a media type.
 type Document interface {
-	// Gets the type of the media for the document.
+	// GetMediaType gets the type of the media for the document.
 	GetMediaType() MediaType
 }
 
-// Represents a generic JSON document.
+// JsonDocument represents a generic JSON document.
 type JsonDocument map[string]interface{}
 
 func (d *JsonDocument) GetMediaType() MediaType {
 	return mediaTypeApplicationJson
 }
 
-// Represents a plain document.
+// PlainDocument represents a plain document.
 type PlainDocument string
 
 func (d *PlainDocument) GetMediaType() MediaType {
 	return mediaTypeTextPlain
 }
 
-// Represents a generic container for a document, providing a media type for the correct handling of its value by the nodes.
-// This class can be used along with DocumentCollection to traffic different document types in a single message.
+// DocumentContainer represents a generic container for a document, providing a media type for the correct handling of its value by the nodes.
+// This class can be used along with DocumentCollection to transport distinct document types in a single message.
 type DocumentContainer struct {
 	// The media type of the contained document.
 	Type MediaType
@@ -54,14 +54,14 @@ func (d *DocumentContainer) GetMediaType() MediaType {
 	return MediaType{MediaTypeApplication, "vnd.lime.container", "json"}
 }
 
-// Wrapper for custom marshalling
+// DocumentContainerWrapper is a wrapper for custom marshalling
 type DocumentContainerWrapper struct {
 	Type  *MediaType       `json:"type"`
 	Value *json.RawMessage `json:"value"`
 }
 
 func (d DocumentContainer) MarshalJSON() ([]byte, error) {
-	dw, err := d.toWrapper()
+	dw, err := d.ToRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (d *DocumentContainer) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (d *DocumentContainer) toWrapper() (DocumentContainerWrapper, error) {
+func (d *DocumentContainer) ToRawEnvelope() (DocumentContainerWrapper, error) {
 	dw := DocumentContainerWrapper{
 		Type: &d.Type,
 	}
@@ -116,7 +116,7 @@ func (d *DocumentContainer) populate(dw *DocumentContainerWrapper) error {
 	return nil
 }
 
-// Represents a collection of documents.
+// DocumentCollection represents a collection of documents.
 type DocumentCollection struct {
 	// The total of items in the collection.
 	// This value refers to the original source collection, without any applied filter that may exist in the items on this instance.
@@ -131,7 +131,7 @@ func (d *DocumentCollection) GetMediaType() MediaType {
 	return MediaType{MediaTypeApplication, "vnd.lime.collection", "json"}
 }
 
-// Wrapper for custom marshalling
+// DocumentCollectionWrapper is a wrapper for custom marshalling
 type DocumentCollectionWrapper struct {
 	Total    int                `json:"total,omitempty"`
 	ItemType *MediaType         `json:"itemType"`
@@ -139,7 +139,7 @@ type DocumentCollectionWrapper struct {
 }
 
 func (d DocumentCollection) MarshalJSON() ([]byte, error) {
-	dw, err := d.toWrapper()
+	dw, err := d.ToRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (d *DocumentCollection) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (d *DocumentCollection) toWrapper() (DocumentCollectionWrapper, error) {
+func (d *DocumentCollection) ToRawEnvelope() (DocumentCollectionWrapper, error) {
 	dw := DocumentCollectionWrapper{
 		ItemType: &d.ItemType,
 		Total:    d.Total,

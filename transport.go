@@ -7,70 +7,61 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
 )
 
 type Transport interface {
-	// Sends an envelope to the remote node.
+	// Send sends an envelope to the remote node.
 	Send(ctx context.Context, e Envelope) error
 
-	// Receives an envelope from the remote node.
+	// Receive receives an envelope from the remote node.
 	Receive(ctx context.Context) (Envelope, error)
 
-	// Opens the transport connection with the specified Uri.
+	// Open opens the transport connection with the specified Uri.
 	Open(ctx context.Context, addr net.Addr) error
 
-	// Closes the connection.
+	// Close closes the connection.
 	Close(ctx context.Context) error
 
-	// Enumerates the supported compression options for the transport.
+	// GetSupportedCompression enumerates the supported compression options for the transport.
 	GetSupportedCompression() []SessionCompression
 
-	// Gets the current transport compression option.
+	// GetCompression gets the current transport compression option.
 	GetCompression() SessionCompression
 
-	// Defines the compression mode for the transport.
-	SetCompression(c SessionCompression) error
+	// SetCompression defines the compression mode for the transport.
+	SetCompression(ctx context.Context, c SessionCompression) error
 
-	// Enumerates the supported encryption options for the transport.
+	// GetSupportedEncryption enumerates the supported encryption options for the transport.
 	GetSupportedEncryption() []SessionEncryption
 
-	// Gets the current transport encryption option.
+	// GetEncryption gets the current transport encryption option.
 	GetEncryption() SessionEncryption
 
-	// Defines the encryption mode for the transport.
-	SetEncryption(e SessionEncryption) error
+	// SetEncryption defines the encryption mode for the transport.
+	SetEncryption(ctx context.Context, e SessionEncryption) error
 
-	// Indicates if the transport is connected.
+	// IsConnected indicates if the transport is connected.
 	IsConnected() bool
 
-	// Gets the local endpoint address.
+	// LocalAdd gets the local endpoint address.
 	LocalAdd() net.Addr
 
-	// Gets the remote endpoint address.
+	// RemoteAdd gets the remote endpoint address.
 	RemoteAdd() net.Addr
 }
 
 const DefaultReadLimit int64 = 8192 * 1024
-const DefaultWriteTimeout time.Duration = time.Second * 60
-const DefaultReadTimeout time.Duration = 0
 
-// Common configurations for net.Conn based transports.
+// ConnTransportConfig defines the common configurations for net.Conn based transports.
 type ConnTransportConfig struct {
 	// The limit for buffered data in read operations.
 	ReadLimit int64
-
-	// The timeout for read operations
-	ReadTimeout time.Duration
-
-	// The timeout for write operations
-	WriteTimeout time.Duration
 
 	// The trace writer for tracing connection envelopes
 	TraceWriter TraceWriter
 }
 
-// Base type for net.Conn based transports.
+// ConnTransport implement a base type for net.Conn based transports.
 type ConnTransport struct {
 	ConnTransportConfig
 	conn          net.Conn
@@ -85,32 +76,38 @@ func (t *ConnTransport) Send(ctx context.Context, e Envelope) error {
 	}
 
 	// Sets the timeout for the next write operation
-	if err := t.conn.SetWriteDeadline(time.Now().Add(t.WriteTimeout)); err != nil {
-		return err
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := t.conn.SetWriteDeadline(deadline); err != nil {
+			return err
+		}
 	}
+
+	// TODO: Encode writes a new line after each entry, how we can avoid this?
 	return t.encoder.Encode(e)
 }
 
-func (t *ConnTransport) Receive(context.Context) (Envelope, error) {
+func (t *ConnTransport) Receive(ctx context.Context) (Envelope, error) {
 	if err := t.ensureOpen(); err != nil {
 		return nil, err
 	}
 
 	// Sets the timeout for the next read operation
-	if err := t.conn.SetReadDeadline(time.Now().Add(t.ReadTimeout)); err != nil {
-		return nil, err
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := t.conn.SetReadDeadline(deadline); err != nil {
+			return nil, err
+		}
 	}
 
-	// Decode as a map of raw JSON to be unmarshalled
-	var m map[string]*json.RawMessage
-	if err := t.decoder.Decode(&m); err != nil {
+	var raw RawEnvelope
+
+	if err := t.decoder.Decode(&raw); err != nil {
 		return nil, err
 	}
 
 	// Reset the read limit
 	t.limitedReader.N = t.ReadLimit
 
-	return UnmarshalJSONMap(m)
+	return raw.ToEnvelope()
 }
 
 func (t *ConnTransport) Close(context.Context) error {
@@ -178,19 +175,19 @@ func (t *ConnTransport) ensureOpen() error {
 	return nil
 }
 
-// Defines a listener interface for the transports.
+// TransportListener Defines a listener interface for the transports.
 type TransportListener interface {
-	// Start listening for new transport connections.
+	// Open Start listening for new transport connections.
 	Open(ctx context.Context, addr net.Addr) error
 
-	// Stop the listener.
+	// Close Stop the listener.
 	Close() error
 
 	// Accept a new transport connection.
 	Accept() (Transport, error)
 }
 
-// Enable request tracing for network transports.
+// TraceWriter Enable request tracing for network transports.
 type TraceWriter interface {
 	// Gets the sendWriter for the transport send operations
 	getSendWriter() *io.Writer
@@ -199,7 +196,7 @@ type TraceWriter interface {
 	getReceiveWriter() *io.Writer
 }
 
-// Implements a TraceWriter that uses the standard output for
+// StdoutTraceWriter Implements a TraceWriter that uses the standard output for
 // writing send and received envelopes.
 type StdoutTraceWriter struct {
 	sendWriter    io.Writer

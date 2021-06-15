@@ -18,7 +18,7 @@ func TestCommand_MarshalJSON_GetPingRequest(t *testing.T) {
 	c.Uri = u
 
 	// Act
-	b, err := json.Marshal(c)
+	b, err := json.Marshal(&c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestCommand_MarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
 	c.SetResource(&d)
 
 	// Act
-	b, err := json.Marshal(c)
+	b, err := json.Marshal(&c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestCommand_MarshalJSON_GetAccountResponse(t *testing.T) {
 	c.Type = m
 
 	// Act
-	b, err := json.Marshal(c)
+	b, err := json.Marshal(&c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestCommand_MarshalJSON_GetAccountCollectionResponse(t *testing.T) {
 	c.SetResource(&collection)
 
 	// Act
-	b, err := json.Marshal(c)
+	b, err := json.Marshal(&c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestCommand_MarshalJSON_SetFailureResponse(t *testing.T) {
 	}
 
 	// Act
-	b, err := json.Marshal(c)
+	b, err := json.Marshal(&c)
 	if err != nil {
 		t.Fatal(err)
 	}

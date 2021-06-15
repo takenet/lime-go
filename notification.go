@@ -2,101 +2,93 @@ package lime
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
-// Transport information about events associated To a message in a session.
-// Can be originated by a server or by the message destination node.
+// Notification Information about events associated to a Message in a Session.
+// Can be originated by a server or by the Message destination Node.
 type Notification struct {
 	EnvelopeBase
 
-	// Related event To the notification
+	// Event Related event To the notification
 	Event NotificationEvent
 
-	// In the case of a failed event, brings more details about the problem.
-	Reason Reason
-}
-
-// Wrapper for custom marshalling
-type NotificationWrapper struct {
-	EnvelopeBaseWrapper
-	Event  NotificationEvent `json:"event,omitempty"`
-	Reason *Reason           `json:"reason,omitempty"`
+	// Reason In the case of a failed event, brings more details about the problem.
+	Reason *Reason
 }
 
 func (n Notification) MarshalJSON() ([]byte, error) {
-	nw, err := n.toWrapper()
+	raw, err := n.ToRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(nw)
+	return json.Marshal(raw)
 }
 
 func (n *Notification) UnmarshalJSON(b []byte) error {
-	nw := NotificationWrapper{}
-	err := json.Unmarshal(b, &nw)
+	raw := RawEnvelope{}
+	err := json.Unmarshal(b, &raw)
 	if err != nil {
 		return err
 	}
 
-	command := Notification{}
-	err = command.populate(&nw)
+	notification := Notification{}
+	err = notification.Populate(&raw)
 	if err != nil {
 		return err
 	}
 
-	*n = command
+	*n = notification
 	return nil
 }
 
-func (n *Notification) toWrapper() (NotificationWrapper, error) {
-	ew, err := n.EnvelopeBase.toWrapper()
+func (n *Notification) ToRawEnvelope() (*RawEnvelope, error) {
+	raw, err := n.EnvelopeBase.ToRawEnvelope()
 	if err != nil {
-		return NotificationWrapper{}, err
+		return nil, err
 	}
 
-	nw := NotificationWrapper{
-		EnvelopeBaseWrapper: ew,
-		Event:               n.Event,
+	if n.Event != "" {
+		raw.Event = &n.Event
 	}
 
-	if n.Reason != (Reason{}) {
-		nw.Reason = &n.Reason
-	}
+	raw.Reason = n.Reason
 
-	return nw, nil
+	return raw, nil
 }
 
-func (n *Notification) populate(nw *NotificationWrapper) error {
-	err := n.EnvelopeBase.populate(&nw.EnvelopeBaseWrapper)
+func (n *Notification) Populate(raw *RawEnvelope) error {
+	err := n.EnvelopeBase.Populate(raw)
 	if err != nil {
 		return err
 	}
 
-	n.Event = nw.Event
-
-	if nw.Reason != nil {
-		n.Reason = *nw.Reason
+	if raw.Event == nil {
+		return errors.New("notification event is required")
 	}
+
+	n.Event = *raw.Event
+	n.Reason = raw.Reason
 
 	return nil
 }
 
-// Events that can happen in the message pipeline.
+// NotificationEvent Events that can happen in the message pipeline.
 type NotificationEvent string
 
 const (
-	// The message was received and accepted by the server.
+	// NotificationEventAccepted The message was received and accepted by the server.
 	// This event is similar To 'received' but is emitted by an intermediate node (hop) and not by the message's final destination.
 	NotificationEventAccepted = NotificationEvent("accepted")
-	// The message was dispatched To the destination by the server.
+	// NotificationEventDispatched The message was dispatched To the destination by the server.
 	// This event is similar To the 'consumed' but is emitted by an intermediate node (hop) and not by the message's final destination.
 	NotificationEventDispatched = NotificationEvent("dispatched")
-	// The node has received the message.
+	// NotificationEventReceived The node has received the message.
 	NotificationEventReceived = NotificationEvent("received")
-	// The node has consumed the Content of the message.
+	// NotificationEventConsumed The node has consumed the Content of the message.
 	NotificationEventConsumed = NotificationEvent("consumed")
-	// A problem occurred during the processing of the message.
+	// NotificationEventFailed A problem occurred during the processing of the message.
 	// In this case, the reason property of the notification should be present.
 	NotificationEventFailed = NotificationEvent("failed")
 )

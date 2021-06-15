@@ -13,7 +13,7 @@ func TestSession_MarshalJSON_New(t *testing.T) {
 	s.State = SessionStateNew
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestSession_MarshalJSON_NegotiatingOptions(t *testing.T) {
 	s.CompressionOptions = []SessionCompression{SessionCompressionNone}
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestSession_MarshalJSON_Negotiating(t *testing.T) {
 	s.Compression = SessionCompressionNone
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestSession_MarshalJSON_AuthenticatingOptions(t *testing.T) {
 	s.SchemeOptions = []AuthenticationScheme{AuthenticationSchemeGuest, AuthenticationSchemePlain, AuthenticationSchemeTransport, AuthenticationSchemeKey, AuthenticationSchemeExternal}
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestSession_MarshalJSON_AuthenticatingPlain(t *testing.T) {
 	s.SetAuthentication(&PlainAuthentication{Password: "bXl2ZXJ5c2VjcmV0cGFzc3dvcmQ="})
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestSession_MarshalJSON_AuthenticatingKey(t *testing.T) {
 	s.SetAuthentication(&KeyAuthentication{Key: "bXl2ZXJ5c2VjcmV0cGFzc3dvcmQ="})
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestSession_MarshalJSON_AuthenticatingTransport(t *testing.T) {
 	s.SetAuthentication(&TransportAuthentication{})
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestSession_MarshalJSON_AuthenticatingExternal(t *testing.T) {
 	s.SetAuthentication(&ExternalAuthentication{Token: "HePX3PtLNJ1hDubBJmxHGAfQnTczpeze", Issuer: "auth.limeprotocol.org"})
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestSession_MarshalJSON_Established(t *testing.T) {
 	s.State = SessionStateEstablished
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestSession_MarshalJSON_Finishing(t *testing.T) {
 	s.State = SessionStateFinishing
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestSession_MarshalJSON_Finished(t *testing.T) {
 	s.State = SessionStateFinished
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ func TestSession_MarshalJSON_Failed(t *testing.T) {
 	s.State = SessionStateFailed
 
 	// Act
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(&s)
 	if err != nil {
 		t.Fatal(err)
 	}

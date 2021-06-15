@@ -18,7 +18,7 @@ func TestMessage_MarshalJSON_TextPlain(t *testing.T) {
 	m.SetContent(&d)
 
 	// Act
-	b, err := json.Marshal(m)
+	b, err := json.Marshal(&m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestMessage_MarshalJSON_TextUnknownPlain(t *testing.T) {
 	m.Type = MediaType{"text", "unknown", ""}
 
 	// Act
-	b, err := json.Marshal(m)
+	b, err := json.Marshal(&m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestMessage_MarshalJSON_ApplicationJson(t *testing.T) {
 	m.SetContent(&d)
 
 	// Act
-	b, err := json.Marshal(m)
+	b, err := json.Marshal(&m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestMessage_MarshalJSON_ApplicationUnknownJson(t *testing.T) {
 	m.Type = MediaType{"application", "x-unknown", "json"}
 
 	// Act
-	b, err := json.Marshal(m)
+	b, err := json.Marshal(&m)
 	if err != nil {
 		t.Fatal(err)
 	}

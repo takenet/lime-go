@@ -23,8 +23,8 @@ func createListener(addr net.Addr, transportChan chan Transport, t *testing.T) *
 		t.Fatal(err)
 		return nil
 	}
-	listener.ReadTimeout = 5 * time.Second
-	listener.WriteTimeout = 5 * time.Second
+	//listener.ReadTimeout = 5 * time.Second
+	//listener.WriteTimeout = 5 * time.Second
 
 	if transportChan != nil {
 		go func() {
@@ -57,8 +57,8 @@ func createClientTransport(addr net.Addr, t *testing.T) *TCPTransport {
 		t.Fatal(err)
 		return nil
 	}
-	client.WriteTimeout = 5 * time.Second
-	client.ReadTimeout = 5 * time.Second
+	//client.WriteTimeout = 5 * time.Second
+	//client.ReadTimeout = 5 * time.Second
 	return &client
 }
 
@@ -194,7 +194,7 @@ func TestTCPTransport_Open_WhenNotListening(t *testing.T) {
 
 	// Assert
 	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "connection refused")
+	assert.Contains(t, err.Error(), "refused")
 }
 
 func TestTCPTransportListener_Close_WhenOpen(t *testing.T) {
@@ -231,7 +231,7 @@ func TestTCPTransport_SetEncryption_None(t *testing.T) {
 	client := createClientTransport(createTCPAddress(), t)
 
 	// Act
-	err := client.SetEncryption(SessionEncryptionNone)
+	err := client.SetEncryption(context.Background(), SessionEncryptionNone)
 
 	// Assert
 	assert.NoError(t, err)
@@ -246,13 +246,13 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	client := createClientTransportTLS(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
 	go func() {
-		if err := server.SetEncryption(SessionEncryptionTLS); err != nil {
+		if err := server.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
 			t.Fatal(err)
 		}
 	}()
 
 	// Act
-	err := client.SetEncryption(SessionEncryptionTLS)
+	err := client.SetEncryption(context.Background(), SessionEncryptionTLS)
 
 	// Assert
 	assert.NoError(t, err)
@@ -291,9 +291,9 @@ func TestTCPTransport_Receive_Session(t *testing.T) {
 
 	// Assert
 	assert.NoError(t, err)
-	received, ok := e.(*Message)
+	received, ok := e.(*Session)
 	assert.True(t, ok)
-	assert.Equal(t, s, *received)
+	assert.Equal(t, s, received)
 }
 
 func TestTCPTransport_Send_SessionTLS(t *testing.T) {
@@ -305,11 +305,11 @@ func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 	client := createClientTransportTLS(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
 	go func() {
-		if err := server.SetEncryption(SessionEncryptionTLS); err != nil {
+		if err := server.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
 			t.Fatal(err)
 		}
 	}()
-	if err := client.SetEncryption(SessionEncryptionTLS); err != nil {
+	if err := client.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
 		t.Fatal(err)
 	}
 	s := createSession()
@@ -330,11 +330,11 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 	client := createClientTransportTLS(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
 	go func() {
-		if err := server.SetEncryption(SessionEncryptionTLS); err != nil {
+		if err := server.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
 			t.Fatal(err)
 		}
 	}()
-	if err := client.SetEncryption(SessionEncryptionTLS); err != nil {
+	if err := client.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
 		t.Fatal(err)
 	}
 	s := createSession()
@@ -347,7 +347,7 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 
 	// Assert
 	assert.NoError(t, err)
-	received, ok := e.(*Message)
+	received, ok := e.(*Session)
 	assert.True(t, ok)
-	assert.Equal(t, s, *received)
+	assert.Equal(t, s, received)
 }

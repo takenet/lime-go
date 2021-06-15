@@ -40,11 +40,11 @@ func main() {
 		return nil
 	}
 
-	t := lime.TCPTransport{}
-	t.TLSConfig = &tls.Config{ServerName: "msging.net"}
-
-	//tw := lime.NewStdoutTraceWriter()
-	//t.TraceWriter = tw
+	t := lime.TCPTransport{
+		TLSConfig: &tls.Config{ServerName: "msging.net"},
+	}
+	tw := lime.NewStdoutTraceWriter()
+	t.TraceWriter = tw
 
 	addr, err := net.ResolveTCPAddr("tcp", "tcp.msging.net:443")
 	if err != nil {
@@ -82,7 +82,7 @@ func main() {
 		func() error {
 			// Negotiation ack
 			_, err := receiver(&t)
-			err = t.SetEncryption(lime.SessionEncryptionTLS)
+			err = t.SetEncryption(context.Background(), lime.SessionEncryptionTLS)
 			return err
 		},
 		func() error {
