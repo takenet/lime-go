@@ -3,6 +3,7 @@ package lime
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 )
 
@@ -95,6 +96,10 @@ func (env *EnvelopeBase) Populate(raw *RawEnvelope) error {
 type Reason struct {
 	Code        int    `json:"code,omitempty"`        // The reason code
 	Description string `json:"description,omitempty"` // The reason description
+}
+
+func (r Reason) String() string {
+	return fmt.Sprintf("Code: %v - Description: %v", r.Code, r.Description)
 }
 
 // NewEnvelopeId generates a new unique envelope ID.

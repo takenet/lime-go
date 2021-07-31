@@ -87,7 +87,9 @@ func (c *Command) ToRawEnvelope() (*RawEnvelope, error) {
 		raw.Method = &c.Method
 	}
 
-	raw.Status = &c.Status
+	if c.Status != "" {
+		raw.Status = &c.Status
+	}
 	raw.Uri = c.Uri
 	raw.Reason = c.Reason
 

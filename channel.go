@@ -70,8 +70,6 @@ type ChannelModule interface {
 }
 
 type channel struct {
-	commandProcessorChannel
-
 	transport  Transport
 	sessionID  string
 	remoteNode Node
@@ -82,6 +80,10 @@ type channel struct {
 	inNotChan  chan *Notification
 	inCmdChan  chan *Command
 	inSesChan  chan *Session
+	ErrChan    chan error
+
+	pendingCommands      map[string]chan *Command
+	pendingCommandsMutex sync.RWMutex
 
 	cancel context.CancelFunc // The function for cancelling the send/receive goroutines
 }
@@ -92,34 +94,52 @@ func newChannel(t Transport, bufferSize int) (*channel, error) {
 	}
 
 	c := channel{
-		transport: t,
-		state:     SessionStateNew,
-		outChan:   make(chan Envelope, bufferSize),
-		inMsgChan: make(chan *Message, bufferSize),
-		inNotChan: make(chan *Notification, bufferSize),
-		inCmdChan: make(chan *Command, bufferSize),
-		inSesChan: make(chan *Session, bufferSize),
+		transport:            t,
+		state:                SessionStateNew,
+		outChan:              make(chan Envelope, bufferSize),
+		inMsgChan:            make(chan *Message, bufferSize),
+		inNotChan:            make(chan *Notification, bufferSize),
+		inCmdChan:            make(chan *Command, bufferSize),
+		inSesChan:            make(chan *Session, bufferSize),
+		ErrChan:              make(chan error, 2),
+		pendingCommands:      make(map[string]chan *Command),
+		pendingCommandsMutex: sync.RWMutex{},
 	}
 	return &c, nil
-}
-
-func (c *channel) startGoroutines() {
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	c.cancel = cancelFunc
-
-	go receiveFromTransport(ctx, c)
-
 }
 
 func (c *channel) isEstablished() bool {
 	return c.state == SessionStateEstablished && c.transport.IsConnected()
 }
 
+func (c *channel) startGoroutines() {
+
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	c.cancel = cancelFunc
+
+	go receiveFromTransport(ctx, c)
+	go sendToTransport(ctx, c)
+}
+
+func (c *channel) setState(state SessionState) {
+	c.state = state
+
+	switch state {
+	case SessionStateEstablished:
+		c.startGoroutines()
+	case SessionStateFinished:
+	case SessionStateFailed:
+		if c.cancel != nil {
+			c.cancel()
+		}
+	}
+}
+
 func receiveFromTransport(ctx context.Context, c *channel) {
 	for c.isEstablished() {
 		env, err := c.transport.Receive(ctx)
 		if err != nil {
-			// TODO: Handle error
+			c.ErrChan <- err
 			break
 		}
 
@@ -129,7 +149,7 @@ func receiveFromTransport(ctx context.Context, c *channel) {
 		case *Notification:
 			c.inNotChan <- e
 		case *Command:
-			if !c.commandProcessorChannel.TrySubmitCommandResult(e) {
+			if !c.trySubmitCommandResult(e) {
 				c.inCmdChan <- e
 			}
 		case *Session:
@@ -138,7 +158,21 @@ func receiveFromTransport(ctx context.Context, c *channel) {
 			// TODO: Handle unknown envelope type
 			break
 		}
+	}
+}
 
+func sendToTransport(ctx context.Context, c *channel) {
+	for c.isEstablished() {
+		select {
+		case <-ctx.Done():
+			break
+		case e := <-c.outChan:
+			err := c.transport.Send(ctx, e)
+			if err != nil {
+				c.ErrChan <- err
+				break
+			}
+		}
 	}
 }
 
@@ -197,7 +231,7 @@ func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 
 	ses, ok := env.(*Session)
 	if !ok {
-		return nil, errors.New("an unexpected envelope was received from the transport")
+		return nil, errors.New("an unexpected envelope type was received from the transport")
 	}
 
 	return ses, nil
@@ -251,7 +285,7 @@ func (c *channel) ReceiveCommand(ctx context.Context) (*Command, error) {
 }
 
 func (c *channel) ProcessCommand(ctx context.Context, reqCmd *Command) (*Command, error) {
-	return c.commandProcessorChannel.ProcessCommand(ctx, c, reqCmd)
+	return c.processCommand(ctx, c, reqCmd)
 }
 
 func (c *channel) sendToBuffer(ctx context.Context, env Envelope) error {
@@ -297,12 +331,7 @@ func (c *channel) ensureTransportOK(action string) error {
 	return nil
 }
 
-type commandProcessorChannel struct {
-	pendingCommands      map[string]chan *Command
-	pendingCommandsMutex sync.RWMutex
-}
-
-func (c *commandProcessorChannel) ProcessCommand(ctx context.Context, sender CommandSender, reqCmd *Command) (*Command, error) {
+func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqCmd *Command) (*Command, error) {
 	if reqCmd == nil {
 		return nil, errors.New("command cannot be nil")
 	}
@@ -333,18 +362,18 @@ func (c *commandProcessorChannel) ProcessCommand(ctx context.Context, sender Com
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("the command processing has timed out: %w", ctx.Err())
 	case respCmd := <-respChan:
 		return respCmd, nil
 	}
 }
 
-func (c *commandProcessorChannel) TrySubmitCommandResult(respCmd *Command) bool {
+func (c *channel) trySubmitCommandResult(respCmd *Command) bool {
 	if respCmd == nil {
 		return false
 	}
 
-	c.pendingCommandsMutex.RLocker()
+	c.pendingCommandsMutex.RLock()
 	defer c.pendingCommandsMutex.RUnlock()
 
 	respChan, ok := c.pendingCommands[respCmd.ID]
@@ -363,10 +392,15 @@ type ClientChannel struct {
 	channel
 }
 
-func NewClientChannel(transport Transport) *ClientChannel {
-	return &ClientChannel{
-		channel{transport: transport},
+func NewClientChannel(t Transport, bufferSize int) (*ClientChannel, error) {
+
+	c, err := newChannel(t, bufferSize)
+	if err != nil {
+		return nil, err
 	}
+	return &ClientChannel{
+		channel: *c,
+	}, nil
 }
 
 // ReceiveSession receives a session from the remote node.
@@ -382,7 +416,7 @@ func (c *ClientChannel) ReceiveSession(ctx context.Context) (*Session, error) {
 	}
 
 	c.sessionID = ses.ID
-	c.state = ses.State
+	c.setState(ses.State)
 
 	if ses.State == SessionStateFinished || ses.State == SessionStateFailed {
 		if err := c.transport.Close(ctx); err != nil {
@@ -393,8 +427,8 @@ func (c *ClientChannel) ReceiveSession(ctx context.Context) (*Session, error) {
 	return ses, nil
 }
 
-// StartNewSession sends a new session envelope to the server and awaits for the response.
-func (c *ClientChannel) StartNewSession(ctx context.Context) (*Session, error) {
+// startNewSession sends a new session envelope to the server and awaits for the response.
+func (c *ClientChannel) startNewSession(ctx context.Context) (*Session, error) {
 	err := c.ensureState(SessionStateNew, "start new session")
 	if err != nil {
 		return nil, err
@@ -413,8 +447,8 @@ func (c *ClientChannel) StartNewSession(ctx context.Context) (*Session, error) {
 	return ses, nil
 }
 
-// NegotiateSession sends a negotiate session envelope to accept the session negotiation options and awaits for the server confirmation.
-func (c *ClientChannel) NegotiateSession(ctx context.Context, compression SessionCompression, encryption SessionEncryption) (*Session, error) {
+// negotiateSession sends a negotiate session envelope to accept the session negotiation options and awaits for the server confirmation.
+func (c *ClientChannel) negotiateSession(ctx context.Context, compression SessionCompression, encryption SessionEncryption) (*Session, error) {
 	err := c.ensureState(SessionStateNegotiating, "negotiate session")
 	if err != nil {
 		return nil, err
@@ -442,8 +476,8 @@ func (c *ClientChannel) NegotiateSession(ctx context.Context, compression Sessio
 	return ses, nil
 }
 
-// AuthenticateSession send a authenticate session envelope to the server to establish an authenticated session and awaits for the response.
-func (c *ClientChannel) AuthenticateSession(ctx context.Context, auth Authentication, instance string) (*Session, error) {
+// authenticateSession send a authenticate session envelope to the server to establish an authenticated session and awaits for the response.
+func (c *ClientChannel) authenticateSession(ctx context.Context, identity Identity, auth Authentication, instance string) (*Session, error) {
 	err := c.ensureState(SessionStateAuthenticating, "authenticate session")
 	if err != nil {
 		return nil, err
@@ -452,10 +486,14 @@ func (c *ClientChannel) AuthenticateSession(ctx context.Context, auth Authentica
 	authSes := Session{
 		EnvelopeBase: EnvelopeBase{
 			ID: c.sessionID,
+			From: Node{
+				identity,
+				instance,
+			},
 		},
-		State:          SessionStateAuthenticating,
-		Authentication: auth,
+		State: SessionStateAuthenticating,
 	}
+	authSes.SetAuthentication(auth)
 
 	err = c.SendSession(ctx, &authSes)
 	if err != nil {
@@ -465,6 +503,122 @@ func (c *ClientChannel) AuthenticateSession(ctx context.Context, auth Authentica
 	ses, err := c.ReceiveSession(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("receiving on session authentication failed: %w", err)
+	}
+
+	return ses, nil
+}
+
+func (c *ClientChannel) sendFinishingSession(ctx context.Context) error {
+	err := c.ensureState(SessionStateEstablished, "finish a session")
+	if err != nil {
+		return err
+	}
+
+	ses := Session{
+		EnvelopeBase: EnvelopeBase{
+			ID: c.sessionID,
+		},
+		State: SessionStateFinishing,
+	}
+
+	return c.SendSession(ctx, &ses)
+}
+
+// CompressionSelector defines a function for selecting the compression for a session.
+type CompressionSelector func([]SessionCompression) SessionCompression
+
+// EncryptionSelector defines a function for selecting the encryption for a session.
+type EncryptionSelector func([]SessionEncryption) SessionEncryption
+
+type Authenticator func([]AuthenticationScheme, Authentication) Authentication
+
+// EstablishSession performs the client session negotiation and authentication handshake.
+func (c *ClientChannel) EstablishSession(
+	ctx context.Context,
+	compSelector CompressionSelector,
+	encSelector EncryptionSelector,
+	identity Identity,
+	authenticator Authenticator,
+	instance string,
+) (*Session, error) {
+	if authenticator == nil {
+		return nil, errors.New("the authenticator should not be nil")
+	}
+
+	ses, err := c.startNewSession(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error establishing the session: %w", err)
+	}
+
+	// Session negotiation
+	if ses.State == SessionStateNegotiating {
+		if compSelector == nil {
+			return nil, errors.New("the compression selector should not be nil")
+		}
+
+		if encSelector == nil {
+			return nil, errors.New("the encryption selector should not be nil")
+		}
+
+		// Select options
+		ses, err = c.negotiateSession(
+			ctx,
+			compSelector(ses.CompressionOptions),
+			encSelector(ses.EncryptionOptions))
+		if err != nil {
+			return nil, fmt.Errorf("error establishing the session: %w", err)
+		}
+
+		if ses.State == SessionStateNegotiating {
+			if ses.Compression != "" && ses.Compression != c.transport.GetCompression() {
+				err = c.transport.SetCompression(ctx, ses.Compression)
+				if err != nil {
+					return nil, fmt.Errorf("error setting the session compression: %w", err)
+				}
+			}
+			if ses.Encryption != "" && ses.Encryption != c.transport.GetEncryption() {
+				err = c.transport.SetEncryption(ctx, ses.Encryption)
+				if err != nil {
+					return nil, fmt.Errorf("error setting the session encryption: %w", err)
+				}
+			}
+		}
+
+		// Await for authentication options
+		ses, err = c.ReceiveSession(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("error establishing the session: %w", err)
+		}
+	}
+
+	// Session authentication
+	var roundtrip Authentication
+
+	for ses.State == SessionStateAuthenticating {
+		ses, err = c.authenticateSession(
+			ctx,
+			identity,
+			authenticator(ses.SchemeOptions, roundtrip),
+			instance,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error establishing the session: %w", err)
+		}
+		roundtrip = ses.Authentication
+	}
+
+	return ses, nil
+}
+
+func (c *ClientChannel) FinishSession(ctx context.Context) (*Session, error) {
+	err := c.sendFinishingSession(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error sending the finishing session: %w", err)
+	}
+
+	ses, err := c.receiveSession(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error receiving the finished the session: %w", err)
 	}
 
 	return ses, nil

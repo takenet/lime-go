@@ -150,7 +150,7 @@ func (t *ConnTransport) setConn(conn net.Conn) {
 		reader = io.TeeReader(reader, *tw.getReceiveWriter())
 	}
 
-	// Sets the decoder to be used for sending envelopes
+	// Sets the encoder to be used for sending envelopes
 	t.encoder = json.NewEncoder(writer)
 
 	if t.ReadLimit == 0 {
@@ -158,7 +158,7 @@ func (t *ConnTransport) setConn(conn net.Conn) {
 	}
 
 	// Using a LimitedReader to avoid the connection be
-	// flooded with a very large JSON which can cause
+	// flooded with a very large JSON which will cause a
 	// high memory usage.
 	t.limitedReader = io.LimitedReader{
 		R: reader,
