@@ -120,8 +120,13 @@ func (c *Command) Populate(raw *RawEnvelope) error {
 	if raw.Method == nil {
 		return errors.New("command method is required")
 	}
+
 	c.Method = *raw.Method
-	c.Status = *raw.Status
+
+	if raw.Status != nil {
+		c.Status = *raw.Status
+	}
+
 	c.Uri = raw.Uri
 	c.Reason = raw.Reason
 

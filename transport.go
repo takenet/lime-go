@@ -80,7 +80,7 @@ func (t *ConnTransport) Send(ctx context.Context, e Envelope) error {
 	if err := t.conn.SetWriteDeadline(deadline); err != nil {
 		return err
 	}
-
+	// TODO: Handle context <-Done() signal
 	// TODO: Encode writes a new line after each entry, how we can avoid this?
 	return t.encoder.Encode(e)
 }
@@ -98,6 +98,7 @@ func (t *ConnTransport) Receive(ctx context.Context) (Envelope, error) {
 
 	var raw RawEnvelope
 
+	// TODO: Handle context <-Done() signal
 	if err := t.decoder.Decode(&raw); err != nil {
 		return nil, err
 	}
@@ -157,7 +158,7 @@ func (t *ConnTransport) setConn(conn net.Conn) {
 	}
 
 	// Using a LimitedReader to avoid the connection be
-	// flooded with a very large JSON which will cause a
+	// flooded with a large JSON which may cause
 	// high memory usage.
 	t.limitedReader = io.LimitedReader{
 		R: reader,

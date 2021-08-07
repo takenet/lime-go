@@ -135,6 +135,18 @@ func (c *channel) setState(state SessionState) {
 	}
 }
 
+func (c *channel) MsgChan() <-chan *Message {
+	return c.inMsgChan
+}
+
+func (c *channel) NotChan() <-chan *Notification {
+	return c.inNotChan
+}
+
+func (c *channel) CmdChan() <-chan *Command {
+	return c.inCmdChan
+}
+
 func receiveFromTransport(ctx context.Context, c *channel) {
 	for c.isEstablished() {
 		env, err := c.transport.Receive(ctx)
