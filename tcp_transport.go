@@ -79,14 +79,12 @@ func (t *TCPTransport) SetEncryption(ctx context.Context, e SessionEncryption) e
 		tlsConn = tls.Client(t.conn, t.TLSConfig)
 	}
 
-	if deadline, ok := ctx.Deadline(); ok {
-		if err := tlsConn.SetWriteDeadline(deadline); err != nil {
-			return err
-		}
-
-		if err := tlsConn.SetReadDeadline(deadline); err != nil {
-			return err
-		}
+	deadline, _ := ctx.Deadline()
+	if err := tlsConn.SetWriteDeadline(deadline); err != nil {
+		return err
+	}
+	if err := tlsConn.SetReadDeadline(deadline); err != nil {
+		return err
 	}
 
 	// We convert existing connection to TLS

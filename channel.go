@@ -353,6 +353,7 @@ func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqC
 
 	respChan := make(chan *Command, 1)
 	c.pendingCommands[reqCmd.ID] = respChan
+	defer delete(c.pendingCommands, reqCmd.ID)
 	c.pendingCommandsMutex.Unlock()
 
 	err := sender.SendCommand(ctx, reqCmd)
