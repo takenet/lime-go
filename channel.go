@@ -82,8 +82,8 @@ type channel struct {
 	inSesChan  chan *Session
 	ErrChan    chan error
 
-	pendingCommands      map[string]chan *Command
-	pendingCommandsMutex sync.RWMutex
+	pendingCmds   map[string]chan *Command
+	pendingCmdsMu sync.RWMutex
 
 	cancel context.CancelFunc // The function for cancelling the send/receive goroutines
 }
@@ -94,16 +94,16 @@ func newChannel(t Transport, bufferSize int) (*channel, error) {
 	}
 
 	c := channel{
-		transport:            t,
-		state:                SessionStateNew,
-		outChan:              make(chan Envelope, bufferSize),
-		inMsgChan:            make(chan *Message, bufferSize),
-		inNotChan:            make(chan *Notification, bufferSize),
-		inCmdChan:            make(chan *Command, bufferSize),
-		inSesChan:            make(chan *Session, bufferSize),
-		ErrChan:              make(chan error, 2),
-		pendingCommands:      make(map[string]chan *Command),
-		pendingCommandsMutex: sync.RWMutex{},
+		transport:     t,
+		state:         SessionStateNew,
+		outChan:       make(chan Envelope, bufferSize),
+		inMsgChan:     make(chan *Message, bufferSize),
+		inNotChan:     make(chan *Notification, bufferSize),
+		inCmdChan:     make(chan *Command, bufferSize),
+		inSesChan:     make(chan *Session, bufferSize),
+		ErrChan:       make(chan error, 2),
+		pendingCmds:   make(map[string]chan *Command),
+		pendingCmdsMu: sync.RWMutex{},
 	}
 	return &c, nil
 }
@@ -356,17 +356,22 @@ func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqC
 		return nil, errors.New("invalid command id")
 	}
 
-	c.pendingCommandsMutex.Lock()
+	c.pendingCmdsMu.Lock()
 
-	if _, ok := c.pendingCommands[reqCmd.ID]; ok {
-		c.pendingCommandsMutex.Unlock()
+	if _, ok := c.pendingCmds[reqCmd.ID]; ok {
+		c.pendingCmdsMu.Unlock()
 		return nil, errors.New("the command id is already in use")
 	}
 
 	respChan := make(chan *Command, 1)
-	c.pendingCommands[reqCmd.ID] = respChan
-	defer delete(c.pendingCommands, reqCmd.ID)
-	c.pendingCommandsMutex.Unlock()
+	c.pendingCmds[reqCmd.ID] = respChan
+	c.pendingCmdsMu.Unlock()
+
+	defer func() {
+		c.pendingCmdsMu.Lock()
+		delete(c.pendingCmds, reqCmd.ID)
+		c.pendingCmdsMu.Unlock()
+	}()
 
 	err := sender.SendCommand(ctx, reqCmd)
 	if err != nil {
@@ -386,15 +391,17 @@ func (c *channel) trySubmitCommandResult(respCmd *Command) bool {
 		return false
 	}
 
-	c.pendingCommandsMutex.RLock()
-	defer c.pendingCommandsMutex.RUnlock()
+	c.pendingCmdsMu.RLock()
+	respChan, ok := c.pendingCmds[respCmd.ID]
+	c.pendingCmdsMu.RUnlock()
 
-	respChan, ok := c.pendingCommands[respCmd.ID]
 	if !ok {
 		return false
 	}
 
-	delete(c.pendingCommands, respCmd.ID)
+	c.pendingCmdsMu.Lock()
+	delete(c.pendingCmds, respCmd.ID)
+	c.pendingCmdsMu.Unlock()
 
 	respChan <- respCmd
 	return true
