@@ -249,22 +249,25 @@ const (
 type AuthenticationScheme string
 
 const (
-	// AuthenticationSchemeGuest The server doesn't requires a client credential, and provides a temporary
+	// AuthenticationSchemeGuest The server doesn't require a client credential, and provides a temporary
 	// identity to the node. Some restriction may apply To guest sessions, like
 	// the inability of sending some commands or other nodes may want To block
 	// messages originated by guest identities.
 	AuthenticationSchemeGuest = AuthenticationScheme("guest")
 	// AuthenticationSchemePlain Username and password authentication.
 	AuthenticationSchemePlain = AuthenticationScheme("plain")
-	// AuthenticationSchemeTransport Transport layer authentication.
-	AuthenticationSchemeTransport = AuthenticationScheme("transport")
 	// AuthenticationSchemeKey Key authentication.
 	AuthenticationSchemeKey = AuthenticationScheme("key")
+	// AuthenticationSchemeTransport Transport layer authentication.
+	AuthenticationSchemeTransport = AuthenticationScheme("transport")
 	// AuthenticationSchemeExternal Third-party authentication.
 	AuthenticationSchemeExternal = AuthenticationScheme("external")
 )
 
 var authFactories = map[AuthenticationScheme]func() Authentication{
+	AuthenticationSchemeGuest: func() Authentication {
+		return &GuestAuthentication{}
+	},
 	AuthenticationSchemePlain: func() Authentication {
 		return &PlainAuthentication{}
 	},
@@ -282,6 +285,14 @@ var authFactories = map[AuthenticationScheme]func() Authentication{
 // Authentication defines a session authentications scheme container
 type Authentication interface {
 	GetAuthenticationScheme() AuthenticationScheme
+}
+
+// GuestAuthentication defines a guest authentication scheme.
+type GuestAuthentication struct {
+}
+
+func (g *GuestAuthentication) GetAuthenticationScheme() AuthenticationScheme {
+	return AuthenticationSchemeGuest
 }
 
 // PlainAuthentication defines a plain authentication scheme, that uses a password for authentication.

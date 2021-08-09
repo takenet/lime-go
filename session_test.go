@@ -108,6 +108,31 @@ func TestSession_MarshalJSON_AuthenticatingPlain(t *testing.T) {
 	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"golang@limeprotocol.org/default","to":"postmaster@limeprotocol.org/#server1","state":"authenticating","scheme":"plain","authentication":{"password":"bXl2ZXJ5c2VjcmV0cGFzc3dvcmQ="}}`, string(b))
 }
 
+func TestSession_MarshalJSON_AuthenticatingGuest(t *testing.T) {
+	// Arrange
+	s := Session{}
+	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
+	s.From = Node{
+		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
+		Instance: "default",
+	}
+	s.To = Node{
+		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
+		Instance: "#server1",
+	}
+	s.State = SessionStateAuthenticating
+	s.SetAuthentication(&GuestAuthentication{})
+
+	// Act
+	b, err := json.Marshal(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"golang@limeprotocol.org/default","to":"postmaster@limeprotocol.org/#server1","state":"authenticating","scheme":"guest","authentication":{}}`, string(b))
+}
+
 func TestSession_MarshalJSON_AuthenticatingKey(t *testing.T) {
 	// Arrange
 	s := Session{}
@@ -380,6 +405,26 @@ func TestSession_UnmarshalJSON_AuthenticatingPlain(t *testing.T) {
 	assert.IsType(t, &PlainAuthentication{}, s.Authentication)
 	a := s.Authentication.(*PlainAuthentication)
 	assert.Equal(t, "bXl2ZXJ5c2VjcmV0cGFzc3dvcmQ=", a.Password)
+}
+
+func TestSession_UnmarshalJSON_AuthenticatingGuest(t *testing.T) {
+	// Arrange
+	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"golang@limeprotocol.org/default","to":"postmaster@limeprotocol.org/#server1","state":"authenticating","scheme":"guest","authentication":{}}`)
+	var s Session
+
+	// Act
+	err := json.Unmarshal(j, &s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", s.ID)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.From)
+	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.To)
+	assert.Equal(t, SessionStateAuthenticating, s.State)
+	assert.Equal(t, AuthenticationSchemeGuest, s.Scheme)
+	assert.IsType(t, &GuestAuthentication{}, s.Authentication)
 }
 
 func TestSession_UnmarshalJSON_AuthenticatingKey(t *testing.T) {
