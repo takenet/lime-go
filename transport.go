@@ -76,12 +76,11 @@ func (t *ConnTransport) Send(ctx context.Context, e Envelope) error {
 	}
 
 	// Sets the timeout for the next write operation
-	if deadline, ok := ctx.Deadline(); ok {
-		if err := t.conn.SetWriteDeadline(deadline); err != nil {
-			return err
-		}
+	deadline, _ := ctx.Deadline()
+	if err := t.conn.SetWriteDeadline(deadline); err != nil {
+		return err
 	}
-
+	// TODO: Handle context <-Done() signal
 	// TODO: Encode writes a new line after each entry, how we can avoid this?
 	return t.encoder.Encode(e)
 }
@@ -92,14 +91,14 @@ func (t *ConnTransport) Receive(ctx context.Context) (Envelope, error) {
 	}
 
 	// Sets the timeout for the next read operation
-	if deadline, ok := ctx.Deadline(); ok {
-		if err := t.conn.SetReadDeadline(deadline); err != nil {
-			return nil, err
-		}
+	deadline, _ := ctx.Deadline()
+	if err := t.conn.SetReadDeadline(deadline); err != nil {
+		return nil, err
 	}
 
 	var raw RawEnvelope
 
+	// TODO: Handle context <-Done() signal
 	if err := t.decoder.Decode(&raw); err != nil {
 		return nil, err
 	}
@@ -140,17 +139,18 @@ func (t *ConnTransport) RemoteAdd() net.Addr {
 
 func (t *ConnTransport) setConn(conn net.Conn) {
 	t.conn = conn
+
 	var writer io.Writer = t.conn
 	var reader io.Reader = t.conn
 
 	// Configure the trace writer, if defined
 	tw := t.TraceWriter
 	if tw != nil {
-		writer = io.MultiWriter(writer, *tw.getSendWriter())
-		reader = io.TeeReader(reader, *tw.getReceiveWriter())
+		writer = io.MultiWriter(writer, *tw.SendWriter())
+		reader = io.TeeReader(reader, *tw.ReceiveWriter())
 	}
 
-	// Sets the decoder to be used for sending envelopes
+	// Sets the encoder to be used for sending envelopes
 	t.encoder = json.NewEncoder(writer)
 
 	if t.ReadLimit == 0 {
@@ -158,7 +158,7 @@ func (t *ConnTransport) setConn(conn net.Conn) {
 	}
 
 	// Using a LimitedReader to avoid the connection be
-	// flooded with a very large JSON which can cause
+	// flooded with a large JSON which may cause
 	// high memory usage.
 	t.limitedReader = io.LimitedReader{
 		R: reader,
@@ -189,11 +189,11 @@ type TransportListener interface {
 
 // TraceWriter Enable request tracing for network transports.
 type TraceWriter interface {
-	// Gets the sendWriter for the transport send operations
-	getSendWriter() *io.Writer
+	// SendWriter returns the sendWriter for the transport send operations
+	SendWriter() *io.Writer
 
-	// Gets the sendWriter for the transport receive operations
-	getReceiveWriter() *io.Writer
+	// ReceiveWriter returns the sendWriter for the transport receive operations
+	ReceiveWriter() *io.Writer
 }
 
 // StdoutTraceWriter Implements a TraceWriter that uses the standard output for
@@ -231,10 +231,10 @@ func NewStdoutTraceWriter() *StdoutTraceWriter {
 	return &tw
 }
 
-func (t StdoutTraceWriter) getSendWriter() *io.Writer {
+func (t StdoutTraceWriter) SendWriter() *io.Writer {
 	return &t.sendWriter
 }
 
-func (t StdoutTraceWriter) getReceiveWriter() *io.Writer {
+func (t StdoutTraceWriter) ReceiveWriter() *io.Writer {
 	return &t.receiveWriter
 }

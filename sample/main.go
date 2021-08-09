@@ -1,44 +1,16 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/takenet/lime-go"
+	"log"
 	"net"
-	"os"
+	"time"
 )
 
 func main() {
-
-	sender := func(t lime.Transport, e lime.Envelope) error {
-		err := t.Send(context.Background(), e)
-		if err != nil {
-			fmt.Println("Send error:", err)
-			return err
-		}
-		return nil
-	}
-
-	receiver := func(t lime.Transport) (lime.Envelope, error) {
-		e, err := t.Receive(context.TODO())
-		if err != nil {
-			fmt.Println("Receive error:", err)
-			return nil, err
-		}
-		return e, nil
-	}
-
-	whileNotError := func(fs ...func() error) error {
-		for _, f := range fs {
-			err := f()
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}
 
 	t := lime.TCPTransport{
 		TLSConfig: &tls.Config{ServerName: "msging.net"},
@@ -48,186 +20,115 @@ func main() {
 
 	addr, err := net.ResolveTCPAddr("tcp", "tcp.msging.net:443")
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalln(err)
 	}
 
 	err = t.Open(context.Background(), addr)
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalln(err)
 	}
-	var sessionId string
 
-	_ = whileNotError(
-		func() error {
-			return sender(&t, &lime.Session{State: lime.SessionStateNew})
-		},
-		func() error {
-			// Negotiating
-			e, err := receiver(&t)
-			if e != nil {
-				sessionId = e.GetID()
-			}
-			return err
-		},
-		func() error {
-			s := lime.Session{}
-			s.ID = sessionId
-			s.State = lime.SessionStateNegotiating
-			s.Compression = lime.SessionCompressionNone
-			s.Encryption = lime.SessionEncryptionTLS
-			return sender(&t, &s)
-		},
-		func() error {
-			// Negotiation ack
-			_, err := receiver(&t)
-			err = t.SetEncryption(context.Background(), lime.SessionEncryptionTLS)
-			return err
-		},
-		func() error {
-			// Authenticating
-			_, err := receiver(&t)
-			return err
-		},
-		func() error {
-			s := lime.Session{}
-			s.ID = sessionId
-			s.From = lime.Node{
-				Identity: lime.Identity{
-					Name:   "andreb",
-					Domain: "msging.net",
-				},
-				Instance: "default",
-			}
+	client, err := lime.NewClientChannel(&t, 1)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-			s.State = lime.SessionStateAuthenticating
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+
+	ses, err := client.EstablishSession(
+		ctx,
+		func(compressions []lime.SessionCompression) lime.SessionCompression {
+			return lime.SessionCompressionNone
+		},
+		func(encryptions []lime.SessionEncryption) lime.SessionEncryption {
+			return lime.SessionEncryptionTLS
+		},
+		lime.Identity{
+			Name:   "andreb",
+			Domain: "msging.net",
+		},
+		func(schemes []lime.AuthenticationScheme, authentication lime.Authentication) lime.Authentication {
 			auth := lime.PlainAuthentication{}
 			auth.SetPasswordAsBase64("123456")
-			s.SetAuthentication(&auth)
-			return sender(&t, &s)
+			return &auth
 		},
-		func() error {
-			// Established
-			s, err := receiver(&t)
-			if s != nil {
-				fmt.Printf("Session %v established\n", s.GetID())
+		"default",
+	)
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	if ses.State != lime.SessionStateEstablished {
+		fmt.Printf("The session was not established - ID: %v - State: %v\n - Reason: %v", ses.ID, ses.State, ses.Reason)
+	}
+
+	fmt.Println("Session established")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	presenceUri, _ := lime.ParseLimeUri("/presence")
+
+	presence := lime.JsonDocument{
+		"status":      "available",
+		"routingRule": "identity",
+	}
+
+	cmd, err := client.ProcessCommand(ctx, &lime.Command{
+		EnvelopeBase: lime.EnvelopeBase{
+			ID: lime.NewEnvelopeId(),
+			To: lime.Node{
+				Identity: lime.Identity{Name: "postmaster", Domain: "msging.net"},
+				Instance: "",
+			},
+		},
+		Method: lime.CommandMethodSet,
+		Uri:    &presenceUri,
+		Type: &lime.MediaType{
+			Type:    "application",
+			Subtype: "vnd.lime.presence",
+			Suffix:  "json",
+		},
+		Resource: &presence,
+	})
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	if cmd != nil {
+		fmt.Printf("Command response received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
+	}
+
+	ctx, cancel = context.WithCancel(context.Background())
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("Listener stopped")
+				return
+			case msg := <-client.MsgChan():
+				fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)
+			case not := <-client.NotChan():
+				fmt.Printf("Notification received - ID: %v - From: %v - Event: %v - Reason: %v\n", not.ID, not.From, not.Event, not.Reason)
+			case cmd := <-client.CmdChan():
+				fmt.Printf("Command received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
 			}
-			return err
-		})
+		}
+	}()
 
 	fmt.Println("Press ENTER key to exit")
-	reader := bufio.NewReader(os.Stdin)
-	reader.ReadString('\n')
 
-	_ = sender(&t, &lime.Session{EnvelopeBase: lime.EnvelopeBase{ID: sessionId}, State: lime.SessionStateFinishing})
-	receiver(&t)
+	_, err = fmt.Scanln()
+	cancel()
 
-	//s := lime.Session{State: lime.SessionStateNew}
-	//err = t.Send(&s)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//
-	//b, err := json.Marshal(&s)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//fmt.Println("Send: ", string(b))
-	//
-	//e, err := t.Receive()
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//
-	//b, err = json.Marshal(&e)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//fmt.Println("Session", string(b))
+	ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
+	ses, err = client.FinishSession(ctx)
 
-	//conn, err := net.Dial("tcp", "tcp.msging.net:443")
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//
-	//enc := json.NewEncoder(conn)
-	//dec := json.NewDecoder(conn)
-	//err = enc.Encode(lime.Session{State: lime.SessionStateNew})
-	//
-	//var receivedSession lime.EnvelopeUnion
-	//err = dec.Decode(&receivedSession)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-
-	//session := lime.Session{}
-	//session.ID = "1"
-	//session.To = lime.Node{
-	//	Identity: lime.Identity{Name: "postmaster", Domain: "msging.net"},
-	//	Instance: "#az-iris1",
-	//}
-	//session.State = lime.SessionStateAuthenticating
-	////session.Encryption = SessionEncryptionTLS
-	//
-	////session.Scheme = lime.AuthenticationSchemePlain
-	//session.SetAuthentication(&lime.PlainAuthentication{Password: "banana"})
-	////session.SetAuthentication(&lime.PlainAuthentication{Password: "banana"})
-	//
-	//b, err := json.Marshal(session)
-	//if err != nil {
-	//	fmt.Println("Error", err)
-	//}
-	//
-	//fmt.Println("Session", string(b))
-	//
-	//identity := lime.Identity{"postmaster", "msging.net"}
-	//
-	//fmt.Println("Identity", identity)
-	//
-	//data := []byte(`{"state": "new","id":"banana","from":"andreb@msging.net/#home","scheme":"plain","authentication":{"password":"1234"},"reason":{"code":1,"description":"crap"}}`)
-	//
-	//session2 := lime.Session{}
-	//err = json.Unmarshal(data, &session2)
-	//if err != nil {
-	//	fmt.Println("Deserialization error:", err)
-	//}
-	//
-	//fmt.Printf("%+v\n", session2)
-	//
-	////auth, err := session2.GetAuthentication()
-	////fmt.Printf("authentication: %+v\n", auth)
-}
-
-func listen() {
-	listener := lime.TCPTransportListener{}
-
-	addr, err := net.ResolveTCPAddr("tcp", ":55321")
 	if err != nil {
-		fmt.Println(err)
+		log.Fatalln(err)
 	}
 
-	err = listener.Open(context.Background(), addr)
-	if err != nil {
-		fmt.Println("Listener error:", err)
-	}
-
-	for {
-		t, err := listener.Accept()
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		err = t.Send(context.Background(), &lime.Session{State: lime.SessionStateFailed})
-		if err != nil {
-			fmt.Println(err)
-		}
-		_ = t.Close(context.TODO())
+	if ses.State != lime.SessionStateFinished {
+		fmt.Printf("The session was not finished - ID: %v - State: %v\n - Reason: %v", ses.ID, ses.State, ses.Reason)
 	}
 }

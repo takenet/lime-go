@@ -87,7 +87,9 @@ func (c *Command) ToRawEnvelope() (*RawEnvelope, error) {
 		raw.Method = &c.Method
 	}
 
-	raw.Status = &c.Status
+	if c.Status != "" {
+		raw.Status = &c.Status
+	}
 	raw.Uri = c.Uri
 	raw.Reason = c.Reason
 
@@ -118,8 +120,13 @@ func (c *Command) Populate(raw *RawEnvelope) error {
 	if raw.Method == nil {
 		return errors.New("command method is required")
 	}
+
 	c.Method = *raw.Method
-	c.Status = *raw.Status
+
+	if raw.Status != nil {
+		c.Status = *raw.Status
+	}
+
 	c.Uri = raw.Uri
 	c.Reason = raw.Reason
 
