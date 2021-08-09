@@ -1,4 +1,4 @@
-module github.com/andrebires/lime-go
+module github.com/takenet/lime-go
 
 go 1.14
 
