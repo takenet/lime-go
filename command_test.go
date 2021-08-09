@@ -15,7 +15,7 @@ func TestCommand_MarshalJSON_GetPingRequest(t *testing.T) {
 	c.To.Domain = "limeprotocol.org"
 	c.Method = CommandMethodGet
 	u, _ := ParseLimeUri("/ping")
-	c.Uri = u
+	c.Uri = &u
 
 	// Act
 	b, err := json.Marshal(&c)
@@ -36,7 +36,7 @@ func TestCommand_MarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
 	c.To.Domain = "limeprotocol.org"
 	c.Method = CommandMethodMerge
 	u, _ := ParseLimeUri("/document/john.doe%40limeprotocol.org")
-	c.Uri = u
+	c.Uri = &u
 	d := DocumentContainer{
 		Type: MediaType{"application", "vnd.lime.account", "json"},
 		Value: &JsonDocument{
@@ -77,7 +77,7 @@ func TestCommand_MarshalJSON_GetAccountResponse(t *testing.T) {
 	a := JsonDocument{"name": "John Doe", "address": "Main street", "city": "Belo Horizonte", "extras": map[string]interface{}{"plan": "premium"}}
 	c.Resource = &a
 	m, _ := ParseMediaType("application/vnd.lime.account+json")
-	c.Type = m
+	c.Type = &m
 
 	// Act
 	b, err := json.Marshal(&c)
@@ -139,7 +139,7 @@ func TestCommand_MarshalJSON_SetFailureResponse(t *testing.T) {
 	c.To.Instance = "default"
 	c.Method = CommandMethodSet
 	c.Status = CommandStatusFailure
-	c.Reason = Reason{
+	c.Reason = &Reason{
 		Code:        101,
 		Description: "The resource was not found",
 	}
@@ -171,7 +171,7 @@ func TestCommand_UnmarshalJSON_GetPingRequest(t *testing.T) {
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, c.To)
 	assert.Equal(t, CommandMethodGet, c.Method)
 	u, _ := ParseLimeUri("/ping")
-	assert.Equal(t, u, c.Uri)
+	assert.Equal(t, u, *c.Uri)
 	assert.Zero(t, c.Status)
 	assert.Nil(t, c.Resource)
 }
@@ -192,10 +192,12 @@ func TestCommand_UnmarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
 	assert.Zero(t, c.From)
 	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, ""}, c.To)
 	assert.Equal(t, CommandMethodMerge, c.Method)
+	assert.NotNil(t, c.Uri)
 	u, _ := ParseLimeUri("/documentContainer/john.doe%40limeprotocol.org")
-	assert.Equal(t, u, c.Uri)
+	assert.Equal(t, u, *c.Uri)
 	assert.Zero(t, c.Status)
-	assert.Equal(t, MediaType{"application", "vnd.lime.container", "json"}, c.Type)
+	assert.NotNil(t, c.Type)
+	assert.Equal(t, MediaType{"application", "vnd.lime.container", "json"}, *c.Type)
 	assert.NotNil(t, c.Resource)
 	dc, ok := c.Resource.(*DocumentContainer)
 	if !assert.True(t, ok) {
@@ -229,7 +231,8 @@ func TestCommand_UnmarshalJSON_GetAccountResponse(t *testing.T) {
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, c.To)
 	assert.Equal(t, CommandMethodGet, c.Method)
 	assert.Equal(t, CommandStatusSuccess, c.Status)
-	assert.Equal(t, MediaType{"application", "vnd.lime.account", "json"}, c.Type)
+	assert.NotNil(t, c.Type)
+	assert.Equal(t, MediaType{"application", "vnd.lime.account", "json"}, *c.Type)
 	assert.NotNil(t, c.Resource)
 	d, ok := c.Resource.(*JsonDocument)
 	if !assert.True(t, ok) {
@@ -259,7 +262,8 @@ func TestCommand_UnmarshalJSON_GetAccountCollectionResponse(t *testing.T) {
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, c.To)
 	assert.Equal(t, CommandMethodGet, c.Method)
 	assert.Equal(t, CommandStatusSuccess, c.Status)
-	assert.Equal(t, MediaType{"application", "vnd.lime.collection", "json"}, c.Type)
+	assert.NotNil(t, c.Type)
+	assert.Equal(t, MediaType{"application", "vnd.lime.collection", "json"}, *c.Type)
 	assert.NotNil(t, c.Resource)
 	d, ok := c.Resource.(*DocumentCollection)
 	if !assert.True(t, ok) {
@@ -311,7 +315,8 @@ func TestCommand_UnmarshalJSON_SetFailureResponse(t *testing.T) {
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, c.To)
 	assert.Equal(t, CommandMethodSet, c.Method)
 	assert.Equal(t, CommandStatusFailure, c.Status)
-	assert.Equal(t, Reason{101, "The resource was not found"}, c.Reason)
+	assert.NotNil(t, c.Reason)
+	assert.Equal(t, Reason{101, "The resource was not found"}, *c.Reason)
 	assert.Zero(t, c.Type)
 	assert.Nil(t, c.Resource)
 }
