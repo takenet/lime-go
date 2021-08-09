@@ -19,7 +19,7 @@ import (
 
 func createListener(addr net.Addr, transportChan chan Transport, t *testing.T) *TCPTransportListener {
 	listener := TCPTransportListener{}
-	if err := listener.Open(context.Background(), addr); err != nil {
+	if err := listener.Listen(context.Background(), addr); err != nil {
 		t.Fatal(err)
 		return nil
 	}
@@ -53,7 +53,7 @@ func createListenerTLS(addr net.Addr, transportChan chan Transport, t *testing.T
 
 func createClientTransport(addr net.Addr, t *testing.T) *TCPTransport {
 	client := TCPTransport{}
-	if err := client.Open(context.Background(), addr); err != nil {
+	if err := client.Dial(context.Background(), addr); err != nil {
 		t.Fatal(err)
 		return nil
 	}
@@ -169,7 +169,7 @@ func createCertificate(host string) (*tls.Certificate, error) {
 	}, nil
 }
 
-func TestTCPTransport_Open_WhenListening(t *testing.T) {
+func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	listener := createListener(addr, nil, t)
@@ -178,19 +178,19 @@ func TestTCPTransport_Open_WhenListening(t *testing.T) {
 	client := TCPTransport{}
 
 	// Act
-	err := client.Open(context.Background(), addr)
+	err := client.Dial(context.Background(), addr)
 
 	// Assert
 	assert.Nil(t, err)
 }
 
-func TestTCPTransport_Open_WhenNotListening(t *testing.T) {
+func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	client := TCPTransport{}
 
 	// Act
-	err := client.Open(context.Background(), addr)
+	err := client.Dial(context.Background(), addr)
 
 	// Assert
 	assert.NotNil(t, err)
@@ -205,7 +205,7 @@ func TestTCPTransportListener_Close_WhenOpen(t *testing.T) {
 	client := createClientTransport(createTCPAddress(), t)
 
 	// Act
-	err := client.Close(context.TODO())
+	err := client.Close()
 
 	// Assert
 	assert.Nil(t, err)
@@ -216,7 +216,7 @@ func TestTCPTransportListener_Close_WhenNotOpen(t *testing.T) {
 	client := TCPTransport{}
 
 	// Act
-	err := client.Close(context.TODO())
+	err := client.Close()
 
 	// Assert
 	assert.NotNil(t, err)

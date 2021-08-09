@@ -17,7 +17,7 @@ type TCPTransport struct {
 	server     bool
 }
 
-func (t *TCPTransport) Open(ctx context.Context, addr net.Addr) error {
+func (t *TCPTransport) Dial(ctx context.Context, addr net.Addr) error {
 	if t.conn != nil {
 		return errors.New("transport already open")
 	}
@@ -45,7 +45,7 @@ func (t *TCPTransport) GetCompression() SessionCompression {
 	return SessionCompressionNone
 }
 
-func (t *TCPTransport) SetCompression(ctx context.Context, c SessionCompression) error {
+func (t *TCPTransport) SetCompression(_ context.Context, c SessionCompression) error {
 	return fmt.Errorf("compression '%v' is not supported", c)
 }
 
@@ -104,7 +104,7 @@ type TCPTransportListener struct {
 	mux       sync.Mutex
 }
 
-func (t *TCPTransportListener) Open(ctx context.Context, addr net.Addr) error {
+func (t *TCPTransportListener) Listen(ctx context.Context, addr net.Addr) error {
 	if addr.Network() != "tcp" {
 		return errors.New("address network should be tcp")
 	}

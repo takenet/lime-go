@@ -10,17 +10,16 @@ import (
 )
 
 type Transport interface {
+	io.Closer
+
 	// Send sends an envelope to the remote node.
 	Send(ctx context.Context, e Envelope) error
 
 	// Receive receives an envelope from the remote node.
 	Receive(ctx context.Context) (Envelope, error)
 
-	// Open opens the transport connection with the specified Uri.
-	Open(ctx context.Context, addr net.Addr) error
-
-	// Close closes the connection.
-	Close(ctx context.Context) error
+	// Dial opens the transport connection with the specified Uri.
+	Dial(ctx context.Context, addr net.Addr) error
 
 	// GetSupportedCompression enumerates the supported compression options for the transport.
 	GetSupportedCompression() []SessionCompression
@@ -109,7 +108,7 @@ func (t *ConnTransport) Receive(ctx context.Context) (Envelope, error) {
 	return raw.ToEnvelope()
 }
 
-func (t *ConnTransport) Close(context.Context) error {
+func (t *ConnTransport) Close() error {
 	if err := t.ensureOpen(); err != nil {
 		return err
 	}
@@ -177,11 +176,10 @@ func (t *ConnTransport) ensureOpen() error {
 
 // TransportListener Defines a listener interface for the transports.
 type TransportListener interface {
-	// Open Start listening for new transport connections.
-	Open(ctx context.Context, addr net.Addr) error
+	io.Closer
 
-	// Close Stop the listener.
-	Close() error
+	// Listen start listening for new transport connections.
+	Listen(ctx context.Context, addr net.Addr) error
 
 	// Accept a new transport connection.
 	Accept() (Transport, error)

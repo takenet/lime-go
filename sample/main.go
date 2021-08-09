@@ -23,7 +23,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	err = t.Open(context.Background(), addr)
+	err = t.Dial(context.Background(), addr)
 	if err != nil {
 		log.Fatalln(err)
 	}

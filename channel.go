@@ -432,7 +432,7 @@ func (c *ClientChannel) ReceiveSession(ctx context.Context) (*Session, error) {
 	c.setState(ses.State)
 
 	if ses.State == SessionStateFinished || ses.State == SessionStateFailed {
-		if err := c.transport.Close(ctx); err != nil {
+		if err := c.transport.Close(); err != nil {
 			return nil, fmt.Errorf("closing the transport failed: %w", err)
 		}
 	}
