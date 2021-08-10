@@ -12,23 +12,21 @@ import (
 
 func main() {
 
-	t := lime.TCPTransport{
-		TLSConfig: &tls.Config{ServerName: "msging.net"},
-	}
-	tw := lime.NewStdoutTraceWriter()
-	t.TraceWriter = tw
-
 	addr, err := net.ResolveTCPAddr("tcp", "tcp.msging.net:443")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	err = t.Dial(context.Background(), addr)
+	t, err := lime.DialTcp(context.Background(), addr, &tls.Config{ServerName: "msging.net"})
+
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	client, err := lime.NewClientChannel(&t, 1)
+	tw := lime.NewStdoutTraceWriter()
+	t.TraceWriter = tw
+
+	client, err := lime.NewClientChannel(t, 1)
 	if err != nil {
 		log.Fatalln(err)
 	}

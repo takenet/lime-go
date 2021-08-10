@@ -52,14 +52,16 @@ func createListenerTLS(addr net.Addr, transportChan chan Transport, t *testing.T
 }
 
 func createClientTransport(addr net.Addr, t *testing.T) *TCPTransport {
-	client := TCPTransport{}
-	if err := client.Dial(context.Background(), addr); err != nil {
+
+	client, err := DialTcp(context.Background(), addr, &tls.Config{})
+
+	if err != nil {
 		t.Fatal(err)
 		return nil
 	}
 	//client.WriteTimeout = 5 * time.Second
 	//client.ReadTimeout = 5 * time.Second
-	return &client
+	return client
 }
 
 func createClientTransportTLS(addr net.Addr, t *testing.T) *TCPTransport {
@@ -175,10 +177,8 @@ func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	listener := createListener(addr, nil, t)
 	defer listener.Close()
 
-	client := TCPTransport{}
-
 	// Act
-	err := client.Dial(context.Background(), addr)
+	_, err := DialTcp(context.Background(), addr, &tls.Config{})
 
 	// Assert
 	assert.Nil(t, err)
@@ -187,10 +187,9 @@ func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	client := TCPTransport{}
 
 	// Act
-	err := client.Dial(context.Background(), addr)
+	_, err := DialTcp(context.Background(), addr, &tls.Config{})
 
 	// Assert
 	assert.NotNil(t, err)

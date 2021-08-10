@@ -17,24 +17,25 @@ type TCPTransport struct {
 	server     bool
 }
 
-func (t *TCPTransport) Dial(ctx context.Context, addr net.Addr) error {
-	if t.conn != nil {
-		return errors.New("transport already open")
-	}
-
+// DialTcp opens a TCP  transport connection with the specified Uri.
+func DialTcp(ctx context.Context, addr net.Addr, tls *tls.Config) (*TCPTransport, error) {
 	if addr.Network() != "tcp" {
-		return errors.New("address network should be tcp")
+		return nil, errors.New("address network should be tcp")
 	}
 
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, addr.Network(), addr.String())
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	t := TCPTransport{
+		TLSConfig: tls,
 	}
 
 	t.setConn(conn)
 	t.encryption = SessionEncryptionNone
-	return nil
+	return &t, nil
 }
 
 func (t *TCPTransport) GetSupportedCompression() []SessionCompression {

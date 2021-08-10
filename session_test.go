@@ -292,7 +292,7 @@ func TestSession_MarshalJSON_Failed(t *testing.T) {
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "default",
 	}
-	s.Reason = Reason{
+	s.Reason = &Reason{
 		Code:        13,
 		Description: "The session authentication failed",
 	}
@@ -575,5 +575,5 @@ func TestSession_UnmarshalJSON_Failed(t *testing.T) {
 	assert.Equal(t, Node{Identity{"postmaster", "limeprotocol.org"}, "#server1"}, s.From)
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, s.To)
 	assert.Equal(t, SessionStateFailed, s.State)
-	assert.Equal(t, Reason{13, "The session authentication failed"}, s.Reason)
+	assert.Equal(t, Reason{13, "The session authentication failed"}, *s.Reason)
 }

@@ -37,7 +37,7 @@ type Session struct {
 	Authentication Authentication
 	// In cases where the client receives a session with failed state,
 	// this property should provide more details about the problem.
-	Reason Reason
+	Reason *Reason
 }
 
 func (s *Session) SetAuthentication(a Authentication) {
@@ -105,9 +105,7 @@ func (s *Session) ToRawEnvelope() (*RawEnvelope, error) {
 		raw.Scheme = &s.Scheme
 	}
 
-	if s.Reason != (Reason{}) {
-		raw.Reason = &s.Reason
-	}
+	raw.Reason = s.Reason
 
 	return raw, nil
 }
@@ -155,9 +153,8 @@ func (s *Session) Populate(raw *RawEnvelope) error {
 	if raw.Scheme != nil {
 		s.Scheme = *raw.Scheme
 	}
-	if raw.Reason != nil {
-		s.Reason = *raw.Reason
-	}
+
+	s.Reason = raw.Reason
 
 	return nil
 }

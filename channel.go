@@ -35,14 +35,6 @@ type CommandProcessor interface {
 	ProcessCommand(ctx context.Context, cmd *Command) (*Command, error)
 }
 
-type SessionSender interface {
-	SendSession(ctx context.Context, ses *Session) error
-}
-
-type SessionReceiver interface {
-	ReceiveSession(ctx context.Context) (*Session, error)
-}
-
 type SessionInformation interface {
 	// GetID gets the session ID.
 	GetID() string
@@ -82,8 +74,8 @@ type channel struct {
 	inSesChan  chan *Session
 	ErrChan    chan error
 
-	pendingCmds   map[string]chan *Command
-	pendingCmdsMu sync.RWMutex
+	processingCmds   map[string]chan *Command
+	processingCmdsMu sync.RWMutex
 
 	cancel context.CancelFunc // The function for cancelling the send/receive goroutines
 }
@@ -94,16 +86,16 @@ func newChannel(t Transport, bufferSize int) (*channel, error) {
 	}
 
 	c := channel{
-		transport:     t,
-		state:         SessionStateNew,
-		outChan:       make(chan Envelope, bufferSize),
-		inMsgChan:     make(chan *Message, bufferSize),
-		inNotChan:     make(chan *Notification, bufferSize),
-		inCmdChan:     make(chan *Command, bufferSize),
-		inSesChan:     make(chan *Session, bufferSize),
-		ErrChan:       make(chan error, 2),
-		pendingCmds:   make(map[string]chan *Command),
-		pendingCmdsMu: sync.RWMutex{},
+		transport:        t,
+		state:            SessionStateNew,
+		outChan:          make(chan Envelope, bufferSize),
+		inMsgChan:        make(chan *Message, bufferSize),
+		inNotChan:        make(chan *Notification, bufferSize),
+		inCmdChan:        make(chan *Command, bufferSize),
+		inSesChan:        make(chan *Session, bufferSize),
+		ErrChan:          make(chan error, 2),
+		processingCmds:   make(map[string]chan *Command),
+		processingCmdsMu: sync.RWMutex{},
 	}
 	return &c, nil
 }
@@ -113,7 +105,6 @@ func (c *channel) isEstablished() bool {
 }
 
 func (c *channel) startGoroutines() {
-
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	c.cancel = cancelFunc
 
@@ -147,6 +138,10 @@ func (c *channel) CmdChan() <-chan *Command {
 	return c.inCmdChan
 }
 
+func (c *channel) SesChan() <-chan *Session {
+	return c.inSesChan
+}
+
 func receiveFromTransport(ctx context.Context, c *channel) {
 	for c.isEstablished() {
 		env, err := c.transport.Receive(ctx)
@@ -167,10 +162,13 @@ func receiveFromTransport(ctx context.Context, c *channel) {
 		case *Session:
 			c.inSesChan <- e
 		default:
-			// TODO: Handle unknown envelope type
-			break
+			panic(fmt.Errorf("unknown envelope type %v", e))
 		}
 	}
+	close(c.inMsgChan)
+	close(c.inNotChan)
+	close(c.inCmdChan)
+	close(c.inSesChan)
 }
 
 func sendToTransport(ctx context.Context, c *channel) {
@@ -186,6 +184,7 @@ func sendToTransport(ctx context.Context, c *channel) {
 			}
 		}
 	}
+	close(c.outChan)
 }
 
 func (c *channel) GetID() string {
@@ -204,14 +203,13 @@ func (c *channel) GetState() SessionState {
 	return c.state
 }
 
-func (c *channel) SendSession(ctx context.Context, ses *Session) error {
+func (c *channel) sendSession(ctx context.Context, ses *Session) error {
+	if err := c.ensureTransportOK("send session"); err != nil {
+		return err
+	}
 	// check the current channel state
 	if c.state == SessionStateFinished || c.state == SessionStateFailed {
 		return fmt.Errorf("cannot send a session in the %v state", c.state)
-	}
-
-	if ses.State == SessionStateFinishing || ses.State == SessionStateFinished || ses.State == SessionStateFailed {
-		// TODO: signal to stop the listener goroutine
 	}
 
 	return c.transport.Send(ctx, ses)
@@ -304,12 +302,7 @@ func (c *channel) sendToBuffer(ctx context.Context, env Envelope) error {
 	if env == nil {
 		return errors.New("envelope cannot be nil")
 	}
-
 	if err := c.ensureEstablished("send"); err != nil {
-		return err
-	}
-
-	if err := c.ensureTransportOK("send"); err != nil {
 		return err
 	}
 
@@ -326,6 +319,10 @@ func (c *channel) ensureEstablished(action string) error {
 }
 
 func (c *channel) ensureState(state SessionState, action string) error {
+	if err := c.ensureTransportOK(action); err != nil {
+		return err
+	}
+
 	if c.state != state {
 		return fmt.Errorf("cannot %v in the %v state", action, c.state)
 	}
@@ -347,30 +344,28 @@ func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqC
 	if reqCmd == nil {
 		return nil, errors.New("command cannot be nil")
 	}
-
 	if reqCmd.Status != "" {
 		return nil, errors.New("invalid command status")
 	}
-
 	if reqCmd.ID == "" {
 		return nil, errors.New("invalid command id")
 	}
 
-	c.pendingCmdsMu.Lock()
+	c.processingCmdsMu.Lock()
 
-	if _, ok := c.pendingCmds[reqCmd.ID]; ok {
-		c.pendingCmdsMu.Unlock()
+	if _, ok := c.processingCmds[reqCmd.ID]; ok {
+		c.processingCmdsMu.Unlock()
 		return nil, errors.New("the command id is already in use")
 	}
 
 	respChan := make(chan *Command, 1)
-	c.pendingCmds[reqCmd.ID] = respChan
-	c.pendingCmdsMu.Unlock()
+	c.processingCmds[reqCmd.ID] = respChan
+	c.processingCmdsMu.Unlock()
 
 	defer func() {
-		c.pendingCmdsMu.Lock()
-		delete(c.pendingCmds, reqCmd.ID)
-		c.pendingCmdsMu.Unlock()
+		c.processingCmdsMu.Lock()
+		delete(c.processingCmds, reqCmd.ID)
+		c.processingCmdsMu.Unlock()
 	}()
 
 	err := sender.SendCommand(ctx, reqCmd)
@@ -391,259 +386,18 @@ func (c *channel) trySubmitCommandResult(respCmd *Command) bool {
 		return false
 	}
 
-	c.pendingCmdsMu.RLock()
-	respChan, ok := c.pendingCmds[respCmd.ID]
-	c.pendingCmdsMu.RUnlock()
+	c.processingCmdsMu.RLock()
+	respChan, ok := c.processingCmds[respCmd.ID]
+	c.processingCmdsMu.RUnlock()
 
 	if !ok {
 		return false
 	}
 
-	c.pendingCmdsMu.Lock()
-	delete(c.pendingCmds, respCmd.ID)
-	c.pendingCmdsMu.Unlock()
+	c.processingCmdsMu.Lock()
+	delete(c.processingCmds, respCmd.ID)
+	c.processingCmdsMu.Unlock()
 
 	respChan <- respCmd
 	return true
-}
-
-// ClientChannel implements the client-side communication channel in a Lime session.
-type ClientChannel struct {
-	channel
-}
-
-func NewClientChannel(t Transport, bufferSize int) (*ClientChannel, error) {
-
-	c, err := newChannel(t, bufferSize)
-	if err != nil {
-		return nil, err
-	}
-	return &ClientChannel{
-		channel: *c,
-	}, nil
-}
-
-// ReceiveSession receives a session from the remote node.
-func (c *ClientChannel) ReceiveSession(ctx context.Context) (*Session, error) {
-	ses, err := c.receiveSession(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("receive session failed: %w", err)
-	}
-
-	if ses.State == SessionStateEstablished {
-		c.localNode = ses.To
-		c.remoteNode = ses.From
-	}
-
-	c.sessionID = ses.ID
-	c.setState(ses.State)
-
-	if ses.State == SessionStateFinished || ses.State == SessionStateFailed {
-		if err := c.transport.Close(); err != nil {
-			return nil, fmt.Errorf("closing the transport failed: %w", err)
-		}
-	}
-
-	return ses, nil
-}
-
-// startNewSession sends a new session envelope to the server and awaits for the response.
-func (c *ClientChannel) startNewSession(ctx context.Context) (*Session, error) {
-	err := c.ensureState(SessionStateNew, "start new session")
-	if err != nil {
-		return nil, err
-	}
-
-	err = c.SendSession(ctx, &Session{State: SessionStateNew})
-	if err != nil {
-		return nil, fmt.Errorf("sending new session failed: %w", err)
-	}
-
-	ses, err := c.ReceiveSession(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("receiving on new session failed: %w", err)
-	}
-
-	return ses, nil
-}
-
-// negotiateSession sends a negotiate session envelope to accept the session negotiation options and awaits for the server confirmation.
-func (c *ClientChannel) negotiateSession(ctx context.Context, compression SessionCompression, encryption SessionEncryption) (*Session, error) {
-	err := c.ensureState(SessionStateNegotiating, "negotiate session")
-	if err != nil {
-		return nil, err
-	}
-
-	negSes := Session{
-		EnvelopeBase: EnvelopeBase{
-			ID: c.sessionID,
-		},
-		State:       SessionStateNegotiating,
-		Compression: compression,
-		Encryption:  encryption,
-	}
-
-	err = c.SendSession(ctx, &negSes)
-	if err != nil {
-		return nil, fmt.Errorf("sending negotiating session failed: %w", err)
-	}
-
-	ses, err := c.ReceiveSession(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("receiving on session negotiation failed: %w", err)
-	}
-
-	return ses, nil
-}
-
-// authenticateSession send a authenticate session envelope to the server to establish an authenticated session and awaits for the response.
-func (c *ClientChannel) authenticateSession(ctx context.Context, identity Identity, auth Authentication, instance string) (*Session, error) {
-	err := c.ensureState(SessionStateAuthenticating, "authenticate session")
-	if err != nil {
-		return nil, err
-	}
-
-	authSes := Session{
-		EnvelopeBase: EnvelopeBase{
-			ID: c.sessionID,
-			From: Node{
-				identity,
-				instance,
-			},
-		},
-		State: SessionStateAuthenticating,
-	}
-	authSes.SetAuthentication(auth)
-
-	err = c.SendSession(ctx, &authSes)
-	if err != nil {
-		return nil, fmt.Errorf("sending authenticating session failed: %w", err)
-	}
-
-	ses, err := c.ReceiveSession(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("receiving on session authentication failed: %w", err)
-	}
-
-	return ses, nil
-}
-
-func (c *ClientChannel) sendFinishingSession(ctx context.Context) error {
-	err := c.ensureState(SessionStateEstablished, "finish a session")
-	if err != nil {
-		return err
-	}
-
-	ses := Session{
-		EnvelopeBase: EnvelopeBase{
-			ID: c.sessionID,
-		},
-		State: SessionStateFinishing,
-	}
-
-	return c.SendSession(ctx, &ses)
-}
-
-// CompressionSelector defines a function for selecting the compression for a session.
-type CompressionSelector func([]SessionCompression) SessionCompression
-
-// EncryptionSelector defines a function for selecting the encryption for a session.
-type EncryptionSelector func([]SessionEncryption) SessionEncryption
-
-type Authenticator func([]AuthenticationScheme, Authentication) Authentication
-
-// EstablishSession performs the client session negotiation and authentication handshake.
-func (c *ClientChannel) EstablishSession(
-	ctx context.Context,
-	compSelector CompressionSelector,
-	encSelector EncryptionSelector,
-	identity Identity,
-	authenticator Authenticator,
-	instance string,
-) (*Session, error) {
-	if authenticator == nil {
-		return nil, errors.New("the authenticator should not be nil")
-	}
-
-	ses, err := c.startNewSession(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error establishing the session: %w", err)
-	}
-
-	// Session negotiation
-	if ses.State == SessionStateNegotiating {
-		if compSelector == nil {
-			return nil, errors.New("the compression selector should not be nil")
-		}
-
-		if encSelector == nil {
-			return nil, errors.New("the encryption selector should not be nil")
-		}
-
-		// Select options
-		ses, err = c.negotiateSession(
-			ctx,
-			compSelector(ses.CompressionOptions),
-			encSelector(ses.EncryptionOptions))
-		if err != nil {
-			return nil, fmt.Errorf("error establishing the session: %w", err)
-		}
-
-		if ses.State == SessionStateNegotiating {
-			if ses.Compression != "" && ses.Compression != c.transport.GetCompression() {
-				err = c.transport.SetCompression(ctx, ses.Compression)
-				if err != nil {
-					return nil, fmt.Errorf("error setting the session compression: %w", err)
-				}
-			}
-			if ses.Encryption != "" && ses.Encryption != c.transport.GetEncryption() {
-				err = c.transport.SetEncryption(ctx, ses.Encryption)
-				if err != nil {
-					return nil, fmt.Errorf("error setting the session encryption: %w", err)
-				}
-			}
-		}
-
-		// Await for authentication options
-		ses, err = c.ReceiveSession(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("error establishing the session: %w", err)
-		}
-	}
-
-	// Session authentication
-	var roundtrip Authentication
-
-	for ses.State == SessionStateAuthenticating {
-		ses, err = c.authenticateSession(
-			ctx,
-			identity,
-			authenticator(ses.SchemeOptions, roundtrip),
-			instance,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error establishing the session: %w", err)
-		}
-		roundtrip = ses.Authentication
-	}
-
-	return ses, nil
-}
-
-func (c *ClientChannel) FinishSession(ctx context.Context) (*Session, error) {
-	err := c.sendFinishingSession(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error sending the finishing session: %w", err)
-	}
-
-	ses, err := c.receiveSession(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error receiving the finished the session: %w", err)
-	}
-
-	return ses, nil
-}
-
-type ServerChannel struct {
-	channel
 }

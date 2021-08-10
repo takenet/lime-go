@@ -18,9 +18,6 @@ type Transport interface {
 	// Receive receives an envelope from the remote node.
 	Receive(ctx context.Context) (Envelope, error)
 
-	// Dial opens the transport connection with the specified Uri.
-	Dial(ctx context.Context, addr net.Addr) error
-
 	// GetSupportedCompression enumerates the supported compression options for the transport.
 	GetSupportedCompression() []SessionCompression
 
