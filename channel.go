@@ -236,7 +236,7 @@ func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 
 	env, err := c.transport.Receive(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error receiving session from the transport: %w", err)
 	}
 
 	ses, ok := env.(*Session)

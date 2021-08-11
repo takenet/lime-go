@@ -11,11 +11,22 @@ type ServerChannel struct {
 	*channel
 }
 
-func NewServerChannel(t Transport, bufferSize int) (*ServerChannel, error) {
+func NewServerChannel(t Transport, bufferSize int, serverNode Node, sessionID string) (*ServerChannel, error) {
+	if !serverNode.IsComplete() {
+		return nil, errors.New("the server node must be complete")
+	}
+
+	if sessionID == "" {
+		return nil, errors.New("the sessionID cannot be zero")
+	}
+
 	c, err := newChannel(t, bufferSize)
 	if err != nil {
 		return nil, err
 	}
+
+	c.localNode = serverNode
+	c.sessionID = sessionID
 
 	return &ServerChannel{channel: c}, nil
 }
@@ -199,6 +210,13 @@ func (c *ServerChannel) EstablishSession(
 		return err
 	}
 
+	if ses.ID != "" {
+		return c.FailSession(ctx, &Reason{
+			Code:        1,
+			Description: "Invalid session id",
+		})
+	}
+
 	if ses.State == SessionStateNew {
 		// Check if there's any transport negotiation option to be presented to the client
 		negCompOpts := make([]SessionCompression, 0)
@@ -243,6 +261,13 @@ func (c *ServerChannel) negotiateSession(ctx context.Context, compOpts []Session
 	ses, err := c.sendNegotiatingOptionsSession(ctx, compOpts, encryptOpts)
 	if err != nil {
 		return err
+	}
+
+	if ses.ID != c.sessionID {
+		return c.FailSession(ctx, &Reason{
+			Code:        1,
+			Description: "Invalid session id",
+		})
 	}
 
 	// Convert the slices to maps for lookup
@@ -302,6 +327,12 @@ func (c *ServerChannel) authenticateSession(
 	}
 
 	for ses.State == SessionStateAuthenticating {
+		if ses.ID != c.sessionID {
+			return c.FailSession(ctx, &Reason{
+				Code:        1,
+				Description: "Invalid session id",
+			})
+		}
 		if _, ok := schemeOptsMap[ses.Scheme]; !ok {
 			return c.FailSession(ctx, &Reason{
 				Code:        1,
@@ -330,6 +361,7 @@ func (c *ServerChannel) authenticateSession(
 			if err != nil {
 				return err
 			}
+
 		} else {
 			if err = c.FailSession(ctx, &Reason{
 				Code:        1,

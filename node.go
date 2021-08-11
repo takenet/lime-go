@@ -50,3 +50,7 @@ func (n *Node) UnmarshalText(text []byte) error {
 	*n = node
 	return nil
 }
+
+func (n *Node) IsComplete() bool {
+	return n.Identity.IsComplete() && n.Instance != ""
+}

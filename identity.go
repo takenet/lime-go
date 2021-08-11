@@ -50,3 +50,7 @@ func (i *Identity) UnmarshalText(text []byte) error {
 func (i Identity) ToNode() Node {
 	return Node{i, ""}
 }
+
+func (i *Identity) IsComplete() bool {
+	return i.Name != "" && i.Domain != ""
+}

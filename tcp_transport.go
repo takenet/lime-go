@@ -151,11 +151,14 @@ func (t *TCPTransportListener) Accept() (Transport, error) {
 		return nil, err
 	}
 
-	transport := TCPTransport{}
-	transport.setConn(conn)
+	transport := TCPTransport{
+		TLSConfig:  t.TLSConfig,
+		encryption: SessionEncryptionNone,
+	}
 	transport.server = true
-	transport.TLSConfig = t.TLSConfig
 	transport.ReadLimit = t.ReadLimit
+
+	transport.setConn(conn)
 
 	return &transport, nil
 }
