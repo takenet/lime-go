@@ -100,7 +100,7 @@ func newChannel(t Transport, bufferSize int) (*channel, error) {
 	return &c, nil
 }
 
-func (c *channel) isEstablished() bool {
+func (c *channel) Established() bool {
 	return c.state == SessionStateEstablished && c.transport.IsConnected()
 }
 
@@ -143,7 +143,7 @@ func (c *channel) SesChan() <-chan *Session {
 }
 
 func receiveFromTransport(ctx context.Context, c *channel) {
-	for c.isEstablished() {
+	for c.Established() {
 		env, err := c.transport.Receive(ctx)
 		if err != nil {
 			c.ErrChan <- err
@@ -172,7 +172,7 @@ func receiveFromTransport(ctx context.Context, c *channel) {
 }
 
 func sendToTransport(ctx context.Context, c *channel) {
-	for c.isEstablished() {
+	for c.Established() {
 		select {
 		case <-ctx.Done():
 			break

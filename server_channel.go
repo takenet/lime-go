@@ -326,7 +326,14 @@ func (c *ServerChannel) authenticateSession(
 		return err
 	}
 
-	for ses.State == SessionStateAuthenticating {
+	for c.state == SessionStateAuthenticating {
+		if ses.State != SessionStateAuthenticating {
+			return c.FailSession(ctx, &Reason{
+				Code:        1,
+				Description: "Invalid session state",
+			})
+		}
+
 		if ses.ID != c.sessionID {
 			return c.FailSession(ctx, &Reason{
 				Code:        1,
@@ -380,8 +387,6 @@ func (c *ServerChannel) FinishSession(ctx context.Context) error {
 		return err
 	}
 
-	c.setState(SessionStateFinished)
-
 	ses := Session{
 		EnvelopeBase: EnvelopeBase{
 			ID:   c.sessionID,
@@ -392,6 +397,8 @@ func (c *ServerChannel) FinishSession(ctx context.Context) error {
 	}
 
 	err := c.sendSession(ctx, &ses)
+
+	c.setState(SessionStateFinished)
 
 	if err == nil {
 		if err = c.transport.Close(); err != nil {
@@ -406,8 +413,6 @@ func (c *ServerChannel) FailSession(ctx context.Context, reason *Reason) error {
 		return err
 	}
 
-	c.setState(SessionStateFailed)
-
 	ses := Session{
 		EnvelopeBase: EnvelopeBase{
 			ID:   c.sessionID,
@@ -417,8 +422,9 @@ func (c *ServerChannel) FailSession(ctx context.Context, reason *Reason) error {
 		State:  SessionStateFailed,
 		Reason: reason,
 	}
-
 	err := c.sendSession(ctx, &ses)
+
+	c.setState(SessionStateFailed)
 
 	if err == nil {
 		if err = c.transport.Close(); err != nil {

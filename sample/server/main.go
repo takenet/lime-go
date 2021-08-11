@@ -26,8 +26,7 @@ func main() {
 	}
 
 	l := createListenerTLS(&addr)
-	tchan := make(chan lime.Transport, 1)
-
+	c := make(chan lime.Transport, 1)
 	go func(l lime.TransportListener, c chan<- lime.Transport) {
 		for {
 			t, err := l.Accept()
@@ -37,22 +36,10 @@ func main() {
 			}
 			c <- t
 		}
-	}(l, tchan)
+	}(l, c)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("Listener stopped")
-				return
-			case t := <-tchan:
-				if err := acceptTransport(t); err != nil {
-					break
-				}
-			}
-		}
-	}()
+	go listen(ctx, c)
 
 	fmt.Printf("Listening at %v. Press ENTER to stop.\n", addr)
 	_, _ = fmt.Scanln()
@@ -60,42 +47,95 @@ func main() {
 	if err := l.Close(); err != nil {
 		log.Printf("listener stop failed: %v\n", err)
 	}
-
 }
 
-var serverNode lime.Node = lime.Node{Identity: lime.Identity{
-	Name:   "postmaster",
-	Domain: "localhost",
-},
-	Instance: "server1"}
+var serverNode = lime.Node{Identity: lime.Identity{Name: "postmaster", Domain: "localhost"}, Instance: "server1"}
 
-func acceptTransport(t lime.Transport) error {
+func listen(ctx context.Context, c <-chan lime.Transport) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Listener stopped")
+			return
+		case t := <-c:
+			if err := acceptTransport(ctx, t); err != nil {
+				_ = t.Close()
+				log.Printf("Accepting transport failed: %v\n", err)
+				break
+			}
+		}
+	}
+}
 
+func acceptTransport(ctx context.Context, t lime.Transport) error {
 	c, err := lime.NewServerChannel(t, 1, serverNode, lime.NewEnvelopeId())
 	if err != nil {
-		log.Printf("create channel failed: %v\n", err)
+		log.Printf("Create channel failed: %v\n", err)
 		return err
 	}
 
 	if err = c.EstablishSession(
-		context.Background(),
+		ctx,
 		[]lime.SessionCompression{lime.SessionCompressionNone},
 		[]lime.SessionEncryption{lime.SessionEncryptionNone},
 		[]lime.AuthenticationScheme{lime.AuthenticationSchemeGuest},
 		authenticate,
 		register,
 	); err != nil {
-		log.Printf("establish session failed: %v\n", err)
+		log.Printf("Establish session failed: %v\n", err)
+		return err
 	}
 
-	return err
+	go listenChannel(ctx, c)
+	return nil
+}
+
+func listenChannel(ctx context.Context, c *lime.ServerChannel) {
+	for c.Established() {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-c.MsgChan():
+			if msg == nil {
+				return
+			}
+			fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)
+		case not := <-c.NotChan():
+			if not == nil {
+				return
+			}
+			fmt.Printf("Notification received - ID: %v - From: %v - Event: %v - Reason: %v\n", not.ID, not.From, not.Event, not.Reason)
+		case cmd := <-c.CmdChan():
+			if cmd == nil {
+				return
+			}
+			fmt.Printf("Command received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
+		case ses := <-c.SesChan():
+			if ses == nil {
+				return
+			}
+			var err error
+			if ses.State == lime.SessionStateFinishing {
+				err = c.FinishSession(context.Background())
+			} else {
+				err = c.FailSession(context.Background(), &lime.Reason{
+					Code:        1,
+					Description: "Invalid session state",
+				})
+			}
+			if err != nil {
+				log.Printf("Error closing the session: %v\n", err)
+			}
+			return
+		}
+	}
 }
 
 func authenticate(lime.Identity, lime.Authentication) (lime.AuthenticationResult, error) {
 	return lime.AuthenticationResult{Role: lime.DomainRoleMember}, nil
 }
 
-func register(n lime.Node, c *lime.ServerChannel) (lime.Node, error) {
+func register(lime.Node, *lime.ServerChannel) (lime.Node, error) {
 	return lime.Node{Identity: lime.Identity{
 		Name:   lime.NewEnvelopeId(),
 		Domain: "localhost",

@@ -31,7 +31,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	ses, err := client.EstablishSession(
 		ctx,
@@ -53,6 +53,8 @@ func main() {
 		"default",
 	)
 
+	cancel()
+
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -63,7 +65,7 @@ func main() {
 
 	fmt.Println("Session established")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	presenceUri, _ := lime.ParseLimeUri("/presence")
 
@@ -99,7 +101,7 @@ func main() {
 
 	ctx, cancel = context.WithCancel(context.Background())
 	go func() {
-		for {
+		for client.Established() {
 			select {
 			case <-ctx.Done():
 				fmt.Println("Listener stopped")
@@ -119,8 +121,10 @@ func main() {
 	_, err = fmt.Scanln()
 	cancel()
 
-	ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	ses, err = client.FinishSession(ctx)
+
+	cancel()
 
 	if err != nil {
 		log.Fatalln(err)
