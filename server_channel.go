@@ -198,7 +198,9 @@ func (c *ServerChannel) EstablishSession(
 	if err != nil {
 		return err
 	}
+
 	if ses.State == SessionStateNew {
+		// Check if there's any transport negotiation option to be presented to the client
 		negCompOpts := make([]SessionCompression, 0)
 		for _, v := range intersect(compOpts, c.transport.GetSupportedCompression()) {
 			negCompOpts = append(negCompOpts, v.(SessionCompression))
@@ -212,23 +214,28 @@ func (c *ServerChannel) EstablishSession(
 		}
 
 		if len(negCompOpts) > 1 || len(negEncryptOpts) > 1 {
+			// Negotiate the session options
 			if err = c.negotiateSession(ctx, negCompOpts, negEncryptOpts); err != nil {
 				return err
 			}
 		}
 
+		// Proceed to the authentication if the channel is not failed
 		if c.state != SessionStateFailed {
-
+			if err = c.authenticateSession(ctx, schemeOpts, authFunc, registerFunc); err != nil {
+				return err
+			}
 		}
-
 	}
 
-	if c.state != SessionStateEstablished && c.state != SessionStateFailed {
+	// If the channel state is not final at this point, fail the session
+	if c.state != SessionStateEstablished && c.state != SessionStateFailed && c.transport.IsConnected() {
 		return c.FailSession(ctx, &Reason{
 			Code:        1,
 			Description: "The session establishment failed",
 		})
 	}
+
 	return nil
 }
 
@@ -238,13 +245,14 @@ func (c *ServerChannel) negotiateSession(ctx context.Context, compOpts []Session
 		return err
 	}
 
-	compOptsMap := make(map[SessionCompression]interface{}, len(compOpts))
+	// Convert the slices to maps for lookup
+	compOptsMap := make(map[SessionCompression]struct{}, len(compOpts))
 	for _, v := range compOpts {
-		compOptsMap[v] = nil
+		compOptsMap[v] = struct{}{}
 	}
-	encryptOptsMap := make(map[SessionEncryption]interface{}, len(encryptOpts))
+	encryptOptsMap := make(map[SessionEncryption]struct{}, len(encryptOpts))
 	for _, v := range encryptOpts {
-		encryptOptsMap[v] = nil
+		encryptOptsMap[v] = struct{}{}
 	}
 
 	if ses.State == SessionStateNegotiating && ses.Compression != "" && ses.Encryption != "" {
@@ -282,13 +290,54 @@ func (c *ServerChannel) authenticateSession(
 	schemeOpts []AuthenticationScheme,
 	authFunc func(Identity, Authentication) (AuthenticationResult, error),
 	registerFunc func(Node, *ServerChannel) (Node, error)) error {
+	// Convert the slice to a map for lookup
+	schemeOptsMap := make(map[AuthenticationScheme]struct{})
+	for _, v := range schemeOpts {
+		schemeOptsMap[v] = struct{}{}
+	}
+
 	ses, err := c.sendAuthenticatingSession(ctx, schemeOpts)
 	if err != nil {
 		return err
 	}
 
 	for ses.State == SessionStateAuthenticating {
+		if _, ok := schemeOptsMap[ses.Scheme]; !ok {
+			return c.FailSession(ctx, &Reason{
+				Code:        1,
+				Description: "An invalid authentication scheme was selected",
+			})
+		}
 
+		// Authenticate using the provided func
+		authResult, err := authFunc(ses.From.Identity, ses.Authentication)
+		if err != nil {
+			return err
+		}
+
+		// If the auth result contains the identity domain role, it has succeeded
+		if authResult.Role != "" && authResult.Role != DomainRoleUnknown {
+			node, err := registerFunc(ses.From, c)
+			if err != nil {
+				return err
+			}
+
+			if err = c.sendEstablishedSession(ctx, node); err != nil {
+				return err
+			}
+		} else if authResult.RoundTrip != nil {
+			ses, err = c.sendAuthenticatingRoundTripSession(ctx, authResult.RoundTrip)
+			if err != nil {
+				return err
+			}
+		} else {
+			if err = c.FailSession(ctx, &Reason{
+				Code:        1,
+				Description: "The session authentication failed",
+			}); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
