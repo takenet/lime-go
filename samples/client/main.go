@@ -12,12 +12,12 @@ import (
 
 func main() {
 
-	addr, err := net.ResolveTCPAddr("tcp", "tcp.msging.net:443")
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:55321")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	t, err := lime.DialTcp(context.Background(), addr, &tls.Config{ServerName: "msging.net"})
+	t, err := lime.DialTcp(context.Background(), addr, &tls.Config{ServerName: "localhost", InsecureSkipVerify: true})
 
 	if err != nil {
 		log.Fatalln(err)
@@ -42,13 +42,11 @@ func main() {
 			return lime.SessionEncryptionTLS
 		},
 		lime.Identity{
-			Name:   "andreb",
-			Domain: "msging.net",
+			Name:   lime.NewEnvelopeId(),
+			Domain: "localhost",
 		},
 		func(schemes []lime.AuthenticationScheme, authentication lime.Authentication) lime.Authentication {
-			auth := lime.PlainAuthentication{}
-			auth.SetPasswordAsBase64("123456")
-			return &auth
+			return &lime.GuestAuthentication{}
 		},
 		"default",
 	)
