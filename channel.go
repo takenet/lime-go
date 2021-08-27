@@ -35,7 +35,7 @@ type CommandProcessor interface {
 	ProcessCommand(ctx context.Context, cmd *Command) (*Command, error)
 }
 
-type SessionInformation interface {
+type SessionInfoProvider interface {
 	// GetID gets the session ID.
 	GetID() string
 

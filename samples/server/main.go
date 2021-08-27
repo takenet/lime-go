@@ -14,6 +14,8 @@ import (
 	"log"
 	"math/big"
 	"net"
+	"os"
+	"os/signal"
 	"strings"
 	"time"
 )
@@ -41,8 +43,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	go listen(ctx, c)
 
-	fmt.Printf("Listening at %v. Press ENTER to stop.\n", addr)
-	_, _ = fmt.Scanln()
+	sig := make(chan os.Signal)
+	signal.Notify(sig)
+	fmt.Printf("Listening at %v. Press Ctrl+C to stop.\n", addr)
+	<-sig
+
 	cancel()
 	if err := l.Close(); err != nil {
 		log.Printf("listener stop failed: %v\n", err)

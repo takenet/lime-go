@@ -7,6 +7,8 @@ import (
 	"github.com/takenet/lime-go"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"time"
 )
 
@@ -114,9 +116,11 @@ func main() {
 		}
 	}()
 
-	fmt.Println("Press ENTER key to exit")
+	sig := make(chan os.Signal)
+	signal.Notify(sig)
+	fmt.Println("Press Ctrl+C key to exit")
+	<-sig
 
-	_, err = fmt.Scanln()
 	cancel()
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
