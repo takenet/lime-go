@@ -25,7 +25,7 @@ func (t *inProcessTransport) Close() error {
 	return nil
 }
 
-func (t *inProcessTransport) Send(ctx context.Context, e Envelope) error {
+func (t *inProcessTransport) Send(_ context.Context, e Envelope) error {
 	if t.closed {
 		return errors.New("transport is closed")
 	}
@@ -63,7 +63,7 @@ func (t *inProcessTransport) GetCompression() SessionCompression {
 	return SessionCompressionNone
 }
 
-func (t *inProcessTransport) SetCompression(ctx context.Context, c SessionCompression) error {
+func (t *inProcessTransport) SetCompression(context.Context, SessionCompression) error {
 	return errors.New("compression is not supported by in process transport")
 }
 
@@ -75,7 +75,7 @@ func (t *inProcessTransport) GetEncryption() SessionEncryption {
 	return SessionEncryptionNone
 }
 
-func (t *inProcessTransport) SetEncryption(ctx context.Context, c SessionEncryption) error {
+func (t *inProcessTransport) SetEncryption(context.Context, SessionEncryption) error {
 	return errors.New("encryption is not supported by in process transport")
 }
 
