@@ -98,13 +98,13 @@ type inProcessTransportListener struct {
 	done       chan bool
 }
 
-func NewInProcessTransportListener(addr InProcessAddr) (TransportListener, error) {
+func NewInProcessTransportListener(addr InProcessAddr) TransportListener {
 	l := &inProcessTransportListener{
 		addr:       addr,
 		transports: make(chan *inProcessTransport, 1),
 		done:       make(chan bool, 1),
 	}
-	return l, nil
+	return l
 }
 
 func (l *inProcessTransportListener) Close() error {
@@ -166,7 +166,7 @@ var listeners = make(map[InProcessAddr]*inProcessTransportListener)
 func DialInProcess(addr InProcessAddr, bufferSize int) (*inProcessTransport, error) {
 	l := listeners[addr]
 	if l == nil {
-		return nil, fmt.Errorf("no listener active on %s address", addr)
+		return nil, fmt.Errorf("in process connection refused on %s address", addr)
 	}
 
 	return l.newClient(addr, bufferSize), nil

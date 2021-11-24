@@ -53,15 +53,11 @@ func createTCPListenerTLS(addr net.Addr, transportChan chan Transport, t *testin
 }
 
 func createClientTCPTransport(addr net.Addr, t *testing.T) *TCPTransport {
-
 	client, err := DialTcp(context.Background(), addr, &tls.Config{})
-
 	if err != nil {
 		t.Fatal(err)
 		return nil
 	}
-	//client.WriteTimeout = 5 * time.Second
-	//client.ReadTimeout = 5 * time.Second
 	return client
 }
 
@@ -195,7 +191,7 @@ func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	_, err := DialTcp(context.Background(), addr, &tls.Config{})
 
 	// Assert
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
@@ -206,11 +202,27 @@ func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 	_, err := DialTcp(context.Background(), addr, &tls.Config{})
 
 	// Assert
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "refused")
 }
 
-func TestTCPTransportListener_Close_WhenOpen(t *testing.T) {
+func TestTCPTransport_Dial_AfterListenerClosed(t *testing.T) {
+	// Arrange
+	addr := createTCPAddress()
+	listener := createTCPListener(addr, nil, t)
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	_, err := DialTcp(context.Background(), addr, &tls.Config{})
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "refused")
+}
+
+func TestTCPTransport_Close_WhenOpen(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	listener := createTCPListener(addr, nil, t)
@@ -221,10 +233,10 @@ func TestTCPTransportListener_Close_WhenOpen(t *testing.T) {
 	err := client.Close()
 
 	// Assert
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
-func TestTCPTransportListener_Close_WhenNotOpen(t *testing.T) {
+func TestTCPTransport_Close_WhenNotOpen(t *testing.T) {
 	// Arrange
 	client := TCPTransport{}
 
@@ -295,12 +307,14 @@ func TestTCPTransport_Receive_Session(t *testing.T) {
 	client := createClientTCPTransport(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
 	s := createSession()
-	if err := client.Send(context.Background(), s); err != nil {
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFunc()
+	if err := client.Send(ctx, s); err != nil {
 		t.Fatal(err)
 	}
 
 	// Act
-	e, err := server.Receive(context.Background())
+	e, err := server.Receive(ctx)
 
 	// Assert
 	assert.NoError(t, err)
