@@ -31,7 +31,7 @@ func main() {
 	c := make(chan lime.Transport, 1)
 	go func(l lime.TransportListener, c chan<- lime.Transport) {
 		for {
-			t, err := l.Accept()
+			t, err := l.Accept(context.Background())
 			if err != nil {
 				log.Printf("transport accept failed: %v\n", err)
 				break

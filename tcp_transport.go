@@ -141,9 +141,14 @@ func (t *TCPTransportListener) Close() error {
 	return err
 }
 
-func (t *TCPTransportListener) Accept() (Transport, error) {
+func (t *TCPTransportListener) Accept(ctx context.Context) (Transport, error) {
 	if t.listener == nil {
 		return nil, errors.New("listener is not started")
+	}
+
+	err := ctx.Err()
+	if err != nil {
+		return nil, err
 	}
 
 	conn, err := t.listener.Accept()

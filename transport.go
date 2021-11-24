@@ -179,7 +179,7 @@ type TransportListener interface {
 	Listen(ctx context.Context, addr net.Addr) error
 
 	// Accept a new transport connection.
-	Accept() (Transport, error)
+	Accept(ctx context.Context) (Transport, error)
 }
 
 // TraceWriter Enable request tracing for network transports.

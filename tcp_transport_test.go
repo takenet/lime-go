@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 	"math/big"
 	"net"
 	"strings"
@@ -17,7 +18,7 @@ import (
 	"time"
 )
 
-func createListener(addr net.Addr, transportChan chan Transport, t *testing.T) *TCPTransportListener {
+func createTCPListener(addr net.Addr, transportChan chan Transport, t *testing.T) *TCPTransportListener {
 	listener := TCPTransportListener{}
 	if err := listener.Listen(context.Background(), addr); err != nil {
 		t.Fatal(err)
@@ -29,7 +30,7 @@ func createListener(addr net.Addr, transportChan chan Transport, t *testing.T) *
 	if transportChan != nil {
 		go func() {
 			for {
-				t, err := listener.Accept()
+				t, err := listener.Accept(context.Background())
 				if err != nil {
 					break
 				}
@@ -41,8 +42,8 @@ func createListener(addr net.Addr, transportChan chan Transport, t *testing.T) *
 	return &listener
 }
 
-func createListenerTLS(addr net.Addr, transportChan chan Transport, t *testing.T) *TCPTransportListener {
-	listener := createListener(addr, transportChan, t)
+func createTCPListenerTLS(addr net.Addr, transportChan chan Transport, t *testing.T) *TCPTransportListener {
+	listener := createTCPListener(addr, transportChan, t)
 	listener.TLSConfig = &tls.Config{
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return createCertificate("127.0.0.1")
@@ -51,7 +52,7 @@ func createListenerTLS(addr net.Addr, transportChan chan Transport, t *testing.T
 	return listener
 }
 
-func createClientTransport(addr net.Addr, t *testing.T) *TCPTransport {
+func createClientTCPTransport(addr net.Addr, t *testing.T) *TCPTransport {
 
 	client, err := DialTcp(context.Background(), addr, &tls.Config{})
 
@@ -64,8 +65,8 @@ func createClientTransport(addr net.Addr, t *testing.T) *TCPTransport {
 	return client
 }
 
-func createClientTransportTLS(addr net.Addr, t *testing.T) *TCPTransport {
-	client := createClientTransport(addr, t)
+func createClientTCPTransportTLS(addr net.Addr, t *testing.T) *TCPTransport {
+	client := createClientTCPTransport(addr, t)
 	client.TLSConfig = &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true}
 	return client
 }
@@ -174,7 +175,7 @@ func createCertificate(host string) (*tls.Certificate, error) {
 func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	listener := createListener(addr, nil, t)
+	listener := createTCPListener(addr, nil, t)
 	defer listener.Close()
 
 	// Act
@@ -199,9 +200,9 @@ func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 func TestTCPTransportListener_Close_WhenOpen(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	listener := createListener(addr, nil, t)
+	listener := createTCPListener(addr, nil, t)
 	defer listener.Close()
-	client := createClientTransport(createTCPAddress(), t)
+	client := createClientTCPTransport(createTCPAddress(), t)
 
 	// Act
 	err := client.Close()
@@ -225,9 +226,9 @@ func TestTCPTransportListener_Close_WhenNotOpen(t *testing.T) {
 func TestTCPTransport_SetEncryption_None(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	listener := createListener(addr, nil, t)
+	listener := createTCPListener(addr, nil, t)
 	defer listener.Close()
-	client := createClientTransport(createTCPAddress(), t)
+	client := createClientTCPTransport(createTCPAddress(), t)
 
 	// Act
 	err := client.SetEncryption(context.Background(), SessionEncryptionNone)
@@ -240,9 +241,9 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
-	listener := createListenerTLS(addr, transportChan, t)
+	listener := createTCPListenerTLS(addr, transportChan, t)
 	defer listener.Close()
-	client := createClientTransportTLS(createTCPAddress(), t)
+	client := createClientTCPTransportTLS(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
 	go func() {
 		if err := server.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
@@ -260,9 +261,9 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 func TestTCPTransport_Send_Session(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	listener := createListener(addr, nil, t)
+	listener := createTCPListener(addr, nil, t)
 	defer listener.Close()
-	client := createClientTransport(createTCPAddress(), t)
+	client := createClientTCPTransport(createTCPAddress(), t)
 	s := createSession()
 
 	// Act
@@ -276,9 +277,9 @@ func TestTCPTransport_Receive_Session(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
-	listener := createListener(addr, transportChan, t)
+	listener := createTCPListener(addr, transportChan, t)
 	defer listener.Close()
-	client := createClientTransport(createTCPAddress(), t)
+	client := createClientTCPTransport(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
 	s := createSession()
 	if err := client.Send(context.Background(), s); err != nil {
@@ -299,9 +300,9 @@ func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
-	listener := createListenerTLS(addr, transportChan, t)
+	listener := createTCPListenerTLS(addr, transportChan, t)
 	defer listener.Close()
-	client := createClientTransportTLS(createTCPAddress(), t)
+	client := createClientTCPTransportTLS(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
 	go func() {
 		if err := server.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
@@ -324,25 +325,34 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
-	listener := createListenerTLS(addr, transportChan, t)
+	listener := createTCPListenerTLS(addr, transportChan, t)
 	defer listener.Close()
-	client := createClientTransportTLS(createTCPAddress(), t)
+	client := createClientTCPTransportTLS(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
-	go func() {
-		if err := server.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
-			t.Fatal(err)
-		}
-	}()
-	if err := client.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFunc()
+
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		return server.SetEncryption(ctx, SessionEncryptionTLS)
+	})
+
+	if err := client.SetEncryption(ctx, SessionEncryptionTLS); err != nil {
 		t.Fatal(err)
 	}
+
+	if err := eg.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
 	s := createSession()
-	if err := client.Send(context.Background(), s); err != nil {
+	if err := client.Send(ctx, s); err != nil {
 		t.Fatal(err)
 	}
 
 	// Act
-	e, err := server.Receive(context.Background())
+	e, err := server.Receive(ctx)
 
 	// Assert
 	assert.NoError(t, err)

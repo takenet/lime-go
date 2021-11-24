@@ -176,7 +176,10 @@ func sendToTransport(ctx context.Context, c *channel) {
 		select {
 		case <-ctx.Done():
 			break
-		case e := <-c.outChan:
+		case e, ok := <-c.outChan:
+			if !ok {
+				return
+			}
 			err := c.transport.Send(ctx, e)
 			if err != nil {
 				c.ErrChan <- err
@@ -298,8 +301,8 @@ func (c *channel) ProcessCommand(ctx context.Context, reqCmd *Command) (*Command
 	return c.processCommand(ctx, c, reqCmd)
 }
 
-func (c *channel) sendToBuffer(ctx context.Context, env Envelope) error {
-	if env == nil {
+func (c *channel) sendToBuffer(ctx context.Context, e Envelope) error {
+	if e == nil {
 		return errors.New("envelope cannot be nil")
 	}
 	if err := c.ensureEstablished("send"); err != nil {
@@ -309,7 +312,7 @@ func (c *channel) sendToBuffer(ctx context.Context, env Envelope) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case c.outChan <- env:
+	case c.outChan <- e:
 		return nil
 	}
 }
