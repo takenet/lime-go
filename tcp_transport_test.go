@@ -172,6 +172,19 @@ func createCertificate(host string) (*tls.Certificate, error) {
 	}, nil
 }
 
+func doTLSHandshake(ctx context.Context, server Transport, client Transport) error {
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		return server.SetEncryption(ctx, SessionEncryptionTLS)
+	})
+
+	if err := client.SetEncryption(ctx, SessionEncryptionTLS); err != nil {
+		return err
+	}
+
+	return eg.Wait()
+}
+
 func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
@@ -245,14 +258,14 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	defer listener.Close()
 	client := createClientTCPTransportTLS(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
-	go func() {
-		if err := server.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
-			t.Fatal(err)
-		}
-	}()
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFunc()
+	if err := doTLSHandshake(ctx, server, client); err != nil {
+		t.Fatal(err)
+	}
 
 	// Act
-	err := client.SetEncryption(context.Background(), SessionEncryptionTLS)
+	err := client.SetEncryption(ctx, SessionEncryptionTLS)
 
 	// Assert
 	assert.NoError(t, err)
@@ -304,18 +317,15 @@ func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 	defer listener.Close()
 	client := createClientTCPTransportTLS(createTCPAddress(), t)
 	server := receiveTransport(t, transportChan)
-	go func() {
-		if err := server.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
-			t.Fatal(err)
-		}
-	}()
-	if err := client.SetEncryption(context.Background(), SessionEncryptionTLS); err != nil {
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFunc()
+	if err := doTLSHandshake(ctx, server, client); err != nil {
 		t.Fatal(err)
 	}
 	s := createSession()
 
 	// Act
-	err := client.Send(context.Background(), s)
+	err := client.Send(ctx, s)
 
 	// Assert
 	assert.NoError(t, err)
@@ -333,16 +343,7 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		return server.SetEncryption(ctx, SessionEncryptionTLS)
-	})
-
-	if err := client.SetEncryption(ctx, SessionEncryptionTLS); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := eg.Wait(); err != nil {
+	if err := doTLSHandshake(ctx, server, client); err != nil {
 		t.Fatal(err)
 	}
 
