@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 )
 
@@ -81,7 +82,7 @@ type channel struct {
 }
 
 func newChannel(t Transport, bufferSize int) (*channel, error) {
-	if t == nil {
+	if t == nil || reflect.ValueOf(t).IsNil() {
 		return nil, errors.New("transport cannot be nil")
 	}
 
@@ -302,7 +303,7 @@ func (c *channel) ProcessCommand(ctx context.Context, reqCmd *Command) (*Command
 }
 
 func (c *channel) sendToBuffer(ctx context.Context, e Envelope) error {
-	if e == nil {
+	if e == nil || reflect.ValueOf(e).IsNil() {
 		return errors.New("envelope cannot be nil")
 	}
 	if err := c.ensureEstablished("send"); err != nil {
@@ -333,7 +334,7 @@ func (c *channel) ensureState(state SessionState, action string) error {
 }
 
 func (c *channel) ensureTransportOK(action string) error {
-	if c.transport == nil {
+	if c.transport == nil || reflect.ValueOf(c.transport).IsNil() {
 		return fmt.Errorf("cannot %v: transport is not defined", action)
 	}
 

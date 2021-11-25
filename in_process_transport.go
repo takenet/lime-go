@@ -55,6 +55,15 @@ func newInProcessTransport(addr InProcessAddr, bufferSize int) *inProcessTranspo
 	}
 }
 
+func newInProcessTransportPair(addr InProcessAddr, bufferSize int) (client *inProcessTransport, server *inProcessTransport) {
+	server = newInProcessTransport(addr, bufferSize)
+	client = newInProcessTransport(addr, bufferSize)
+	server.remote = client
+	client.remote = server
+
+	return
+}
+
 func (t *inProcessTransport) GetSupportedCompression() []SessionCompression {
 	return []SessionCompression{SessionCompressionNone}
 }
@@ -149,15 +158,11 @@ func (l *inProcessTransportListener) Accept(ctx context.Context) (Transport, err
 
 func (l *inProcessTransportListener) newClient(addr InProcessAddr, bufferSize int) *inProcessTransport {
 	// Create transport pair
-	serverTransport := newInProcessTransport(addr, bufferSize)
-	clientTransport := newInProcessTransport(addr, bufferSize)
-	serverTransport.remote = clientTransport
-	clientTransport.remote = serverTransport
+	client, server := newInProcessTransportPair(addr, bufferSize)
 	go func() {
-		l.transports <- serverTransport
+		l.transports <- server
 	}()
-
-	return clientTransport
+	return client
 }
 
 var listeners = make(map[InProcessAddr]*inProcessTransportListener)

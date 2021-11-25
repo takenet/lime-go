@@ -1,29 +1,51 @@
 package lime
 
 import (
-	"encoding/json"
+	"context"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
-func TestChannel_MarshalJSON_GetPingRequest(t *testing.T) {
-	// Arrange
-
-	c := Command{}
-	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	c.To = Node{}
-	c.To.Name = "postmaster"
-	c.To.Domain = "limeprotocol.org"
-	c.Method = CommandMethodGet
-	u, _ := ParseLimeUri("/ping")
-	c.Uri = &u
-
-	// Act
-	b, err := json.Marshal(&c)
+func createChannel(t *testing.T, tran Transport) *channel {
+	c, err := newChannel(tran, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return c
+}
+
+func TestChannel_SendMessage_WhenEstablished(t *testing.T) {
+	// Arrange
+	client, server := newInProcessTransportPair("localhost", 1)
+	c := createChannel(t, client)
+	c.setState(SessionStateEstablished)
+	m := createMessage()
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFunc()
+
+	// Act
+	err := c.SendMessage(ctx, m)
 
 	// Assert
-	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"postmaster@limeprotocol.org","method":"get","uri":"/ping"}`, string(b))
+	assert.NoError(t, err)
+	actual, err := server.Receive(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, m, actual)
+}
+
+func TestChannel_SendMessage_NilMessage(t *testing.T) {
+	// Arrange
+	client, _ := newInProcessTransportPair("localhost", 1)
+	c := createChannel(t, client)
+	c.setState(SessionStateEstablished)
+	var m *Message = nil
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFunc()
+
+	// Act
+	err := c.SendMessage(ctx, m)
+
+	// Assert
+	assert.Error(t, err)
 }

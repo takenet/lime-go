@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func createInProcessListener(addr InProcessAddr, transportChan chan Transport, t *testing.T) TransportListener {
+func createInProcessListener(t *testing.T, addr InProcessAddr, transportChan chan Transport) TransportListener {
 	listener := NewInProcessTransportListener(addr)
 	if err := listener.Listen(context.Background(), addr); err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func createInProcessListener(addr InProcessAddr, transportChan chan Transport, t
 	return listener
 }
 
-func createClientInProcessTransport(addr InProcessAddr, t *testing.T) Transport {
+func createClientInProcessTransport(t *testing.T, addr InProcessAddr) Transport {
 	client, err := DialInProcess(addr, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +41,7 @@ func createClientInProcessTransport(addr InProcessAddr, t *testing.T) Transport 
 func TestInProcessTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
-	listener := createInProcessListener(addr, nil, t)
+	listener := createInProcessListener(t, addr, nil)
 	defer listener.Close()
 
 	// Act
@@ -66,7 +66,7 @@ func TestInProcessTransport_Dial_WhenNotListening(t *testing.T) {
 func TestInProcessTransport_Dial_AfterListenerClosed(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
-	listener := createInProcessListener(addr, nil, t)
+	listener := createInProcessListener(t, addr, nil)
 	if err := listener.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestInProcessTransport_Dial_AfterListenerClosed(t *testing.T) {
 func TestInProcessTransport_Dial_OtherAddress(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
-	listener := createInProcessListener(addr, nil, t)
+	listener := createInProcessListener(t, addr, nil)
 	defer listener.Close()
 	var addr2 InProcessAddr = "remote"
 
@@ -97,9 +97,9 @@ func TestInProcessTransport_Dial_OtherAddress(t *testing.T) {
 func TestInProcessTransport_Close_WhenOpen(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
-	listener := createInProcessListener(addr, nil, t)
+	listener := createInProcessListener(t, addr, nil)
 	defer listener.Close()
-	client := createClientInProcessTransport(addr, t)
+	client := createClientInProcessTransport(t, addr)
 
 	// Act
 	err := client.Close()
@@ -111,9 +111,9 @@ func TestInProcessTransport_Close_WhenOpen(t *testing.T) {
 func TestInProcessTransport_Send_Session(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
-	listener := createInProcessListener(addr, nil, t)
+	listener := createInProcessListener(t, addr, nil)
 	defer listener.Close()
-	client := createClientInProcessTransport(addr, t)
+	client := createClientInProcessTransport(t, addr)
 	s := createSession()
 
 	// Act
@@ -126,9 +126,9 @@ func TestInProcessTransport_Receive_Session(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	var transportChan = make(chan Transport, 1)
-	listener := createInProcessListener(addr, transportChan, t)
+	listener := createInProcessListener(t, addr, transportChan)
 	defer listener.Close()
-	client := createClientInProcessTransport(addr, t)
+	client := createClientInProcessTransport(t, addr)
 	server := receiveTransport(t, transportChan)
 	s := createSession()
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
