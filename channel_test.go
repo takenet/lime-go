@@ -49,3 +49,19 @@ func TestChannel_SendMessage_NilMessage(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 }
+
+func TestChannel_SendMessage_WhenNew(t *testing.T) {
+	// Arrange
+	client, _ := newInProcessTransportPair("localhost", 1)
+	c := createChannel(t, client)
+	m := createMessage()
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFunc()
+
+	// Act
+	err := c.SendMessage(ctx, m)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, "cannot send in the new state", err.Error())
+}

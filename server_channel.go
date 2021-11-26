@@ -52,7 +52,9 @@ func (c *ServerChannel) sendNegotiatingOptionsSession(ctx context.Context, compO
 		return nil, err
 	}
 
-	c.setState(SessionStateNegotiating)
+	if err := c.setState(SessionStateNegotiating); err != nil {
+		return nil, err
+	}
 
 	ses := Session{
 		EnvelopeBase: EnvelopeBase{
@@ -100,7 +102,9 @@ func (c *ServerChannel) sendAuthenticatingSession(ctx context.Context, schemeOpt
 		return nil, fmt.Errorf("cannot authenticate session in the %v state", c.state)
 	}
 
-	c.setState(SessionStateAuthenticating)
+	if err := c.setState(SessionStateAuthenticating); err != nil {
+		return nil, err
+	}
 
 	ses := Session{
 		EnvelopeBase: EnvelopeBase{
@@ -150,7 +154,10 @@ func (c *ServerChannel) sendEstablishedSession(ctx context.Context, node Node) e
 		return fmt.Errorf("cannot establish the session in the %v state", c.state)
 	}
 
-	c.setState(SessionStateEstablished)
+	if err := c.setState(SessionStateEstablished); err != nil {
+		return err
+	}
+
 	c.remoteNode = node
 
 	ses := Session{
@@ -398,7 +405,7 @@ func (c *ServerChannel) FinishSession(ctx context.Context) error {
 
 	err := c.sendSession(ctx, &ses)
 
-	c.setState(SessionStateFinished)
+	_ = c.setState(SessionStateFinished)
 
 	if err == nil {
 		if err = c.transport.Close(); err != nil {
@@ -424,7 +431,7 @@ func (c *ServerChannel) FailSession(ctx context.Context, reason *Reason) error {
 	}
 	err := c.sendSession(ctx, &ses)
 
-	c.setState(SessionStateFailed)
+	_ = c.setState(SessionStateFailed)
 
 	if err == nil {
 		if err = c.transport.Close(); err != nil {

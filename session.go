@@ -204,6 +204,26 @@ func (s SessionState) IsValid() error {
 	return fmt.Errorf("invalid session state '%v'", s)
 }
 
+func (s SessionState) Step() int {
+	switch s {
+	case SessionStateNew:
+		return 0
+	case SessionStateNegotiating:
+		return 1
+	case SessionStateAuthenticating:
+		return 2
+	case SessionStateEstablished:
+		return 3
+	case SessionStateFinishing:
+		return 4
+	case SessionStateFinished:
+		return 5
+	case SessionStateFailed:
+		return 6
+	}
+	return -1
+}
+
 func (s SessionState) MarshalText() ([]byte, error) {
 	err := s.IsValid()
 	if err != nil {

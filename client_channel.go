@@ -32,7 +32,9 @@ func (c *ClientChannel) receiveSessionFromServer(ctx context.Context) (*Session,
 	}
 
 	c.sessionID = ses.ID
-	c.setState(ses.State)
+	if err = c.setState(ses.State); err != nil {
+		return nil, err
+	}
 
 	if ses.State == SessionStateFinished || ses.State == SessionStateFailed {
 		if err := c.transport.Close(); err != nil {

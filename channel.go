@@ -73,7 +73,7 @@ type channel struct {
 	inNotChan  chan *Notification
 	inCmdChan  chan *Command
 	inSesChan  chan *Session
-	ErrChan    chan error
+	errChan    chan error
 
 	processingCmds   map[string]chan *Command
 	processingCmdsMu sync.RWMutex
@@ -94,7 +94,7 @@ func newChannel(t Transport, bufferSize int) (*channel, error) {
 		inNotChan:        make(chan *Notification, bufferSize),
 		inCmdChan:        make(chan *Command, bufferSize),
 		inSesChan:        make(chan *Session, bufferSize),
-		ErrChan:          make(chan error, 2),
+		errChan:          make(chan error, 2),
 		processingCmds:   make(map[string]chan *Command),
 		processingCmdsMu: sync.RWMutex{},
 	}
@@ -106,14 +106,18 @@ func (c *channel) Established() bool {
 }
 
 func (c *channel) startGoroutines() {
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	c.cancel = cancelFunc
+	ctx, cancel := context.WithCancel(context.Background())
+	c.cancel = cancel
 
 	go receiveFromTransport(ctx, c)
 	go sendToTransport(ctx, c)
 }
 
-func (c *channel) setState(state SessionState) {
+func (c *channel) setState(state SessionState) error {
+	if state.Step() <= c.state.Step() {
+		return fmt.Errorf("cannot change from state %s to %s", c.state, state)
+	}
+
 	c.state = state
 
 	switch state {
@@ -125,6 +129,7 @@ func (c *channel) setState(state SessionState) {
 			c.cancel()
 		}
 	}
+	return nil
 }
 
 func (c *channel) MsgChan() <-chan *Message {
@@ -143,11 +148,15 @@ func (c *channel) SesChan() <-chan *Session {
 	return c.inSesChan
 }
 
+func (c *channel) ErrChan() <-chan error {
+	return c.errChan
+}
+
 func receiveFromTransport(ctx context.Context, c *channel) {
 	for c.Established() {
 		env, err := c.transport.Receive(ctx)
 		if err != nil {
-			c.ErrChan <- err
+			c.errChan <- err
 			break
 		}
 
@@ -183,7 +192,7 @@ func sendToTransport(ctx context.Context, c *channel) {
 			}
 			err := c.transport.Send(ctx, e)
 			if err != nil {
-				c.ErrChan <- err
+				c.errChan <- err
 				break
 			}
 		}
