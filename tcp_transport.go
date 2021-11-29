@@ -80,7 +80,7 @@ func (t *TCPTransport) SetEncryption(ctx context.Context, e SessionEncryption) e
 		tlsConn = tls.Client(t.conn, t.TLSConfig)
 	}
 
-	deadline, _ := ctx.Deadline()
+	deadline, _ := ctx.Deadline() // Use the deadline zero value if ctx has no deadline defined
 	if err := tlsConn.SetWriteDeadline(deadline); err != nil {
 		return err
 	}

@@ -114,7 +114,7 @@ func (c *channel) startGoroutines() {
 }
 
 func (c *channel) setState(state SessionState) error {
-	if state.Step() <= c.state.Step() {
+	if state.Step() < c.state.Step() {
 		return fmt.Errorf("cannot change from state %s to %s", c.state, state)
 	}
 
@@ -123,8 +123,7 @@ func (c *channel) setState(state SessionState) error {
 	switch state {
 	case SessionStateEstablished:
 		c.startGoroutines()
-	case SessionStateFinished:
-	case SessionStateFailed:
+	case SessionStateFinished, SessionStateFailed:
 		if c.cancel != nil {
 			c.cancel()
 		}
@@ -222,10 +221,14 @@ func (c *channel) sendSession(ctx context.Context, ses *Session) error {
 	}
 	// check the current channel state
 	if c.state == SessionStateFinished || c.state == SessionStateFailed {
-		return fmt.Errorf("cannot send a session in the %v state", c.state)
+		return fmt.Errorf("send session: cannot do in the %v state", c.state)
 	}
 
-	return c.transport.Send(ctx, ses)
+	err := c.transport.Send(ctx, ses)
+	if err != nil {
+		return fmt.Errorf("send session: transport error: %w", err)
+	}
+	return nil
 }
 func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 	if err := c.ensureTransportOK("receive session"); err != nil {
@@ -234,14 +237,14 @@ func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 
 	switch c.state {
 	case SessionStateFinished:
-		return nil, fmt.Errorf("cannot receive a session in the %v session state", c.state)
+		return nil, fmt.Errorf("receive session: cannot do in the %v state", c.state)
 	case SessionStateEstablished:
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("receive session: %w", ctx.Err())
 		case s, ok := <-c.inSesChan:
 			if !ok {
-				return nil, errors.New("session receiver channel is closed")
+				return nil, errors.New("receive session: channel closed")
 			}
 			return s, nil
 		}
@@ -249,59 +252,59 @@ func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 
 	env, err := c.transport.Receive(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error receiving session from the transport: %w", err)
+		return nil, fmt.Errorf("receive session: transport error: %w", err)
 	}
 
 	ses, ok := env.(*Session)
 	if !ok {
-		return nil, errors.New("an unexpected envelope type was received from the transport")
+		return nil, errors.New("receive session: unexpected envelope type")
 	}
 
 	return ses, nil
 }
 
 func (c *channel) SendMessage(ctx context.Context, msg *Message) error {
-	return c.sendToBuffer(ctx, msg)
+	return c.sendToBuffer(ctx, msg, "send message")
 }
 
 func (c *channel) ReceiveMessage(ctx context.Context) (*Message, error) {
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("receive message: %w", ctx.Err())
 	case msg, ok := <-c.inMsgChan:
 		if !ok {
-			return nil, errors.New("message receiver channel is closed")
+			return nil, errors.New("receive message: channel closed")
 		}
 		return msg, nil
 	}
 }
 func (c *channel) SendNotification(ctx context.Context, not *Notification) error {
-	return c.sendToBuffer(ctx, not)
+	return c.sendToBuffer(ctx, not, "send notification")
 }
 
 func (c *channel) ReceiveNotification(ctx context.Context) (*Notification, error) {
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("receive notification: %w", ctx.Err())
 	case not, ok := <-c.inNotChan:
 		if !ok {
-			return nil, errors.New("notification receiver channel is closed")
+			return nil, errors.New("receive notification: channel closed")
 		}
 		return not, nil
 	}
 }
 
 func (c *channel) SendCommand(ctx context.Context, cmd *Command) error {
-	return c.sendToBuffer(ctx, cmd)
+	return c.sendToBuffer(ctx, cmd, "send command")
 }
 
 func (c *channel) ReceiveCommand(ctx context.Context) (*Command, error) {
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("receive command: %w", ctx.Err())
 	case cmd, ok := <-c.inCmdChan:
 		if !ok {
-			return nil, errors.New("notification receiver channel is closed")
+			return nil, errors.New("receive command: channel closed")
 		}
 		return cmd, nil
 	}
@@ -311,17 +314,17 @@ func (c *channel) ProcessCommand(ctx context.Context, reqCmd *Command) (*Command
 	return c.processCommand(ctx, c, reqCmd)
 }
 
-func (c *channel) sendToBuffer(ctx context.Context, e Envelope) error {
+func (c *channel) sendToBuffer(ctx context.Context, e Envelope, action string) error {
 	if e == nil || reflect.ValueOf(e).IsNil() {
-		return errors.New("envelope cannot be nil")
+		return fmt.Errorf("%v: envelope cannot be nil", action)
 	}
-	if err := c.ensureEstablished("send"); err != nil {
+	if err := c.ensureEstablished(action); err != nil {
 		return err
 	}
 
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("%v: %w", action, ctx.Err())
 	case c.outChan <- e:
 		return nil
 	}
@@ -337,38 +340,38 @@ func (c *channel) ensureState(state SessionState, action string) error {
 	}
 
 	if c.state != state {
-		return fmt.Errorf("cannot %v in the %v state", action, c.state)
+		return fmt.Errorf("%v: cannot do in the %v state", action, c.state)
 	}
 	return nil
 }
 
 func (c *channel) ensureTransportOK(action string) error {
 	if c.transport == nil || reflect.ValueOf(c.transport).IsNil() {
-		return fmt.Errorf("cannot %v: transport is not defined", action)
+		return fmt.Errorf("%v: transport is nil", action)
 	}
 
 	if !c.transport.IsConnected() {
-		return fmt.Errorf("cannot %v: transport is not connected", action)
+		return fmt.Errorf("%v: transport is not connected", action)
 	}
 	return nil
 }
 
 func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqCmd *Command) (*Command, error) {
 	if reqCmd == nil {
-		return nil, errors.New("command cannot be nil")
+		return nil, errors.New("process command: command cannot be nil")
 	}
 	if reqCmd.Status != "" {
-		return nil, errors.New("invalid command status")
+		return nil, errors.New("process command: invalid command status")
 	}
 	if reqCmd.ID == "" {
-		return nil, errors.New("invalid command id")
+		return nil, errors.New("process command: invalid command id")
 	}
 
 	c.processingCmdsMu.Lock()
 
 	if _, ok := c.processingCmds[reqCmd.ID]; ok {
 		c.processingCmdsMu.Unlock()
-		return nil, errors.New("the command id is already in use")
+		return nil, errors.New("process command: the command id is already in use")
 	}
 
 	respChan := make(chan *Command, 1)
@@ -388,7 +391,7 @@ func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqC
 
 	select {
 	case <-ctx.Done():
-		return nil, fmt.Errorf("the command processing has timed out: %w", ctx.Err())
+		return nil, fmt.Errorf("process command: %w", ctx.Err())
 	case respCmd := <-respChan:
 		return respCmd, nil
 	}

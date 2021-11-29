@@ -39,7 +39,7 @@ func (t *inProcessTransport) Receive(ctx context.Context) (Envelope, error) {
 	}
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("receive: %w", ctx.Err())
 	case <-t.done:
 		return nil, errors.New("transport was closed while receiving")
 	case e := <-t.envChan:
