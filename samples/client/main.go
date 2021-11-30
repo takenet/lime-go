@@ -28,10 +28,7 @@ func main() {
 	tw := lime.NewStdoutTraceWriter()
 	t.TraceWriter = tw
 
-	client, err := lime.NewClientChannel(t, 1)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	client := lime.NewClientChannel(t, 1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 

@@ -73,13 +73,9 @@ func listen(ctx context.Context, c <-chan lime.Transport) {
 }
 
 func acceptTransport(ctx context.Context, t lime.Transport) error {
-	c, err := lime.NewServerChannel(t, 1, serverNode, lime.NewEnvelopeId())
-	if err != nil {
-		log.Printf("Create channel failed: %v\n", err)
-		return err
-	}
+	c := lime.NewServerChannel(t, 1, serverNode, lime.NewEnvelopeId())
 
-	if err = c.EstablishSession(
+	if err := c.EstablishSession(
 		ctx,
 		[]lime.SessionCompression{lime.SessionCompressionNone},
 		[]lime.SessionEncryption{lime.SessionEncryptionNone},

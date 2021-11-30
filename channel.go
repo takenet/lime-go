@@ -81,7 +81,7 @@ type channel struct {
 	cancel context.CancelFunc // The function for cancelling the send/receive goroutines
 }
 
-func newChannel(t Transport, bufferSize int) (*channel, error) {
+func newChannel(t Transport, bufferSize int) *channel {
 	if t == nil || reflect.ValueOf(t).IsNil() {
 		panic("transport cannot be nil")
 	}
@@ -98,7 +98,7 @@ func newChannel(t Transport, bufferSize int) (*channel, error) {
 		processingCmds:   make(map[string]chan *Command),
 		processingCmdsMu: sync.RWMutex{},
 	}
-	return &c, nil
+	return &c
 }
 
 func (c *channel) Established() bool {
@@ -113,9 +113,9 @@ func (c *channel) startGoroutines() {
 	go sendToTransport(ctx, c)
 }
 
-func (c *channel) setState(state SessionState) error {
+func (c *channel) setState(state SessionState) {
 	if state.Step() < c.state.Step() {
-		return fmt.Errorf("cannot change from state %s to %s", c.state, state)
+		panic(fmt.Errorf("cannot change from state %s to %s", c.state, state))
 	}
 
 	c.state = state
@@ -128,7 +128,6 @@ func (c *channel) setState(state SessionState) error {
 			c.cancel()
 		}
 	}
-	return nil
 }
 
 func (c *channel) MsgChan() <-chan *Message {
@@ -361,10 +360,10 @@ func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqC
 		panic("process command: command cannot be nil")
 	}
 	if reqCmd.Status != "" {
-		return nil, errors.New("process command: invalid command status")
+		panic("process command: invalid command status")
 	}
 	if reqCmd.ID == "" {
-		return nil, errors.New("process command: invalid command id")
+		panic("process command: invalid command id")
 	}
 
 	c.processingCmdsMu.Lock()

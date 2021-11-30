@@ -11,12 +11,9 @@ type ClientChannel struct {
 	*channel
 }
 
-func NewClientChannel(t Transport, bufferSize int) (*ClientChannel, error) {
-	c, err := newChannel(t, bufferSize)
-	if err != nil {
-		return nil, err
-	}
-	return &ClientChannel{channel: c}, nil
+func NewClientChannel(t Transport, bufferSize int) *ClientChannel {
+	c := newChannel(t, bufferSize)
+	return &ClientChannel{channel: c}
 }
 
 // receiveSessionFromServer receives a session from the remote node.
@@ -32,9 +29,7 @@ func (c *ClientChannel) receiveSessionFromServer(ctx context.Context) (*Session,
 	}
 
 	c.sessionID = ses.ID
-	if err = c.setState(ses.State); err != nil {
-		return nil, err
-	}
+	c.setState(ses.State)
 
 	if ses.State == SessionStateFinished || ses.State == SessionStateFailed {
 		if err := c.transport.Close(); err != nil {

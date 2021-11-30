@@ -11,24 +11,20 @@ type ServerChannel struct {
 	*channel
 }
 
-func NewServerChannel(t Transport, bufferSize int, serverNode Node, sessionID string) (*ServerChannel, error) {
+func NewServerChannel(t Transport, bufferSize int, serverNode Node, sessionID string) *ServerChannel {
 	if !serverNode.IsComplete() {
-		return nil, errors.New("the server node must be complete")
+		panic("the server node must be complete")
 	}
 
 	if sessionID == "" {
-		return nil, errors.New("the sessionID cannot be zero")
+		panic("the sessionID cannot be zero")
 	}
 
-	c, err := newChannel(t, bufferSize)
-	if err != nil {
-		return nil, err
-	}
-
+	c := newChannel(t, bufferSize)
 	c.localNode = serverNode
 	c.sessionID = sessionID
 
-	return &ServerChannel{channel: c}, nil
+	return &ServerChannel{channel: c}
 }
 
 // receiveNewSession receives a new session envelope from the client node.
@@ -52,9 +48,7 @@ func (c *ServerChannel) sendNegotiatingOptionsSession(ctx context.Context, compO
 		return nil, err
 	}
 
-	if err := c.setState(SessionStateNegotiating); err != nil {
-		return nil, err
-	}
+	c.setState(SessionStateNegotiating)
 
 	ses := Session{
 		EnvelopeBase: EnvelopeBase{
@@ -102,9 +96,7 @@ func (c *ServerChannel) sendAuthenticatingSession(ctx context.Context, schemeOpt
 		return nil, fmt.Errorf("cannot authenticate session in the %v state", c.state)
 	}
 
-	if err := c.setState(SessionStateAuthenticating); err != nil {
-		return nil, err
-	}
+	c.setState(SessionStateAuthenticating)
 
 	ses := Session{
 		EnvelopeBase: EnvelopeBase{
@@ -154,9 +146,7 @@ func (c *ServerChannel) sendEstablishedSession(ctx context.Context, node Node) e
 		return fmt.Errorf("cannot establish the session in the %v state", c.state)
 	}
 
-	if err := c.setState(SessionStateEstablished); err != nil {
-		return err
-	}
+	c.setState(SessionStateEstablished)
 
 	c.remoteNode = node
 
@@ -405,7 +395,7 @@ func (c *ServerChannel) FinishSession(ctx context.Context) error {
 
 	err := c.sendSession(ctx, &ses)
 
-	_ = c.setState(SessionStateFinished)
+	c.setState(SessionStateFinished)
 
 	if err == nil {
 		if err = c.transport.Close(); err != nil {
@@ -431,7 +421,7 @@ func (c *ServerChannel) FailSession(ctx context.Context, reason *Reason) error {
 	}
 	err := c.sendSession(ctx, &ses)
 
-	_ = c.setState(SessionStateFailed)
+	c.setState(SessionStateFailed)
 
 	if err == nil {
 		if err = c.transport.Close(); err != nil {

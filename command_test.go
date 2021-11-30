@@ -8,14 +8,7 @@ import (
 
 func TestCommand_MarshalJSON_GetPingRequest(t *testing.T) {
 	// Arrange
-	c := Command{}
-	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	c.To = Node{}
-	c.To.Name = "postmaster"
-	c.To.Domain = "limeprotocol.org"
-	c.Method = CommandMethodGet
-	u, _ := ParseLimeUri("/ping")
-	c.Uri = &u
+	c := createGetPingCommand()
 
 	// Act
 	b, err := json.Marshal(&c)
@@ -319,4 +312,17 @@ func TestCommand_UnmarshalJSON_SetFailureResponse(t *testing.T) {
 	assert.Equal(t, Reason{101, "The resource was not found"}, *c.Reason)
 	assert.Zero(t, c.Type)
 	assert.Nil(t, c.Resource)
+}
+
+func createGetPingCommand() *Command {
+	c := Command{}
+	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
+	c.To = Node{}
+	c.To.Name = "postmaster"
+	c.To.Domain = "limeprotocol.org"
+	c.Method = CommandMethodGet
+	u, _ := ParseLimeUri("/ping")
+	c.Uri = &u
+
+	return &c
 }
