@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="go test lime-go" type="GoTestRunConfiguration" factoryName="Go Test" nameIsGenerated="true">
+  <configuration default="false" name="tests" type="GoTestRunConfiguration" factoryName="Go Test">
     <module name="lime-go" />
     <working_directory value="$PROJECT_DIR$" />
     <kind value="DIRECTORY" />

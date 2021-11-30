@@ -122,7 +122,7 @@ func TestChannel_SendMessage_NoBuffer(t *testing.T) {
 	m1 := createMessage() // Will wait in the transport chan
 	m2 := createMessage() // Will not be sent
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	_ = c.SendMessage(ctx, m1)
 
 	// Act
@@ -147,7 +147,7 @@ func TestChannel_SendMessage_FullBuffer(t *testing.T) {
 	m1 := createMessage() // Will wait in the transport chan
 	m2 := createMessage() // Will wait in the channel buffer
 	m3 := createMessage() // Will not be sent
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	_ = c.SendMessage(ctx, m1)
 	_ = c.SendMessage(ctx, m2)
 
@@ -338,7 +338,7 @@ func TestChannel_SendNotification_NoBuffer(t *testing.T) {
 	m1 := createNotification() // Will wait in the transport chan
 	m2 := createNotification() // Will not be sent
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	_ = c.SendNotification(ctx, m1)
 
 	// Act
@@ -363,7 +363,7 @@ func TestChannel_SendNotification_FullBuffer(t *testing.T) {
 	m1 := createNotification() // Will wait in the transport chan
 	m2 := createNotification() // Will wait in the channel buffer
 	m3 := createNotification() // Will not be sent
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	_ = c.SendNotification(ctx, m1)
 	_ = c.SendNotification(ctx, m2)
 
@@ -554,7 +554,7 @@ func TestChannel_SendCommand_NoBuffer(t *testing.T) {
 	m1 := createGetPingCommand() // Will wait in the transport chan
 	m2 := createGetPingCommand() // Will not be sent
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	_ = c.SendCommand(ctx, m1)
 
 	// Act
@@ -579,7 +579,7 @@ func TestChannel_SendCommand_FullBuffer(t *testing.T) {
 	m1 := createGetPingCommand() // Will wait in the transport chan
 	m2 := createGetPingCommand() // Will wait in the channel buffer
 	m3 := createGetPingCommand() // Will not be sent
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	_ = c.SendCommand(ctx, m1)
 	_ = c.SendCommand(ctx, m2)
 
@@ -696,5 +696,76 @@ func receiveCommandWithState(t *testing.T, state SessionState) {
 }
 
 func TestChannel_ProcessCommand(t *testing.T) {
+	// Arrange
+	client, server := newInProcessTransportPair("localhost", 1)
+	c := newChannel(client, 1)
+	c.setState(SessionStateEstablished)
+	reqCmd := createGetPingCommand()
+	respCmd := createResponseCommand()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
 
+	go func() {
+		_, err := server.Receive(ctx)
+		if err != nil {
+			cancel()
+			return
+		}
+
+		_ = server.Send(ctx, respCmd)
+	}()
+
+	// Act
+	actual, err := c.ProcessCommand(ctx, reqCmd)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, respCmd, actual)
+}
+
+func TestChannel_ProcessCommand_WhenContextCancelled(t *testing.T) {
+	// Arrange
+	client, _ := newInProcessTransportPair("localhost", 1)
+	c := newChannel(client, 1)
+	c.setState(SessionStateEstablished)
+	reqCmd := createGetPingCommand()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Act
+	actual, err := c.ProcessCommand(ctx, reqCmd)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, "process command: context deadline exceeded", err.Error())
+	assert.Nil(t, actual)
+}
+
+func TestChannel_ProcessCommand_ResponseWithAnotherId(t *testing.T) {
+	// Arrange
+	client, server := newInProcessTransportPair("localhost", 1)
+	c := newChannel(client, 1)
+	c.setState(SessionStateEstablished)
+	reqCmd := createGetPingCommand()
+	respCmd := createResponseCommand()
+	respCmd.ID = "other-id"
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	go func() {
+		_, err := server.Receive(ctx)
+		if err != nil {
+			cancel()
+			return
+		}
+
+		_ = server.Send(ctx, respCmd)
+	}()
+
+	// Act
+	actual, err := c.ProcessCommand(ctx, reqCmd)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, "process command: context deadline exceeded", err.Error())
+	assert.Nil(t, actual)
 }

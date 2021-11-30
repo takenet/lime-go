@@ -326,3 +326,14 @@ func createGetPingCommand() *Command {
 
 	return &c
 }
+
+func createResponseCommand() *Command {
+	c := Command{}
+	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
+	c.From = Node{}
+	c.From.Name = "postmaster"
+	c.From.Domain = "limeprotocol.org"
+	c.Method = CommandMethodGet
+	c.Status = CommandStatusSuccess
+	return &c
+}
