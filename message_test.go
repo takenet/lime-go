@@ -6,6 +6,18 @@ import (
 	"testing"
 )
 
+func createMessage() *Message {
+	m := Message{}
+	m.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
+	m.To = Node{}
+	m.To.Name = "golang"
+	m.To.Domain = "limeprotocol.org"
+	m.To.Instance = "default"
+	var d PlainDocument = "Hello world"
+	m.SetContent(&d)
+	return &m
+}
+
 func TestMessage_MarshalJSON_TextPlain(t *testing.T) {
 	// Arrange
 	m := Message{}
