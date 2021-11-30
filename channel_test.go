@@ -114,6 +114,44 @@ func TestChannel_SendMessage_Batch(t *testing.T) {
 	assert.Equal(t, messages, actuals)
 }
 
+func BenchmarkChannel_SendMessage(b *testing.B) {
+	// Arrange
+	count := b.N
+	client, server := newInProcessTransportPair("localhost", 1)
+	c := newChannel(client, 1)
+	c.setState(SessionStateEstablished)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	messages := make([]*Message, count)
+	for i := 0; i < count; i++ {
+		messages[i] = createMessage()
+	}
+	errchan := make(chan error)
+	done := make(chan bool)
+	b.ResetTimer()
+
+	// Act
+	go func() {
+		for i := 0; i < count; i++ {
+			_, err := server.Receive(ctx)
+			if err != nil {
+				errchan <- err
+				return
+			}
+		}
+		done <- true
+	}()
+	for _, m := range messages {
+		_ = c.SendMessage(ctx, m)
+	}
+	select {
+	case err := <-errchan:
+		b.Fatal(err)
+	case <-done:
+		break
+	}
+}
+
 func TestChannel_SendMessage_NoBuffer(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 0)
@@ -330,6 +368,44 @@ func TestChannel_SendNotification_Batch(t *testing.T) {
 	assert.Equal(t, notifications, actuals)
 }
 
+func BenchmarkChannel_SendNotification(b *testing.B) {
+	// Arrange
+	count := b.N
+	client, server := newInProcessTransportPair("localhost", 1)
+	c := newChannel(client, 1)
+	c.setState(SessionStateEstablished)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	notifications := make([]*Notification, count)
+	for i := 0; i < count; i++ {
+		notifications[i] = createNotification()
+	}
+	errchan := make(chan error)
+	done := make(chan bool)
+	b.ResetTimer()
+
+	// Act
+	go func() {
+		for i := 0; i < count; i++ {
+			_, err := server.Receive(ctx)
+			if err != nil {
+				errchan <- err
+				return
+			}
+		}
+		done <- true
+	}()
+	for _, n := range notifications {
+		_ = c.SendNotification(ctx, n)
+	}
+	select {
+	case err := <-errchan:
+		b.Fatal(err)
+	case <-done:
+		break
+	}
+}
+
 func TestChannel_SendNotification_NoBuffer(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 0)
@@ -544,6 +620,44 @@ func TestChannel_SendCommand_Batch(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, commands, actuals)
+}
+
+func BenchmarkChannel_SendCommand(b *testing.B) {
+	// Arrange
+	count := b.N
+	client, server := newInProcessTransportPair("localhost", 1)
+	c := newChannel(client, 1)
+	c.setState(SessionStateEstablished)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	commands := make([]*Command, count)
+	for i := 0; i < count; i++ {
+		commands[i] = createGetPingCommand()
+	}
+	errchan := make(chan error)
+	done := make(chan bool)
+	b.ResetTimer()
+
+	// Act
+	go func() {
+		for i := 0; i < count; i++ {
+			_, err := server.Receive(ctx)
+			if err != nil {
+				errchan <- err
+				return
+			}
+		}
+		done <- true
+	}()
+	for _, cmd := range commands {
+		_ = c.SendCommand(ctx, cmd)
+	}
+	select {
+	case err := <-errchan:
+		b.Fatal(err)
+	case <-done:
+		break
+	}
 }
 
 func TestChannel_SendCommand_NoBuffer(t *testing.T) {
