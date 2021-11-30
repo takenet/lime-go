@@ -2,7 +2,6 @@ package lime
 
 import (
 	"context"
-	"errors"
 	"fmt"
 )
 
@@ -148,7 +147,11 @@ func (c *ClientChannel) EstablishSession(
 	instance string,
 ) (*Session, error) {
 	if authenticator == nil {
-		return nil, errors.New("the authenticator should not be nil")
+		panic("the authenticator should not be nil")
+	}
+
+	if c.state != SessionStateNew {
+		panic("channel state is not new")
 	}
 
 	ses, err := c.startNewSession(ctx)
@@ -159,11 +162,11 @@ func (c *ClientChannel) EstablishSession(
 	// Session negotiation
 	if ses.State == SessionStateNegotiating {
 		if compSelector == nil {
-			return nil, errors.New("the compression selector should not be nil")
+			panic("the compression selector should not be nil")
 		}
 
 		if encryptSelector == nil {
-			return nil, errors.New("the encryption selector should not be nil")
+			panic("the encryption selector should not be nil")
 		}
 
 		// Select options

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"reflect"
 )
 
 type Transport interface {
@@ -67,6 +68,14 @@ type ConnTransport struct {
 }
 
 func (t *ConnTransport) Send(ctx context.Context, e Envelope) error {
+	if ctx == nil {
+		panic("nil context")
+	}
+
+	if e == nil || reflect.ValueOf(e).IsNil() {
+		panic("nil envelope")
+	}
+
 	if err := t.ensureOpen(); err != nil {
 		return err
 	}
@@ -82,6 +91,10 @@ func (t *ConnTransport) Send(ctx context.Context, e Envelope) error {
 }
 
 func (t *ConnTransport) Receive(ctx context.Context) (Envelope, error) {
+	if ctx == nil {
+		panic("nil context")
+	}
+
 	if err := t.ensureOpen(); err != nil {
 		return nil, err
 	}
