@@ -11,7 +11,7 @@ func TestClientChannel_EstablishSession_WhenStateEstablished(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := NewClientChannel(client, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
@@ -75,7 +75,7 @@ func TestClientChannel_EstablishSession_WhenStateFailed(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := NewClientChannel(client, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
@@ -145,7 +145,7 @@ func TestClientChannel_FinishSession(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := NewClientChannel(client, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	c.setState(SessionStateEstablished)
 	clientNode := Node{
