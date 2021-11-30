@@ -136,12 +136,10 @@ func TestChannel_SendMessage_NilMessage(t *testing.T) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 
-	// Act
-	err := c.SendMessage(ctx, m)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "send message: envelope cannot be nil", err.Error())
+	// Act / Assert
+	assert.Panics(t, func() {
+		_ = c.SendMessage(ctx, m)
+	}, "send message: envelope cannot be nil")
 }
 
 func TestChannel_SendMessage_WhenNew(t *testing.T) {

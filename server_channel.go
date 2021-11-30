@@ -124,7 +124,7 @@ func (c *ServerChannel) sendAuthenticatingSession(ctx context.Context, schemeOpt
 // sendAuthenticatingRoundTripSession sends authentication round-trip information to the connected node and awaits for the client authentication.
 func (c *ServerChannel) sendAuthenticatingRoundTripSession(ctx context.Context, roundTrip Authentication) (*Session, error) {
 	if roundTrip == nil {
-		return nil, errors.New("auth roundTrip cannot be nil")
+		panic("auth roundTrip cannot be nil")
 	}
 	if err := c.ensureState(SessionStateAuthenticating, "perform authentication roundTrip"); err != nil {
 		return nil, err
@@ -200,16 +200,16 @@ func (c *ServerChannel) EstablishSession(
 		return err
 	}
 	if compOpts == nil {
-		return errors.New("compOpts cannot be nil")
+		panic("compOpts cannot be nil")
 	}
 	if encryptOpts == nil {
-		return errors.New("encryptOpts cannot be nil")
+		panic("encryptOpts cannot be nil")
 	}
 	if authFunc == nil {
-		return errors.New("authentication func cannot be nil")
+		panic("authentication func cannot be nil")
 	}
 	if registerFunc == nil {
-		return errors.New("registration func cannot be nil")
+		panic("registration func cannot be nil")
 	}
 
 	ses, err := c.receiveNewSession(ctx)

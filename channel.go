@@ -83,7 +83,7 @@ type channel struct {
 
 func newChannel(t Transport, bufferSize int) (*channel, error) {
 	if t == nil || reflect.ValueOf(t).IsNil() {
-		return nil, errors.New("transport cannot be nil")
+		panic("transport cannot be nil")
 	}
 
 	c := channel{
@@ -316,7 +316,7 @@ func (c *channel) ProcessCommand(ctx context.Context, reqCmd *Command) (*Command
 
 func (c *channel) sendToBuffer(ctx context.Context, e Envelope, action string) error {
 	if e == nil || reflect.ValueOf(e).IsNil() {
-		return fmt.Errorf("%v: envelope cannot be nil", action)
+		panic(fmt.Errorf("%v: envelope cannot be nil", action))
 	}
 	if err := c.ensureEstablished(action); err != nil {
 		return err
@@ -358,7 +358,7 @@ func (c *channel) ensureTransportOK(action string) error {
 
 func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqCmd *Command) (*Command, error) {
 	if reqCmd == nil {
-		return nil, errors.New("process command: command cannot be nil")
+		panic("process command: command cannot be nil")
 	}
 	if reqCmd.Status != "" {
 		return nil, errors.New("process command: invalid command status")
