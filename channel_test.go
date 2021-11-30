@@ -768,4 +768,9 @@ func TestChannel_ProcessCommand_ResponseWithAnotherId(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "process command: context deadline exceeded", err.Error())
 	assert.Nil(t, actual)
+	ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	actualRespCmd, err := c.ReceiveCommand(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, respCmd, actualRespCmd)
 }
