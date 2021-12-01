@@ -91,12 +91,12 @@ func (t *inProcessTransport) IsConnected() bool {
 	return !t.closed
 }
 
-func (t *inProcessTransport) LocalAdd() net.Addr {
+func (t *inProcessTransport) LocalAddr() net.Addr {
 
 	panic("implement me")
 }
 
-func (t *inProcessTransport) RemoteAdd() net.Addr {
+func (t *inProcessTransport) RemoteAddr() net.Addr {
 	panic("implement me")
 }
 

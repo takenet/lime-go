@@ -40,11 +40,11 @@ type Transport interface {
 	// IsConnected indicates if the transport is connected.
 	IsConnected() bool
 
-	// LocalAdd gets the local endpoint address.
-	LocalAdd() net.Addr
+	// LocalAddr gets the local endpoint address.
+	LocalAddr() net.Addr
 
-	// RemoteAdd gets the remote endpoint address.
-	RemoteAdd() net.Addr
+	// RemoteAddr gets the remote endpoint address.
+	RemoteAddr() net.Addr
 }
 
 const DefaultReadLimit int64 = 8192 * 1024
@@ -132,14 +132,14 @@ func (t *ConnTransport) IsConnected() bool {
 	return t.conn != nil
 }
 
-func (t *ConnTransport) LocalAdd() net.Addr {
+func (t *ConnTransport) LocalAddr() net.Addr {
 	if t.conn == nil {
 		return nil
 	}
 	return t.conn.LocalAddr()
 }
 
-func (t *ConnTransport) RemoteAdd() net.Addr {
+func (t *ConnTransport) RemoteAddr() net.Addr {
 	if t.conn == nil {
 		return nil
 	}
