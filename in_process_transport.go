@@ -60,7 +60,6 @@ func newInProcessTransportPair(addr InProcessAddr, bufferSize int) (client *inPr
 	client = newInProcessTransport(addr, bufferSize)
 	server.remote = client
 	client.remote = server
-
 	return
 }
 
