@@ -256,7 +256,7 @@ func TestWebsocketTransport_Send_SessionTLS(t *testing.T) {
 	addr := createWSAddr()
 	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
 	defer listener.Close()
-	url := fmt.Sprintf("ws://%s", addr)
+	url := fmt.Sprintf("wss://%s", addr)
 	client := createClientWebsocketTransportTLS(ctx, t, url)
 	s := createSession()
 
