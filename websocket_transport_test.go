@@ -5,17 +5,24 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"net"
 	"testing"
 	"time"
 )
 
-func createWebsocketListener(ctx context.Context, t *testing.T, addr string, transportChan chan Transport) *WebsocketTransportListener {
-	listener := WebsocketTransportListener{}
+func createWebsocketListener(ctx context.Context, t *testing.T, addr net.Addr, transportChan chan Transport) *WebsocketTransportListener {
+	listener := &WebsocketTransportListener{}
 	if err := listener.Listen(ctx, addr); err != nil {
 		t.Fatal(err)
 		return nil
 	}
 
+	listenTransports(transportChan, listener)
+
+	return listener
+}
+
+func listenTransports(transportChan chan Transport, listener TransportListener) {
 	if transportChan != nil {
 		go func() {
 			for {
@@ -27,22 +34,27 @@ func createWebsocketListener(ctx context.Context, t *testing.T, addr string, tra
 			}
 		}()
 	}
-
-	return &listener
 }
 
-func createWebsocketListenerTLS(ctx context.Context, t *testing.T, addr string, transportChan chan Transport) *WebsocketTransportListener {
-	listener := createWebsocketListener(ctx, t, addr, transportChan)
+func createWebsocketListenerTLS(ctx context.Context, t *testing.T, addr net.Addr, transportChan chan Transport) *WebsocketTransportListener {
+	listener := &WebsocketTransportListener{}
 	listener.TLSConfig = &tls.Config{
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return createCertificate("127.0.0.1")
 		},
 	}
+	if err := listener.Listen(ctx, addr); err != nil {
+		t.Fatal(err)
+		return nil
+	}
+
+	listenTransports(transportChan, listener)
+
 	return listener
 }
 
-func createClientWebsocketTransport(t *testing.T, urlStr string) Transport {
-	client, err := DialWebsocket(context.Background(), urlStr, nil, nil)
+func createClientWebsocketTransport(ctx context.Context, t *testing.T, urlStr string) Transport {
+	client, err := DialWebsocket(ctx, urlStr, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 		return nil
@@ -50,20 +62,26 @@ func createClientWebsocketTransport(t *testing.T, urlStr string) Transport {
 	return client
 }
 
-func createClientWebsocketTransportTLS(t *testing.T, addr string) Transport {
-	client, err := DialWebsocket(context.Background(), addr, nil, &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true})
+func createClientWebsocketTransportTLS(ctx context.Context, t *testing.T, addr string) Transport {
+	client, err := DialWebsocket(ctx, addr, nil, &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true})
 	if err != nil {
 		t.Fatal(err)
 		return nil
 	}
 	return client
+}
+
+func createWSAddr() net.Addr {
+	return &net.TCPAddr{
+		Port: 8080,
+	}
 }
 
 func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	addr := ":8080"
+	addr := createWSAddr()
 	url := fmt.Sprintf("ws://%s", addr)
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer listener.Close()
@@ -81,7 +99,7 @@ func TestWebsocketTransport_Dial_WhenNotListening(t *testing.T) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	addr := ":8080"
+	addr := createWSAddr()
 	url := fmt.Sprintf("ws://%s", addr)
 
 	// Act
@@ -97,7 +115,7 @@ func TestWebsocketTransport_Dial_AfterListenerClosed(t *testing.T) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	addr := ":8080"
+	addr := createWSAddr()
 	url := fmt.Sprintf("ws://%s", addr)
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	if err := listener.Close(); err != nil {
@@ -117,11 +135,11 @@ func TestWebsocketTransport_Close_WhenOpen(t *testing.T) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	addr := ":8080"
+	addr := createWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer listener.Close()
 	url := fmt.Sprintf("ws://%s", addr)
-	client := createClientWebsocketTransport(t, url)
+	client := createClientWebsocketTransport(ctx, t, url)
 
 	// Act
 	err := client.Close()
@@ -134,11 +152,11 @@ func TestWebsocketTransport_Close_WhenAlreadyClosed(t *testing.T) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	addr := ":8080"
+	addr := createWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer listener.Close()
 	url := fmt.Sprintf("ws://%s", addr)
-	client := createClientWebsocketTransport(t, url)
+	client := createClientWebsocketTransport(ctx, t, url)
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -149,4 +167,40 @@ func TestWebsocketTransport_Close_WhenAlreadyClosed(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Equal(t, "transport is not open", err.Error())
+}
+
+func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
+	// Arrange
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	addr := createWSAddr()
+	listener := createWebsocketListener(ctx, t, addr, nil)
+	defer listener.Close()
+	url := fmt.Sprintf("ws://%s", addr)
+	client := createClientWebsocketTransport(ctx, t, url)
+
+	// Act
+	err := client.SetEncryption(ctx, SessionEncryptionNone)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, SessionEncryptionNone, client.GetEncryption())
+}
+
+func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
+	// Arrange
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	addr := createWSAddr()
+	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
+	defer listener.Close()
+	url := fmt.Sprintf("wss://%s", addr)
+	client := createClientWebsocketTransportTLS(ctx, t, url)
+
+	// Act
+	err := client.SetEncryption(ctx, SessionEncryptionTLS)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, SessionEncryptionTLS, client.GetEncryption())
 }

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -29,7 +30,14 @@ func DialWebsocket(ctx context.Context, urlStr string, requestHeader http.Header
 		return nil, err
 	}
 
-	return &websocketTransport{conn: conn, c: "", e: ""}, nil
+	t := &websocketTransport{conn: conn, c: SessionCompressionNone}
+	if strings.HasPrefix(urlStr, "wss:") {
+		t.e = SessionEncryptionTLS
+	} else {
+		t.e = SessionEncryptionNone
+	}
+
+	return t, nil
 }
 
 type websocketTransport struct {
@@ -101,7 +109,10 @@ func (t *websocketTransport) GetCompression() SessionCompression {
 }
 
 func (t *websocketTransport) SetCompression(ctx context.Context, c SessionCompression) error {
-	return errors.New("compression cannot be changed")
+	if c != t.c {
+		return errors.New("compression cannot be changed")
+	}
+	return nil
 }
 
 func (t *websocketTransport) GetSupportedEncryption() []SessionEncryption {
@@ -113,7 +124,10 @@ func (t *websocketTransport) GetEncryption() SessionEncryption {
 }
 
 func (t *websocketTransport) SetEncryption(ctx context.Context, e SessionEncryption) error {
-	return errors.New("encryption cannot be changed")
+	if e != t.e {
+		return errors.New("encryption cannot be changed")
+	}
+	return nil
 }
 
 func (t *websocketTransport) IsConnected() bool {
@@ -149,7 +163,7 @@ type WebsocketTransportListener struct {
 	mu                sync.Mutex
 }
 
-func (t *WebsocketTransportListener) Listen(ctx context.Context, addr string) error {
+func (t *WebsocketTransportListener) Listen(ctx context.Context, addr net.Addr) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -158,7 +172,7 @@ func (t *WebsocketTransportListener) Listen(ctx context.Context, addr string) er
 	}
 
 	var lc net.ListenConfig
-	l, err := lc.Listen(ctx, "tcp", addr)
+	l, err := lc.Listen(ctx, "tcp", addr.String())
 	if err != nil {
 		return err
 	}
@@ -170,7 +184,7 @@ func (t *WebsocketTransportListener) Listen(ctx context.Context, addr string) er
 		EnableCompression: t.EnableCompression,
 	}
 	srv := &http.Server{
-		Addr:      addr,
+		Addr:      addr.String(),
 		Handler:   t,
 		TLSConfig: t.TLSConfig,
 	}
@@ -251,10 +265,13 @@ func (t *WebsocketTransportListener) ServeHTTP(writer http.ResponseWriter, reque
 
 	ws := &websocketTransport{
 		conn: conn,
+		c:    SessionCompressionNone,
 	}
 
 	if t.tls() {
 		ws.e = SessionEncryptionTLS
+	} else {
+		ws.e = SessionEncryptionNone
 	}
 
 	t.transportChan <- ws

@@ -79,7 +79,6 @@ func createTCPAddress() net.Addr {
 	return &net.TCPAddr{
 		IP:   net.IPv4(127, 0, 0, 1),
 		Port: 55321,
-		Zone: "",
 	}
 }
 
