@@ -7,6 +7,21 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func createSession() *Session {
+	s := Session{}
+	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
+	s.From = Node{}
+	s.From.Name = "postmaster"
+	s.From.Domain = "limeprotocol.org"
+	s.From.Instance = "#server1"
+	s.To = Node{}
+	s.To.Name = "golang"
+	s.To.Domain = "limeprotocol.org"
+	s.To.Instance = "default"
+	s.State = SessionStateEstablished
+	return &s
+}
+
 func TestSession_MarshalJSON_New(t *testing.T) {
 	// Arrange
 	s := Session{}

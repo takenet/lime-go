@@ -18,14 +18,12 @@ import (
 	"time"
 )
 
-func createTCPListener(addr net.Addr, transportChan chan Transport, t *testing.T) *TCPTransportListener {
+func createTCPListener(t *testing.T, addr net.Addr, transportChan chan Transport) *TCPTransportListener {
 	listener := TCPTransportListener{}
 	if err := listener.Listen(context.Background(), addr); err != nil {
 		t.Fatal(err)
 		return nil
 	}
-	//listener.ReadTimeout = 5 * time.Second
-	//listener.WriteTimeout = 5 * time.Second
 
 	if transportChan != nil {
 		go func() {
@@ -42,8 +40,8 @@ func createTCPListener(addr net.Addr, transportChan chan Transport, t *testing.T
 	return &listener
 }
 
-func createTCPListenerTLS(addr net.Addr, transportChan chan Transport, t *testing.T) *TCPTransportListener {
-	listener := createTCPListener(addr, transportChan, t)
+func createTCPListenerTLS(t *testing.T, addr net.Addr, transportChan chan Transport) *TCPTransportListener {
+	listener := createTCPListener(t, addr, transportChan)
 	listener.TLSConfig = &tls.Config{
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return createCertificate("127.0.0.1")
@@ -52,7 +50,7 @@ func createTCPListenerTLS(addr net.Addr, transportChan chan Transport, t *testin
 	return listener
 }
 
-func createClientTCPTransport(addr net.Addr, t *testing.T) *TCPTransport {
+func createClientTCPTransport(t *testing.T, addr net.Addr) *TCPTransport {
 	client, err := DialTcp(context.Background(), addr, &tls.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -61,8 +59,8 @@ func createClientTCPTransport(addr net.Addr, t *testing.T) *TCPTransport {
 	return client
 }
 
-func createClientTCPTransportTLS(addr net.Addr, t *testing.T) *TCPTransport {
-	client := createClientTCPTransport(addr, t)
+func createClientTCPTransportTLS(t *testing.T, addr net.Addr) *TCPTransport {
+	client := createClientTCPTransport(t, addr)
 	client.TLSConfig = &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true}
 	return client
 }
@@ -74,7 +72,7 @@ func receiveTransport(t *testing.T, transportChan chan Transport) Transport {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Transport listener timeout")
 	}
-	panic("Something very wrong has occurred")
+	panic("something very wrong has occurred")
 }
 
 func createTCPAddress() net.Addr {
@@ -83,21 +81,6 @@ func createTCPAddress() net.Addr {
 		Port: 55321,
 		Zone: "",
 	}
-}
-
-func createSession() *Session {
-	s := Session{}
-	s.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
-	s.From = Node{}
-	s.From.Name = "postmaster"
-	s.From.Domain = "limeprotocol.org"
-	s.From.Instance = "#server1"
-	s.To = Node{}
-	s.To.Name = "golang"
-	s.To.Domain = "limeprotocol.org"
-	s.To.Instance = "default"
-	s.State = SessionStateEstablished
-	return &s
 }
 
 func publicKey(priv interface{}) interface{} {
@@ -172,56 +155,85 @@ func doTLSHandshake(ctx context.Context, server Transport, client Transport) err
 func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	listener := createTCPListener(addr, nil, t)
+	listener := createTCPListener(t, addr, nil)
 	defer listener.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
 	// Act
-	_, err := DialTcp(context.Background(), addr, &tls.Config{})
+	client, err := DialTcp(ctx, addr, &tls.Config{})
 
 	// Assert
 	assert.NoError(t, err)
+	assert.NotNil(t, client)
+	assert.True(t, client.IsConnected())
+
 }
 
 func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
 	// Act
-	_, err := DialTcp(context.Background(), addr, &tls.Config{})
+	client, err := DialTcp(ctx, addr, &tls.Config{})
 
 	// Assert
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "refused")
+	assert.Nil(t, client)
 }
 
 func TestTCPTransport_Dial_AfterListenerClosed(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	listener := createTCPListener(addr, nil, t)
+	listener := createTCPListener(t, addr, nil)
 	if err := listener.Close(); err != nil {
 		t.Fatal(err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
 	// Act
-	_, err := DialTcp(context.Background(), addr, &tls.Config{})
+	client, err := DialTcp(ctx, addr, &tls.Config{})
 
 	// Assert
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "refused")
+	assert.Nil(t, client)
 }
 
 func TestTCPTransport_Close_WhenOpen(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	listener := createTCPListener(addr, nil, t)
+	listener := createTCPListener(t, addr, nil)
 	defer listener.Close()
-	client := createClientTCPTransport(createTCPAddress(), t)
+	client := createClientTCPTransport(t, createTCPAddress())
 
 	// Act
 	err := client.Close()
 
 	// Assert
 	assert.NoError(t, err)
+}
+
+func TestTCPTransport_Close_WhenAlreadyClosed(t *testing.T) {
+	// Arrange
+	addr := createTCPAddress()
+	listener := createTCPListener(t, addr, nil)
+	defer listener.Close()
+	client := createClientTCPTransport(t, createTCPAddress())
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	err := client.Close()
+
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, "transport is not open", err.Error())
 }
 
 func TestTCPTransport_Close_WhenNotOpen(t *testing.T) {
@@ -232,34 +244,37 @@ func TestTCPTransport_Close_WhenNotOpen(t *testing.T) {
 	err := client.Close()
 
 	// Assert
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Equal(t, "transport is not open", err.Error())
 }
 
 func TestTCPTransport_SetEncryption_None(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	listener := createTCPListener(addr, nil, t)
+	listener := createTCPListener(t, addr, nil)
 	defer listener.Close()
-	client := createClientTCPTransport(createTCPAddress(), t)
+	client := createClientTCPTransport(t, createTCPAddress())
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
 	// Act
-	err := client.SetEncryption(context.Background(), SessionEncryptionNone)
+	err := client.SetEncryption(ctx, SessionEncryptionNone)
 
 	// Assert
 	assert.NoError(t, err)
+	assert.Equal(t, SessionEncryptionNone, client.GetEncryption())
 }
 
 func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
-	listener := createTCPListenerTLS(addr, transportChan, t)
+	listener := createTCPListenerTLS(t, addr, transportChan)
 	defer listener.Close()
-	client := createClientTCPTransportTLS(createTCPAddress(), t)
+	client := createClientTCPTransportTLS(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelFunc()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 	if err := doTLSHandshake(ctx, server, client); err != nil {
 		t.Fatal(err)
 	}
@@ -269,18 +284,21 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 
 	// Assert
 	assert.NoError(t, err)
+	assert.Equal(t, SessionEncryptionTLS, client.GetEncryption())
 }
 
 func TestTCPTransport_Send_Session(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	listener := createTCPListener(addr, nil, t)
+	listener := createTCPListener(t, addr, nil)
 	defer listener.Close()
-	client := createClientTCPTransport(createTCPAddress(), t)
+	client := createClientTCPTransport(t, createTCPAddress())
 	s := createSession()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
 	// Act
-	err := client.Send(context.Background(), s)
+	err := client.Send(ctx, s)
 
 	// Assert
 	assert.NoError(t, err)
@@ -290,13 +308,13 @@ func TestTCPTransport_Receive_Session(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
-	listener := createTCPListener(addr, transportChan, t)
+	listener := createTCPListener(t, addr, transportChan)
 	defer listener.Close()
-	client := createClientTCPTransport(createTCPAddress(), t)
+	client := createClientTCPTransport(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
 	s := createSession()
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelFunc()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 	if err := client.Send(ctx, s); err != nil {
 		t.Fatal(err)
 	}
@@ -315,12 +333,12 @@ func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
-	listener := createTCPListenerTLS(addr, transportChan, t)
+	listener := createTCPListenerTLS(t, addr, transportChan)
 	defer listener.Close()
-	client := createClientTCPTransportTLS(createTCPAddress(), t)
+	client := createClientTCPTransportTLS(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelFunc()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 	if err := doTLSHandshake(ctx, server, client); err != nil {
 		t.Fatal(err)
 	}
@@ -337,14 +355,12 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
-	listener := createTCPListenerTLS(addr, transportChan, t)
+	listener := createTCPListenerTLS(t, addr, transportChan)
 	defer listener.Close()
-	client := createClientTCPTransportTLS(createTCPAddress(), t)
+	client := createClientTCPTransportTLS(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
-
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelFunc()
-
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 	if err := doTLSHandshake(ctx, server, client); err != nil {
 		t.Fatal(err)
 	}

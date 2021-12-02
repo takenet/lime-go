@@ -9,14 +9,19 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
-func DialWebsocket(ctx context.Context, urlStr string) (Transport, error) {
-	d := websocket.Dialer{}
+func DialWebsocket(ctx context.Context, urlStr string, requestHeader http.Header, tls *tls.Config) (Transport, error) {
+	d := websocket.Dialer{
+		TLSClientConfig: tls,
+	}
 
-	requestHeader := http.Header{}
+	if requestHeader == nil {
+		requestHeader = http.Header{}
+	}
 	requestHeader["Sec-WebSocket-Protocol"] = []string{"lime"}
 
 	conn, _, err := d.DialContext(ctx, urlStr, requestHeader)
@@ -33,15 +38,6 @@ type websocketTransport struct {
 	e    SessionEncryption
 }
 
-func (t *websocketTransport) Close() error {
-	if err := t.conn.Close(); err != nil {
-		return err
-	}
-
-	t.conn = nil
-	return nil
-}
-
 func (t *websocketTransport) Send(ctx context.Context, e Envelope) error {
 	if ctx == nil {
 		panic("nil context")
@@ -49,6 +45,10 @@ func (t *websocketTransport) Send(ctx context.Context, e Envelope) error {
 
 	if e == nil || reflect.ValueOf(e).IsNil() {
 		panic("nil envelope")
+	}
+
+	if err := t.ensureOpen(); err != nil {
+		return err
 	}
 
 	// Sets the timeout for the next write operation
@@ -65,13 +65,31 @@ func (t *websocketTransport) Receive(ctx context.Context) (Envelope, error) {
 		panic("nil context")
 	}
 
+	if err := t.ensureOpen(); err != nil {
+		return nil, err
+	}
+
 	var raw RawEnvelope
 
+	// TODO: Support context
 	if err := t.conn.ReadJSON(&raw); err != nil {
 		return nil, err
 	}
 
 	return raw.ToEnvelope()
+}
+
+func (t *websocketTransport) Close() error {
+	if err := t.ensureOpen(); err != nil {
+		return err
+	}
+
+	if err := t.conn.Close(); err != nil {
+		return err
+	}
+
+	t.conn = nil
+	return nil
 }
 
 func (t *websocketTransport) GetSupportedCompression() []SessionCompression {
@@ -83,7 +101,7 @@ func (t *websocketTransport) GetCompression() SessionCompression {
 }
 
 func (t *websocketTransport) SetCompression(ctx context.Context, c SessionCompression) error {
-	panic("compression cannot be changed")
+	return errors.New("compression cannot be changed")
 }
 
 func (t *websocketTransport) GetSupportedEncryption() []SessionEncryption {
@@ -95,7 +113,7 @@ func (t *websocketTransport) GetEncryption() SessionEncryption {
 }
 
 func (t *websocketTransport) SetEncryption(ctx context.Context, e SessionEncryption) error {
-	panic("encryption cannot be changed")
+	return errors.New("encryption cannot be changed")
 }
 
 func (t *websocketTransport) IsConnected() bool {
@@ -110,8 +128,16 @@ func (t *websocketTransport) RemoteAddr() net.Addr {
 	return t.conn.RemoteAddr()
 }
 
+func (t *websocketTransport) ensureOpen() error {
+	if t.conn == nil {
+		return errors.New("transport is not open")
+	}
+
+	return nil
+}
+
 type WebsocketTransportListener struct {
-	CertFile          string
+	CertFile          string // CertFile
 	KeyFile           string
 	TLSConfig         *tls.Config
 	EnableCompression bool
@@ -119,45 +145,70 @@ type WebsocketTransportListener struct {
 	upgrader          *websocket.Upgrader
 	transportBuffer   int
 	transportChan     chan *websocketTransport
+	errChan           chan error
+	mu                sync.Mutex
 }
 
-func (t *WebsocketTransportListener) Listen(_ context.Context, addr net.Addr) error {
-	if addr.Network() != "ws" && addr.Network() != "wss" {
-		return errors.New("address network should be ws or wss")
+func (t *WebsocketTransportListener) Listen(ctx context.Context, addr string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.srv != nil {
+		return errors.New("ws listener already started")
+	}
+
+	var lc net.ListenConfig
+	l, err := lc.Listen(ctx, "tcp", addr)
+	if err != nil {
+		return err
 	}
 
 	t.transportChan = make(chan *websocketTransport, t.transportBuffer)
+	t.errChan = make(chan error)
 	t.upgrader = &websocket.Upgrader{
 		Subprotocols:      []string{"lime"},
 		EnableCompression: t.EnableCompression,
 	}
-
-	t.srv = &http.Server{
-		Addr:      addr.String(),
+	srv := &http.Server{
+		Addr:      addr,
 		Handler:   t,
 		TLSConfig: t.TLSConfig,
 	}
+	t.srv = srv
 
-	switch addr.Network() {
-	case "ws":
-		if err := t.srv.ListenAndServe(); err != nil {
-			return fmt.Errorf("ws listener: %w", err)
+	go func() {
+		if t.tls() {
+			if err := srv.ServeTLS(l, t.CertFile, t.KeyFile); err != nil {
+				t.errChan <- fmt.Errorf("ws listener: %w", err)
+				_ = t.Close()
+				return
+			}
+		} else {
+			if err := srv.Serve(l); err != nil {
+				t.errChan <- fmt.Errorf("ws listener: %w", err)
+				_ = t.Close()
+				return
+			}
 		}
-	case "wss":
-		if err := t.srv.ListenAndServeTLS(t.CertFile, t.KeyFile); err != nil {
-			return fmt.Errorf("ws listener: %w", err)
-		}
-	default:
-		panic("unknown addr network")
-	}
+	}()
 
 	return nil
 }
 
+func (t *WebsocketTransportListener) tls() bool {
+	return t.TLSConfig != nil || (t.CertFile != "" && t.KeyFile != "")
+}
+
 func (t *WebsocketTransportListener) Accept(ctx context.Context) (Transport, error) {
+	if err := t.ensureStarted(); err != nil {
+		return nil, err
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("ws listener: %w", ctx.Err())
+	case err := <-t.errChan:
+		return nil, err
 	case t, ok := <-t.transportChan:
 		if !ok {
 			return nil, errors.New("ws listener closed")
@@ -167,11 +218,27 @@ func (t *WebsocketTransportListener) Accept(ctx context.Context) (Transport, err
 }
 
 func (t *WebsocketTransportListener) Close() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if err := t.ensureStarted(); err != nil {
+		return err
+	}
+
 	if err := t.srv.Close(); err != nil {
 		return err
 	}
 
+	t.srv = nil
 	close(t.transportChan)
+	return nil
+}
+
+func (t *WebsocketTransportListener) ensureStarted() error {
+	if t.srv == nil {
+		return errors.New("ws listener: listener is not started")
+	}
+
 	return nil
 }
 
@@ -185,5 +252,10 @@ func (t *WebsocketTransportListener) ServeHTTP(writer http.ResponseWriter, reque
 	ws := &websocketTransport{
 		conn: conn,
 	}
+
+	if t.tls() {
+		ws.e = SessionEncryptionTLS
+	}
+
 	t.transportChan <- ws
 }
