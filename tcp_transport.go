@@ -3,14 +3,24 @@ package lime
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"reflect"
 	"sync"
 )
 
+const DefaultReadLimit int64 = 8192 * 1024
+
 type TCPTransport struct {
-	ConnTransport
+	ReadLimit     int64       // ReadLimit defines the limit for buffered data in read operations.
+	TraceWriter   TraceWriter // TraceWriter sets the trace writer for tracing connection envelopes
+	conn          net.Conn
+	encoder       *json.Encoder
+	decoder       *json.Decoder
+	limitedReader io.LimitedReader
 	// TLSConfig The configuration for TLS session encryption
 	TLSConfig  *tls.Config
 	encryption SessionEncryption
@@ -98,11 +108,129 @@ func (t *TCPTransport) SetEncryption(ctx context.Context, e SessionEncryption) e
 	return nil
 }
 
+func (t *TCPTransport) Send(ctx context.Context, e Envelope) error {
+	if ctx == nil {
+		panic("nil context")
+	}
+
+	if e == nil || reflect.ValueOf(e).IsNil() {
+		panic("nil envelope")
+	}
+
+	if err := t.ensureOpen(); err != nil {
+		return err
+	}
+
+	// Sets the timeout for the next write operation
+	deadline, _ := ctx.Deadline()
+	if err := t.conn.SetWriteDeadline(deadline); err != nil {
+		return err
+	}
+	// TODO: Handle context <-Done() signal
+	// TODO: Encode writes a new line after each entry, how we can avoid this?
+	return t.encoder.Encode(e)
+}
+
+func (t *TCPTransport) Receive(ctx context.Context) (Envelope, error) {
+	if ctx == nil {
+		panic("nil context")
+	}
+
+	if err := t.ensureOpen(); err != nil {
+		return nil, err
+	}
+
+	// Sets the timeout for the next read operation
+	deadline, _ := ctx.Deadline()
+	if err := t.conn.SetReadDeadline(deadline); err != nil {
+		return nil, err
+	}
+
+	var raw RawEnvelope
+
+	// TODO: Handle context <-Done() signal
+	if err := t.decoder.Decode(&raw); err != nil {
+		return nil, err
+	}
+
+	// Reset the read limit
+	t.limitedReader.N = t.ReadLimit
+
+	return raw.ToEnvelope()
+}
+
+func (t *TCPTransport) Close() error {
+	if err := t.ensureOpen(); err != nil {
+		return err
+	}
+
+	err := t.conn.Close()
+	t.conn = nil
+	return err
+}
+
+func (t *TCPTransport) IsConnected() bool {
+	return t.conn != nil
+}
+
+func (t *TCPTransport) LocalAddr() net.Addr {
+	if t.conn == nil {
+		return nil
+	}
+	return t.conn.LocalAddr()
+}
+
+func (t *TCPTransport) RemoteAddr() net.Addr {
+	if t.conn == nil {
+		return nil
+	}
+	return t.conn.RemoteAddr()
+}
+
+func (t *TCPTransport) setConn(conn net.Conn) {
+	t.conn = conn
+
+	var writer io.Writer = t.conn
+	var reader io.Reader = t.conn
+
+	// Configure the trace writer, if defined
+	tw := t.TraceWriter
+	if tw != nil {
+		writer = io.MultiWriter(writer, *tw.SendWriter())
+		reader = io.TeeReader(reader, *tw.ReceiveWriter())
+	}
+
+	// Sets the encoder to be used for sending envelopes
+	t.encoder = json.NewEncoder(writer)
+
+	if t.ReadLimit == 0 {
+		t.ReadLimit = DefaultReadLimit
+	}
+
+	// Using a LimitedReader to avoid the connection be
+	// flooded with a large JSON which may cause
+	// high memory usage.
+	t.limitedReader = io.LimitedReader{
+		R: reader,
+		N: t.ReadLimit,
+	}
+	t.decoder = json.NewDecoder(&t.limitedReader)
+}
+
+func (t *TCPTransport) ensureOpen() error {
+	if t.conn == nil {
+		return errors.New("transport is not open")
+	}
+
+	return nil
+}
+
 type TCPTransportListener struct {
-	ConnTransportConfig
-	TLSConfig *tls.Config
-	listener  net.Listener
-	mux       sync.Mutex
+	ReadLimit   int64       // ReadLimit defines the limit for buffered data in read operations.
+	TraceWriter TraceWriter // TraceWriter sets the trace writer for tracing connection envelopes
+	TLSConfig   *tls.Config
+	listener    net.Listener
+	mu          sync.Mutex
 }
 
 func (t *TCPTransportListener) Listen(ctx context.Context, addr net.Addr) error {
@@ -110,11 +238,11 @@ func (t *TCPTransportListener) Listen(ctx context.Context, addr net.Addr) error 
 		return errors.New("address network should be tcp")
 	}
 
-	t.mux.Lock()
-	defer t.mux.Unlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	if t.listener != nil {
-		return errors.New("listener is already started")
+		return errors.New("tcp listener is already started")
 	}
 
 	var lc net.ListenConfig
@@ -127,23 +255,9 @@ func (t *TCPTransportListener) Listen(ctx context.Context, addr net.Addr) error 
 	return nil
 }
 
-func (t *TCPTransportListener) Close() error {
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	if t.listener == nil {
-		return errors.New("listener is not started")
-	}
-
-	err := t.listener.Close()
-	t.listener = nil
-
-	return err
-}
-
 func (t *TCPTransportListener) Accept(ctx context.Context) (Transport, error) {
 	if t.listener == nil {
-		return nil, errors.New("listener is not started")
+		return nil, errors.New("tcp listener is not started")
 	}
 
 	err := ctx.Err()
@@ -166,4 +280,18 @@ func (t *TCPTransportListener) Accept(ctx context.Context) (Transport, error) {
 	transport.setConn(conn)
 
 	return &transport, nil
+}
+
+func (t *TCPTransportListener) Close() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.listener == nil {
+		return errors.New("tcp listener is not started")
+	}
+
+	err := t.listener.Close()
+	t.listener = nil
+
+	return err
 }

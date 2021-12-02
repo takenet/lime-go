@@ -3,205 +3,38 @@ package lime
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
-	"reflect"
 )
 
+// Transport defines the basic features for a Lime communication mean
 type Transport interface {
 	io.Closer
-
-	// Send sends an envelope to the remote node.
-	Send(ctx context.Context, e Envelope) error
-
-	// Receive receives an envelope from the remote node.
-	Receive(ctx context.Context) (Envelope, error)
-
-	// GetSupportedCompression enumerates the supported compression options for the transport.
-	GetSupportedCompression() []SessionCompression
-
-	// GetCompression gets the current transport compression option.
-	GetCompression() SessionCompression
-
-	// SetCompression defines the compression mode for the transport.
-	SetCompression(ctx context.Context, c SessionCompression) error
-
-	// GetSupportedEncryption enumerates the supported encryption options for the transport.
-	GetSupportedEncryption() []SessionEncryption
-
-	// GetEncryption gets the current transport encryption option.
-	GetEncryption() SessionEncryption
-
-	// SetEncryption defines the encryption mode for the transport.
-	SetEncryption(ctx context.Context, e SessionEncryption) error
-
-	// IsConnected indicates if the transport is connected.
-	IsConnected() bool
-
-	// LocalAddr gets the local endpoint address.
-	LocalAddr() net.Addr
-
-	// RemoteAddr gets the remote endpoint address.
-	RemoteAddr() net.Addr
-}
-
-const DefaultReadLimit int64 = 8192 * 1024
-
-// ConnTransportConfig defines the common configurations for net.Conn based transports.
-type ConnTransportConfig struct {
-	// The limit for buffered data in read operations.
-	ReadLimit int64
-
-	// The trace writer for tracing connection envelopes
-	TraceWriter TraceWriter
-}
-
-// ConnTransport implement a base type for net.Conn based transports.
-type ConnTransport struct {
-	ConnTransportConfig
-	conn          net.Conn
-	encoder       *json.Encoder
-	decoder       *json.Decoder
-	limitedReader io.LimitedReader
-}
-
-func (t *ConnTransport) Send(ctx context.Context, e Envelope) error {
-	if ctx == nil {
-		panic("nil context")
-	}
-
-	if e == nil || reflect.ValueOf(e).IsNil() {
-		panic("nil envelope")
-	}
-
-	if err := t.ensureOpen(); err != nil {
-		return err
-	}
-
-	// Sets the timeout for the next write operation
-	deadline, _ := ctx.Deadline()
-	if err := t.conn.SetWriteDeadline(deadline); err != nil {
-		return err
-	}
-	// TODO: Handle context <-Done() signal
-	// TODO: Encode writes a new line after each entry, how we can avoid this?
-	return t.encoder.Encode(e)
-}
-
-func (t *ConnTransport) Receive(ctx context.Context) (Envelope, error) {
-	if ctx == nil {
-		panic("nil context")
-	}
-
-	if err := t.ensureOpen(); err != nil {
-		return nil, err
-	}
-
-	// Sets the timeout for the next read operation
-	deadline, _ := ctx.Deadline()
-	if err := t.conn.SetReadDeadline(deadline); err != nil {
-		return nil, err
-	}
-
-	var raw RawEnvelope
-
-	// TODO: Handle context <-Done() signal
-	if err := t.decoder.Decode(&raw); err != nil {
-		return nil, err
-	}
-
-	// Reset the read limit
-	t.limitedReader.N = t.ReadLimit
-
-	return raw.ToEnvelope()
-}
-
-func (t *ConnTransport) Close() error {
-	if err := t.ensureOpen(); err != nil {
-		return err
-	}
-
-	err := t.conn.Close()
-	t.conn = nil
-	return err
-}
-
-func (t *ConnTransport) IsConnected() bool {
-	return t.conn != nil
-}
-
-func (t *ConnTransport) LocalAddr() net.Addr {
-	if t.conn == nil {
-		return nil
-	}
-	return t.conn.LocalAddr()
-}
-
-func (t *ConnTransport) RemoteAddr() net.Addr {
-	if t.conn == nil {
-		return nil
-	}
-	return t.conn.RemoteAddr()
-}
-
-func (t *ConnTransport) setConn(conn net.Conn) {
-	t.conn = conn
-
-	var writer io.Writer = t.conn
-	var reader io.Reader = t.conn
-
-	// Configure the trace writer, if defined
-	tw := t.TraceWriter
-	if tw != nil {
-		writer = io.MultiWriter(writer, *tw.SendWriter())
-		reader = io.TeeReader(reader, *tw.ReceiveWriter())
-	}
-
-	// Sets the encoder to be used for sending envelopes
-	t.encoder = json.NewEncoder(writer)
-
-	if t.ReadLimit == 0 {
-		t.ReadLimit = DefaultReadLimit
-	}
-
-	// Using a LimitedReader to avoid the connection be
-	// flooded with a large JSON which may cause
-	// high memory usage.
-	t.limitedReader = io.LimitedReader{
-		R: reader,
-		N: t.ReadLimit,
-	}
-	t.decoder = json.NewDecoder(&t.limitedReader)
-}
-
-func (t *ConnTransport) ensureOpen() error {
-	if t.conn == nil {
-		return errors.New("transport is not open")
-	}
-
-	return nil
+	Send(ctx context.Context, e Envelope) error                     // Send sends an envelope to the remote node.
+	Receive(ctx context.Context) (Envelope, error)                  // Receive receives an envelope from the remote node.
+	GetSupportedCompression() []SessionCompression                  // GetSupportedCompression enumerates the supported compression options for the transport.
+	GetCompression() SessionCompression                             // GetCompression gets the current transport compression option.
+	SetCompression(ctx context.Context, c SessionCompression) error // SetCompression defines the compression mode for the transport.
+	GetSupportedEncryption() []SessionEncryption                    // GetSupportedEncryption enumerates the supported encryption options for the transport.
+	GetEncryption() SessionEncryption                               // GetEncryption gets the current transport encryption option.
+	SetEncryption(ctx context.Context, e SessionEncryption) error   // SetEncryption defines the encryption mode for the transport.
+	IsConnected() bool                                              // IsConnected indicates if the transport is connected.
+	LocalAddr() net.Addr                                            // LocalAddr gets the local endpoint address.
+	RemoteAddr() net.Addr                                           // RemoteAddr gets the remote endpoint address.
 }
 
 // TransportListener Defines a listener interface for the transports.
 type TransportListener interface {
 	io.Closer
-
-	// Listen start listening for new transport connections.
-	Listen(ctx context.Context, addr net.Addr) error
-
-	// Accept a new transport connection.
-	Accept(ctx context.Context) (Transport, error)
+	Listen(ctx context.Context, addr net.Addr) error // Listen start listening for new transport connections.
+	Accept(ctx context.Context) (Transport, error)   // Accept a new transport connection.
 }
 
 // TraceWriter Enable request tracing for network transports.
 type TraceWriter interface {
-	// SendWriter returns the sendWriter for the transport send operations
-	SendWriter() *io.Writer
-
-	// ReceiveWriter returns the sendWriter for the transport receive operations
-	ReceiveWriter() *io.Writer
+	SendWriter() *io.Writer    // SendWriter returns the sendWriter for the transport send operations
+	ReceiveWriter() *io.Writer // ReceiveWriter returns the sendWriter for the transport receive operations
 }
 
 // StdoutTraceWriter Implements a TraceWriter that uses the standard output for
