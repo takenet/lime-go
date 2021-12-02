@@ -189,7 +189,7 @@ func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
 
 func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
@@ -203,4 +203,92 @@ func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, SessionEncryptionTLS, client.GetEncryption())
+}
+
+func TestWebsocketTransport_Send_Session(t *testing.T) {
+	// Arrange
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	addr := createWSAddr()
+	listener := createWebsocketListener(ctx, t, addr, nil)
+	defer listener.Close()
+	url := fmt.Sprintf("ws://%s", addr)
+	client := createClientWebsocketTransport(ctx, t, url)
+	s := createSession()
+
+	// Act
+	err := client.Send(ctx, s)
+
+	// Assert
+	assert.NoError(t, err)
+}
+
+func TestWebsocketTransport_Receive_Session(t *testing.T) {
+	// Arrange
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	addr := createWSAddr()
+	var transportChan = make(chan Transport, 1)
+	listener := createWebsocketListener(ctx, t, addr, transportChan)
+	defer listener.Close()
+	url := fmt.Sprintf("ws://%s", addr)
+	client := createClientWebsocketTransport(ctx, t, url)
+	server := receiveTransport(t, transportChan)
+	s := createSession()
+	if err := client.Send(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	e, err := server.Receive(ctx)
+
+	// Assert
+	assert.NoError(t, err)
+	received, ok := e.(*Session)
+	assert.True(t, ok)
+	assert.Equal(t, s, received)
+}
+
+func TestWebsocketTransport_Send_SessionTLS(t *testing.T) {
+	// Arrange
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	addr := createWSAddr()
+	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
+	defer listener.Close()
+	url := fmt.Sprintf("ws://%s", addr)
+	client := createClientWebsocketTransportTLS(ctx, t, url)
+	s := createSession()
+
+	// Act
+	err := client.Send(ctx, s)
+
+	// Assert
+	assert.NoError(t, err)
+}
+
+func TestWebsocketTransport_Receive_SessionTLS(t *testing.T) {
+	// Arrange
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	addr := createWSAddr()
+	var transportChan = make(chan Transport, 1)
+	listener := createWebsocketListenerTLS(ctx, t, addr, transportChan)
+	defer listener.Close()
+	url := fmt.Sprintf("wss://%s", addr)
+	client := createClientWebsocketTransportTLS(ctx, t, url)
+	server := receiveTransport(t, transportChan)
+	s := createSession()
+	if err := client.Send(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	e, err := server.Receive(ctx)
+
+	// Assert
+	assert.NoError(t, err)
+	received, ok := e.(*Session)
+	assert.True(t, ok)
+	assert.Equal(t, s, received)
 }
