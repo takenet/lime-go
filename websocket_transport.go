@@ -155,6 +155,7 @@ type WebsocketTransportListener struct {
 	KeyFile           string
 	TLSConfig         *tls.Config
 	EnableCompression bool
+	ln                net.Listener
 	srv               *http.Server
 	upgrader          *websocket.Upgrader
 	transportBuffer   int
@@ -177,7 +178,7 @@ func (l *WebsocketTransportListener) Listen(ctx context.Context, addr net.Addr) 
 	if err != nil {
 		return err
 	}
-
+	l.ln = ln
 	l.transportChan = make(chan *websocketTransport, l.transportBuffer)
 	l.done = make(chan bool)
 	l.errChan = make(chan error)
@@ -241,6 +242,10 @@ func (l *WebsocketTransportListener) Close() error {
 	}
 
 	if err := l.srv.Close(); err != nil {
+		return err
+	}
+
+	if err := l.ln.Close(); err != nil {
 		return err
 	}
 
