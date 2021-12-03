@@ -155,7 +155,7 @@ type WebsocketTransportListener struct {
 	KeyFile           string
 	TLSConfig         *tls.Config
 	EnableCompression bool
-	ln                net.Listener
+	listener          net.Listener
 	srv               *http.Server
 	upgrader          *websocket.Upgrader
 	transportBuffer   int
@@ -174,32 +174,32 @@ func (l *WebsocketTransportListener) Listen(ctx context.Context, addr net.Addr) 
 	}
 
 	var lc net.ListenConfig
-	ln, err := lc.Listen(ctx, "tcp", addr.String())
+	listener, err := lc.Listen(ctx, "tcp", addr.String())
 	if err != nil {
 		return err
 	}
-	l.ln = ln
-	l.transportChan = make(chan *websocketTransport, l.transportBuffer)
-	l.done = make(chan bool)
-	l.errChan = make(chan error)
-	l.upgrader = &websocket.Upgrader{
-		Subprotocols:      []string{"lime"},
-		EnableCompression: l.EnableCompression,
-	}
+	l.listener = listener
 	srv := &http.Server{
 		Addr:      addr.String(),
 		Handler:   l,
 		TLSConfig: l.TLSConfig,
 	}
 	l.srv = srv
+	l.upgrader = &websocket.Upgrader{
+		Subprotocols:      []string{"lime"},
+		EnableCompression: l.EnableCompression,
+	}
+	l.transportChan = make(chan *websocketTransport, l.transportBuffer)
+	l.done = make(chan bool)
+	l.errChan = make(chan error)
 
 	go func() {
 		if l.tls() {
-			if err := srv.ServeTLS(ln, l.CertFile, l.KeyFile); err != nil {
+			if err := srv.ServeTLS(listener, l.CertFile, l.KeyFile); err != nil {
 				l.errChan <- fmt.Errorf("ws listener: %w", err)
 			}
 		} else {
-			if err := srv.Serve(ln); err != nil {
+			if err := srv.Serve(listener); err != nil {
 				l.errChan <- fmt.Errorf("ws listener: %w", err)
 			}
 		}
@@ -245,7 +245,7 @@ func (l *WebsocketTransportListener) Close() error {
 		return err
 	}
 
-	if err := l.ln.Close(); err != nil {
+	if err := l.listener.Close(); err != nil {
 		return err
 	}
 
