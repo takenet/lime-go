@@ -73,8 +73,8 @@ func (m *MediaType) UnmarshalText(text []byte) error {
 }
 
 // Unexported to avoid changing
-var mediaTypeApplicationJson MediaType = MediaType{MediaTypeApplication, "json", ""}
-var mediaTypeTextPlain MediaType = MediaType{MediaTypeText, "plain", ""}
+var mediaTypeApplicationJson = MediaType{MediaTypeApplication, "json", ""}
+var mediaTypeTextPlain = MediaType{MediaTypeText, "plain", ""}
 var documentFactories = map[MediaType]func() Document{}
 
 func MediaTypeTextPlain() MediaType {

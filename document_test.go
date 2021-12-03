@@ -2,13 +2,22 @@ package lime
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
+func createPlainDocument() PlainDocument {
+	return PlainDocument("Hello world!")
+}
+
+func createJsonDocument() *JsonDocument {
+	return &JsonDocument{"property1": "value1", "property2": 2.0, "property3": map[string]interface{}{"subproperty1": "subvalue1"}, "property4": false, "property5": 12.3}
+}
+
 func TestDocumentContainer_MarshalJSON_Plain(t *testing.T) {
 	// Arrange
-	d := PlainDocument("Hello world!")
+	d := createPlainDocument()
 	c := NewDocumentContainer(d)
 
 	// Act
@@ -23,8 +32,8 @@ func TestDocumentContainer_MarshalJSON_Plain(t *testing.T) {
 
 func TestDocumentContainer_MarshalJSON_JSON(t *testing.T) {
 	// Arrange
-	d := JsonDocument{"property1": "value1", "property2": 2, "property3": map[string]interface{}{"subproperty1": "subvalue1"}, "property4": false, "property5": 12.3}
-	c := NewDocumentContainer(&d)
+	d := createJsonDocument()
+	c := NewDocumentContainer(d)
 
 	// Act
 	b, err := json.Marshal(c)
@@ -53,7 +62,7 @@ func TestDocumentContainer_UnmarshalJSON_Plain(t *testing.T) {
 	if !assert.True(t, ok) {
 		t.Fatal()
 	}
-	assert.Equal(t, PlainDocument("Hello world!"), *actual)
+	assert.Equal(t, createPlainDocument(), *actual)
 }
 
 func TestDocumentContainer_UnmarshalJSON_JSON(t *testing.T) {
@@ -73,5 +82,87 @@ func TestDocumentContainer_UnmarshalJSON_JSON(t *testing.T) {
 	if !assert.True(t, ok) {
 		t.Fatal()
 	}
-	assert.Equal(t, JsonDocument{"property1": "value1", "property2": 2.0, "property3": map[string]interface{}{"subproperty1": "subvalue1"}, "property4": false, "property5": 12.3}, *actual)
+	assert.Equal(t, *createJsonDocument(), *actual)
+}
+
+func TestDocumentCollection_MarshalJSON_Plain(t *testing.T) {
+	// Arrange
+	items := make([]Document, 3)
+	for i := 0; i < len(items); i++ {
+		items[i] = PlainDocument(fmt.Sprintf("Hello world %v!", i+1))
+	}
+	c := NewDocumentCollection(items, MediaTypeTextPlain())
+
+	// Act
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.JSONEq(t, `{"total":3,"itemType":"text/plain","items":["Hello world 1!","Hello world 2!","Hello world 3!"]}`, string(b))
+}
+
+func TestDocumentCollection_MarshalJSON_JSON(t *testing.T) {
+	// Arrange
+	items := make([]Document, 3)
+	for i := 0; i < len(items); i++ {
+		items[i] = &JsonDocument{"text": fmt.Sprintf("Hello world %v!", i+1)}
+	}
+	c := NewDocumentCollection(items, MediaTypeApplicationJson())
+
+	// Act
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.JSONEq(t, `{"total":3,"itemType":"application/json","items":[{"text":"Hello world 1!"},{"text":"Hello world 2!"},{"text":"Hello world 3!"}]}`, string(b))
+}
+
+func TestDocumentCollection_UnmarshalJSON_Plain(t *testing.T) {
+	// Arrange
+	j := []byte(`{"total":3,"itemType":"text/plain","items":["Hello world 1!","Hello world 2!","Hello world 3!"]}`)
+	var c DocumentCollection
+
+	// Act
+	err := json.Unmarshal(j, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.Equal(t, 3, c.Total)
+	assert.Equal(t, MediaTypeTextPlain(), c.ItemType)
+	for i, d := range c.Items {
+		actual, ok := d.(*PlainDocument)
+		if !assert.True(t, ok) {
+			t.Fatal()
+		}
+		assert.Equal(t, PlainDocument(fmt.Sprintf("Hello world %v!", i+1)), *actual)
+	}
+}
+
+func TestDocumentCollection_UnmarshalJSON_JSON(t *testing.T) {
+	// Arrange
+	j := []byte(`{"total":3,"itemType":"application/json","items":[{"text":"Hello world 1!"},{"text":"Hello world 2!"},{"text":"Hello world 3!"}]}`)
+	var c DocumentCollection
+
+	// Act
+	err := json.Unmarshal(j, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.Equal(t, 3, c.Total)
+	assert.Equal(t, MediaTypeApplicationJson(), c.ItemType)
+	for i, d := range c.Items {
+		actual, ok := d.(*JsonDocument)
+		if !assert.True(t, ok) {
+			t.Fatal()
+		}
+		assert.Equal(t, JsonDocument{"text": fmt.Sprintf("Hello world %v!", i+1)}, *actual)
+	}
 }

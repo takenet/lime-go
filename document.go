@@ -73,7 +73,7 @@ type rawDocumentContainer struct {
 	Value *json.RawMessage `json:"value"`
 }
 
-func (d DocumentContainer) MarshalJSON() ([]byte, error) {
+func (d *DocumentContainer) MarshalJSON() ([]byte, error) {
 	dw, err := d.raw()
 	if err != nil {
 		return nil, err
@@ -98,19 +98,19 @@ func (d *DocumentContainer) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (d *DocumentContainer) raw() (rawDocumentContainer, error) {
+func (d *DocumentContainer) raw() (*rawDocumentContainer, error) {
 	raw := rawDocumentContainer{
 		Type: &d.Type,
 	}
 
 	b, err := json.Marshal(d.Value)
 	if err != nil {
-		return rawDocumentContainer{}, err
+		return &rawDocumentContainer{}, err
 	}
 	r := json.RawMessage(b)
 	raw.Value = &r
 
-	return raw, nil
+	return &raw, nil
 }
 
 func (d *DocumentContainer) populate(raw *rawDocumentContainer) error {
@@ -146,6 +146,14 @@ func (d *DocumentCollection) GetMediaType() MediaType {
 	return MediaType{MediaTypeApplication, "vnd.lime.collection", "json"}
 }
 
+func NewDocumentCollection(items []Document, t MediaType) *DocumentCollection {
+	return &DocumentCollection{
+		Total:    len(items),
+		ItemType: t,
+		Items:    items,
+	}
+}
+
 // rawDocumentCollection is a wrapper for custom marshalling
 type rawDocumentCollection struct {
 	Total    int                `json:"total,omitempty"`
@@ -153,7 +161,7 @@ type rawDocumentCollection struct {
 	Items    []*json.RawMessage `json:"items"`
 }
 
-func (d DocumentCollection) MarshalJSON() ([]byte, error) {
+func (d *DocumentCollection) MarshalJSON() ([]byte, error) {
 	raw, err := d.raw()
 	if err != nil {
 		return nil, err
@@ -178,7 +186,7 @@ func (d *DocumentCollection) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (d *DocumentCollection) raw() (rawDocumentCollection, error) {
+func (d *DocumentCollection) raw() (*rawDocumentCollection, error) {
 	raw := rawDocumentCollection{
 		ItemType: &d.ItemType,
 		Total:    d.Total,
@@ -190,14 +198,14 @@ func (d *DocumentCollection) raw() (rawDocumentCollection, error) {
 		for i, v := range d.Items {
 			b, err := json.Marshal(v)
 			if err != nil {
-				return rawDocumentCollection{}, err
+				return &rawDocumentCollection{}, err
 			}
 			r := json.RawMessage(b)
 			raw.Items[i] = &r
 		}
 	}
 
-	return raw, nil
+	return &raw, nil
 }
 
 func (d *DocumentCollection) populate(raw *rawDocumentCollection) error {
