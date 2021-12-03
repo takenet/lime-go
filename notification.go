@@ -19,7 +19,7 @@ type Notification struct {
 }
 
 func (n Notification) MarshalJSON() ([]byte, error) {
-	raw, err := n.ToRawEnvelope()
+	raw, err := n.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -27,14 +27,14 @@ func (n Notification) MarshalJSON() ([]byte, error) {
 }
 
 func (n *Notification) UnmarshalJSON(b []byte) error {
-	raw := RawEnvelope{}
+	raw := rawEnvelope{}
 	err := json.Unmarshal(b, &raw)
 	if err != nil {
 		return err
 	}
 
 	notification := Notification{}
-	err = notification.Populate(&raw)
+	err = notification.populate(&raw)
 	if err != nil {
 		return err
 	}
@@ -43,8 +43,8 @@ func (n *Notification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (n *Notification) ToRawEnvelope() (*RawEnvelope, error) {
-	raw, err := n.EnvelopeBase.ToRawEnvelope()
+func (n *Notification) toRawEnvelope() (*rawEnvelope, error) {
+	raw, err := n.EnvelopeBase.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +58,8 @@ func (n *Notification) ToRawEnvelope() (*RawEnvelope, error) {
 	return raw, nil
 }
 
-func (n *Notification) Populate(raw *RawEnvelope) error {
-	err := n.EnvelopeBase.Populate(raw)
+func (n *Notification) populate(raw *rawEnvelope) error {
+	err := n.EnvelopeBase.populate(raw)
 	if err != nil {
 		return err
 	}

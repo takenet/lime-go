@@ -77,7 +77,7 @@ func (t *websocketTransport) Receive(ctx context.Context) (Envelope, error) {
 		return nil, err
 	}
 
-	var raw RawEnvelope
+	var raw rawEnvelope
 
 	// TODO: Support context
 	if err := t.conn.ReadJSON(&raw); err != nil {

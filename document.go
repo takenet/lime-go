@@ -54,14 +54,14 @@ func (d *DocumentContainer) GetMediaType() MediaType {
 	return MediaType{MediaTypeApplication, "vnd.lime.container", "json"}
 }
 
-// DocumentContainerWrapper is a wrapper for custom marshalling
-type DocumentContainerWrapper struct {
+// rawDocumentContainer is a wrapper for custom marshalling
+type rawDocumentContainer struct {
 	Type  *MediaType       `json:"type"`
 	Value *json.RawMessage `json:"value"`
 }
 
 func (d DocumentContainer) MarshalJSON() ([]byte, error) {
-	dw, err := d.ToRawEnvelope()
+	dw, err := d.raw()
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (d DocumentContainer) MarshalJSON() ([]byte, error) {
 }
 
 func (d *DocumentContainer) UnmarshalJSON(b []byte) error {
-	dw := DocumentContainerWrapper{}
+	dw := rawDocumentContainer{}
 	err := json.Unmarshal(b, &dw)
 	if err != nil {
 		return err
@@ -85,14 +85,14 @@ func (d *DocumentContainer) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (d *DocumentContainer) ToRawEnvelope() (DocumentContainerWrapper, error) {
-	dw := DocumentContainerWrapper{
+func (d *DocumentContainer) raw() (rawDocumentContainer, error) {
+	dw := rawDocumentContainer{
 		Type: &d.Type,
 	}
 
 	b, err := json.Marshal(d.Value)
 	if err != nil {
-		return DocumentContainerWrapper{}, err
+		return rawDocumentContainer{}, err
 	}
 	r := json.RawMessage(b)
 	dw.Value = &r
@@ -100,18 +100,18 @@ func (d *DocumentContainer) ToRawEnvelope() (DocumentContainerWrapper, error) {
 	return dw, nil
 }
 
-func (d *DocumentContainer) populate(dw *DocumentContainerWrapper) error {
+func (d *DocumentContainer) populate(raw *rawDocumentContainer) error {
 	// Create the document type instance and unmarshal the json to it
-	if dw.Type == nil {
+	if raw.Type == nil {
 		return errors.New("document type is required")
 	}
 
-	document, err := UnmarshalDocument(dw.Value, *dw.Type)
+	document, err := UnmarshalDocument(raw.Value, *raw.Type)
 	if err != nil {
 		return err
 	}
 
-	d.Type = *dw.Type
+	d.Type = *raw.Type
 	d.Value = document
 	return nil
 }
@@ -131,30 +131,30 @@ func (d *DocumentCollection) GetMediaType() MediaType {
 	return MediaType{MediaTypeApplication, "vnd.lime.collection", "json"}
 }
 
-// DocumentCollectionWrapper is a wrapper for custom marshalling
-type DocumentCollectionWrapper struct {
+// rawDocumentCollection is a wrapper for custom marshalling
+type rawDocumentCollection struct {
 	Total    int                `json:"total,omitempty"`
 	ItemType *MediaType         `json:"itemType"`
 	Items    []*json.RawMessage `json:"items"`
 }
 
 func (d DocumentCollection) MarshalJSON() ([]byte, error) {
-	dw, err := d.ToRawEnvelope()
+	raw, err := d.raw()
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(dw)
+	return json.Marshal(raw)
 }
 
 func (d *DocumentCollection) UnmarshalJSON(b []byte) error {
-	dw := DocumentCollectionWrapper{}
-	err := json.Unmarshal(b, &dw)
+	raw := rawDocumentCollection{}
+	err := json.Unmarshal(b, &raw)
 	if err != nil {
 		return err
 	}
 
 	documentCollection := DocumentCollection{}
-	err = documentCollection.populate(&dw)
+	err = documentCollection.populate(&raw)
 	if err != nil {
 		return err
 	}
@@ -163,39 +163,39 @@ func (d *DocumentCollection) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (d *DocumentCollection) ToRawEnvelope() (DocumentCollectionWrapper, error) {
-	dw := DocumentCollectionWrapper{
+func (d *DocumentCollection) raw() (rawDocumentCollection, error) {
+	raw := rawDocumentCollection{
 		ItemType: &d.ItemType,
 		Total:    d.Total,
 	}
 
 	if d.Items != nil {
-		dw.Items = make([]*json.RawMessage, len(d.Items))
+		raw.Items = make([]*json.RawMessage, len(d.Items))
 
 		for i, v := range d.Items {
 			b, err := json.Marshal(v)
 			if err != nil {
-				return DocumentCollectionWrapper{}, err
+				return rawDocumentCollection{}, err
 			}
 			r := json.RawMessage(b)
-			dw.Items[i] = &r
+			raw.Items[i] = &r
 		}
 	}
 
-	return dw, nil
+	return raw, nil
 }
 
-func (d *DocumentCollection) populate(dw *DocumentCollectionWrapper) error {
+func (d *DocumentCollection) populate(raw *rawDocumentCollection) error {
 	// Create the document type instance and unmarshal the json to it
-	if dw.ItemType == nil {
+	if raw.ItemType == nil {
 		return errors.New("document collection item type is required")
 	}
 
-	if dw.Items != nil {
-		d.Items = make([]Document, len(dw.Items))
+	if raw.Items != nil {
+		d.Items = make([]Document, len(raw.Items))
 
-		for i, v := range dw.Items {
-			document, err := UnmarshalDocument(v, *dw.ItemType)
+		for i, v := range raw.Items {
+			document, err := UnmarshalDocument(v, *raw.ItemType)
 			if err != nil {
 				return err
 			}
@@ -204,8 +204,8 @@ func (d *DocumentCollection) populate(dw *DocumentCollectionWrapper) error {
 		}
 	}
 
-	d.ItemType = *dw.ItemType
-	d.Total = dw.Total
+	d.ItemType = *raw.ItemType
+	d.Total = raw.Total
 
 	return nil
 }

@@ -44,7 +44,7 @@ func (c *Command) SetStatusFailure(r Reason) {
 }
 
 func (c *Command) MarshalJSON() ([]byte, error) {
-	raw, err := c.ToRawEnvelope()
+	raw, err := c.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -52,14 +52,14 @@ func (c *Command) MarshalJSON() ([]byte, error) {
 }
 
 func (c *Command) UnmarshalJSON(b []byte) error {
-	raw := RawEnvelope{}
+	raw := rawEnvelope{}
 	err := json.Unmarshal(b, &raw)
 	if err != nil {
 		return err
 	}
 
 	command := Command{}
-	err = command.Populate(&raw)
+	err = command.populate(&raw)
 	if err != nil {
 		return err
 	}
@@ -68,8 +68,8 @@ func (c *Command) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (c *Command) ToRawEnvelope() (*RawEnvelope, error) {
-	raw, err := c.EnvelopeBase.ToRawEnvelope()
+func (c *Command) toRawEnvelope() (*rawEnvelope, error) {
+	raw, err := c.EnvelopeBase.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -96,8 +96,8 @@ func (c *Command) ToRawEnvelope() (*RawEnvelope, error) {
 	return raw, nil
 }
 
-func (c *Command) Populate(raw *RawEnvelope) error {
-	err := c.EnvelopeBase.Populate(raw)
+func (c *Command) populate(raw *rawEnvelope) error {
+	err := c.EnvelopeBase.populate(raw)
 	if err != nil {
 		return err
 	}

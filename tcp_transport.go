@@ -146,7 +146,7 @@ func (t *TCPTransport) Receive(ctx context.Context) (Envelope, error) {
 		return nil, err
 	}
 
-	var raw RawEnvelope
+	var raw rawEnvelope
 
 	// TODO: Handle context <-Done() signal
 	if err := t.decoder.Decode(&raw); err != nil {

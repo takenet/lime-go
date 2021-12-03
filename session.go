@@ -46,7 +46,7 @@ func (s *Session) SetAuthentication(a Authentication) {
 }
 
 func (s *Session) MarshalJSON() ([]byte, error) {
-	raw, err := s.ToRawEnvelope()
+	raw, err := s.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -54,14 +54,14 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 }
 
 func (s *Session) UnmarshalJSON(b []byte) error {
-	raw := RawEnvelope{}
+	raw := rawEnvelope{}
 	err := json.Unmarshal(b, &raw)
 	if err != nil {
 		return err
 	}
 
 	session := Session{}
-	err = session.Populate(&raw)
+	err = session.populate(&raw)
 	if err != nil {
 		return err
 	}
@@ -70,8 +70,8 @@ func (s *Session) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (s *Session) ToRawEnvelope() (*RawEnvelope, error) {
-	raw, err := s.EnvelopeBase.ToRawEnvelope()
+func (s *Session) toRawEnvelope() (*rawEnvelope, error) {
+	raw, err := s.EnvelopeBase.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +110,8 @@ func (s *Session) ToRawEnvelope() (*RawEnvelope, error) {
 	return raw, nil
 }
 
-func (s *Session) Populate(raw *RawEnvelope) error {
-	err := s.EnvelopeBase.Populate(raw)
+func (s *Session) populate(raw *rawEnvelope) error {
+	err := s.EnvelopeBase.populate(raw)
 	if err != nil {
 		return err
 	}
