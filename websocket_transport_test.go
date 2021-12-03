@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func createWebsocketListener(ctx context.Context, t *testing.T, addr net.Addr, transportChan chan Transport) *WebsocketTransportListener {
+func createWebsocketListener(ctx context.Context, t testing.TB, addr net.Addr, transportChan chan Transport) *WebsocketTransportListener {
 	listener := &WebsocketTransportListener{}
 	if err := listener.Listen(ctx, addr); err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func listenTransports(transportChan chan Transport, listener TransportListener) 
 	}
 }
 
-func createWebsocketListenerTLS(ctx context.Context, t *testing.T, addr net.Addr, transportChan chan Transport) *WebsocketTransportListener {
+func createWebsocketListenerTLS(ctx context.Context, t testing.TB, addr net.Addr, transportChan chan Transport) *WebsocketTransportListener {
 	listener := &WebsocketTransportListener{}
 	listener.TLSConfig = &tls.Config{
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
@@ -53,7 +53,7 @@ func createWebsocketListenerTLS(ctx context.Context, t *testing.T, addr net.Addr
 	return listener
 }
 
-func createClientWebsocketTransport(ctx context.Context, t *testing.T, urlStr string) Transport {
+func createClientWebsocketTransport(ctx context.Context, t testing.TB, urlStr string) Transport {
 	client, err := DialWebsocket(ctx, urlStr, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +62,7 @@ func createClientWebsocketTransport(ctx context.Context, t *testing.T, urlStr st
 	return client
 }
 
-func createClientWebsocketTransportTLS(ctx context.Context, t *testing.T, addr string) Transport {
+func createClientWebsocketTransportTLS(ctx context.Context, t testing.TB, addr string) Transport {
 	client, err := DialWebsocket(ctx, addr, nil, &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true})
 	if err != nil {
 		t.Fatal(err)
@@ -291,4 +291,90 @@ func TestWebsocketTransport_Receive_SessionTLS(t *testing.T) {
 	received, ok := e.(*Session)
 	assert.True(t, ok)
 	assert.Equal(t, s, received)
+}
+
+func BenchmarkWebsocketTransport_Send_Message(b *testing.B) {
+	// Arrange
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	addr := createWSAddr()
+	var transportChan = make(chan Transport)
+	listener := createWebsocketListener(ctx, b, addr, transportChan)
+	defer listener.Close()
+	url := fmt.Sprintf("ws://%s", addr)
+	client := createClientWebsocketTransport(ctx, b, url)
+	server := receiveTransport(b, transportChan)
+	messages := make([]*Message, b.N)
+	for i := 0; i < len(messages); i++ {
+		messages[i] = createMessage()
+	}
+	errChan := make(chan error)
+	done := make(chan bool)
+	b.ResetTimer()
+
+	// Act
+	go func() {
+		for i := 0; i < b.N; i++ {
+			_, err := server.Receive(ctx)
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}
+		done <- true
+	}()
+	for _, m := range messages {
+		_ = client.Send(ctx, m)
+	}
+	select {
+	case <-ctx.Done():
+		b.Fatal(ctx.Err())
+	case err := <-errChan:
+		b.Fatal(err)
+	case <-done:
+		break
+	}
+}
+
+func BenchmarkWebsocketTransport_Send_MessageTLS(b *testing.B) {
+	// Arrange
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	addr := createWSAddr()
+	var transportChan = make(chan Transport)
+	listener := createWebsocketListenerTLS(ctx, b, addr, transportChan)
+	defer listener.Close()
+	url := fmt.Sprintf("wss://%s", addr)
+	client := createClientWebsocketTransportTLS(ctx, b, url)
+	server := receiveTransport(b, transportChan)
+	messages := make([]*Message, b.N)
+	for i := 0; i < len(messages); i++ {
+		messages[i] = createMessage()
+	}
+	errChan := make(chan error)
+	done := make(chan bool)
+	b.ResetTimer()
+
+	// Act
+	go func() {
+		for i := 0; i < b.N; i++ {
+			_, err := server.Receive(ctx)
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}
+		done <- true
+	}()
+	for _, m := range messages {
+		_ = client.Send(ctx, m)
+	}
+	select {
+	case <-ctx.Done():
+		b.Fatal(ctx.Err())
+	case err := <-errChan:
+		b.Fatal(err)
+	case <-done:
+		break
+	}
 }

@@ -116,26 +116,25 @@ func TestChannel_SendMessage_Batch(t *testing.T) {
 
 func BenchmarkChannel_SendMessage(b *testing.B) {
 	// Arrange
-	count := b.N
-	client, server := newInProcessTransportPair("localhost", 1)
-	c := newChannel(client, 1)
+	client, server := newInProcessTransportPair("localhost", 0)
+	c := newChannel(client, 0)
 	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	messages := make([]*Message, count)
-	for i := 0; i < count; i++ {
+	messages := make([]*Message, b.N)
+	for i := 0; i < len(messages); i++ {
 		messages[i] = createMessage()
 	}
-	errchan := make(chan error)
+	errChan := make(chan error)
 	done := make(chan bool)
 	b.ResetTimer()
 
 	// Act
 	go func() {
-		for i := 0; i < count; i++ {
+		for i := 0; i < b.N; i++ {
 			_, err := server.Receive(ctx)
 			if err != nil {
-				errchan <- err
+				errChan <- err
 				return
 			}
 		}
@@ -145,7 +144,9 @@ func BenchmarkChannel_SendMessage(b *testing.B) {
 		_ = c.SendMessage(ctx, m)
 	}
 	select {
-	case err := <-errchan:
+	case <-ctx.Done():
+		b.Fatal(ctx.Err())
+	case err := <-errChan:
 		b.Fatal(err)
 	case <-done:
 		break
@@ -370,14 +371,13 @@ func TestChannel_SendNotification_Batch(t *testing.T) {
 
 func BenchmarkChannel_SendNotification(b *testing.B) {
 	// Arrange
-	count := b.N
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	notifications := make([]*Notification, count)
-	for i := 0; i < count; i++ {
+	notifications := make([]*Notification, b.N)
+	for i := 0; i < len(notifications); i++ {
 		notifications[i] = createNotification()
 	}
 	errchan := make(chan error)
@@ -386,7 +386,7 @@ func BenchmarkChannel_SendNotification(b *testing.B) {
 
 	// Act
 	go func() {
-		for i := 0; i < count; i++ {
+		for i := 0; i < b.N; i++ {
 			_, err := server.Receive(ctx)
 			if err != nil {
 				errchan <- err
@@ -399,6 +399,8 @@ func BenchmarkChannel_SendNotification(b *testing.B) {
 		_ = c.SendNotification(ctx, n)
 	}
 	select {
+	case <-ctx.Done():
+		b.Fatal(ctx.Err())
 	case err := <-errchan:
 		b.Fatal(err)
 	case <-done:
@@ -624,14 +626,13 @@ func TestChannel_SendCommand_Batch(t *testing.T) {
 
 func BenchmarkChannel_SendCommand(b *testing.B) {
 	// Arrange
-	count := b.N
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	commands := make([]*Command, count)
-	for i := 0; i < count; i++ {
+	commands := make([]*Command, b.N)
+	for i := 0; i < len(commands); i++ {
 		commands[i] = createGetPingCommand()
 	}
 	errchan := make(chan error)
@@ -640,7 +641,7 @@ func BenchmarkChannel_SendCommand(b *testing.B) {
 
 	// Act
 	go func() {
-		for i := 0; i < count; i++ {
+		for i := 0; i < b.N; i++ {
 			_, err := server.Receive(ctx)
 			if err != nil {
 				errchan <- err
@@ -653,6 +654,8 @@ func BenchmarkChannel_SendCommand(b *testing.B) {
 		_ = c.SendCommand(ctx, cmd)
 	}
 	select {
+	case <-ctx.Done():
+		b.Fatal(ctx.Err())
 	case err := <-errchan:
 		b.Fatal(err)
 	case <-done:

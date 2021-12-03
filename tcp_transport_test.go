@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-func createTCPListener(t *testing.T, addr net.Addr, transportChan chan Transport) *TCPTransportListener {
+func createTCPListener(t testing.TB, addr net.Addr, transportChan chan Transport) *TCPTransportListener {
 	listener := TCPTransportListener{}
 	if err := listener.Listen(context.Background(), addr); err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func createTCPListener(t *testing.T, addr net.Addr, transportChan chan Transport
 	return &listener
 }
 
-func createTCPListenerTLS(t *testing.T, addr net.Addr, transportChan chan Transport) *TCPTransportListener {
+func createTCPListenerTLS(t testing.TB, addr net.Addr, transportChan chan Transport) *TCPTransportListener {
 	listener := createTCPListener(t, addr, transportChan)
 	listener.TLSConfig = &tls.Config{
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
@@ -50,7 +50,7 @@ func createTCPListenerTLS(t *testing.T, addr net.Addr, transportChan chan Transp
 	return listener
 }
 
-func createClientTCPTransport(t *testing.T, addr net.Addr) *TCPTransport {
+func createClientTCPTransport(t testing.TB, addr net.Addr) *TCPTransport {
 	client, err := DialTcp(context.Background(), addr, &tls.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -59,13 +59,13 @@ func createClientTCPTransport(t *testing.T, addr net.Addr) *TCPTransport {
 	return client
 }
 
-func createClientTCPTransportTLS(t *testing.T, addr net.Addr) *TCPTransport {
+func createClientTCPTransportTLS(t testing.TB, addr net.Addr) *TCPTransport {
 	client := createClientTCPTransport(t, addr)
 	client.TLSConfig = &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true}
 	return client
 }
 
-func receiveTransport(t *testing.T, transportChan chan Transport) Transport {
+func receiveTransport(t testing.TB, transportChan chan Transport) Transport {
 	select {
 	case s := <-transportChan:
 		return s
@@ -377,4 +377,91 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 	received, ok := e.(*Session)
 	assert.True(t, ok)
 	assert.Equal(t, s, received)
+}
+
+func BenchmarkTCPTransport_Send_Message(b *testing.B) {
+	// Arrange
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	addr := createTCPAddress()
+	var transportChan = make(chan Transport, 1)
+	listener := createTCPListener(b, addr, transportChan)
+	defer listener.Close()
+	client := createClientTCPTransport(b, createTCPAddress())
+	server := receiveTransport(b, transportChan)
+	messages := make([]*Message, b.N)
+	for i := 0; i < len(messages); i++ {
+		messages[i] = createMessage()
+	}
+	errChan := make(chan error)
+	done := make(chan bool)
+	b.ResetTimer()
+
+	// Act
+	go func() {
+		for i := 0; i < b.N; i++ {
+			_, err := server.Receive(ctx)
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}
+		done <- true
+	}()
+	for _, m := range messages {
+		_ = client.Send(ctx, m)
+	}
+	select {
+	case <-ctx.Done():
+		b.Fatal(ctx.Err())
+	case err := <-errChan:
+		b.Fatal(err)
+	case <-done:
+		break
+	}
+}
+
+func BenchmarkTCPTransport_Send_MessageTLS(b *testing.B) {
+	// Arrange
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	addr := createTCPAddress()
+	var transportChan = make(chan Transport, 1)
+	listener := createTCPListenerTLS(b, addr, transportChan)
+	defer listener.Close()
+	client := createClientTCPTransportTLS(b, createTCPAddress())
+	server := receiveTransport(b, transportChan)
+	if err := doTLSHandshake(ctx, server, client); err != nil {
+		b.Fatal(err)
+	}
+	messages := make([]*Message, b.N)
+	for i := 0; i < len(messages); i++ {
+		messages[i] = createMessage()
+	}
+	errChan := make(chan error)
+	done := make(chan bool)
+	b.ResetTimer()
+
+	// Act
+	go func() {
+		for i := 0; i < b.N; i++ {
+			_, err := server.Receive(ctx)
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}
+		done <- true
+	}()
+	for _, m := range messages {
+		_ = client.Send(ctx, m)
+	}
+	select {
+	case <-ctx.Done():
+		b.Fatal(ctx.Err())
+	case err := <-errChan:
+		b.Fatal(err)
+	case <-done:
+		break
+	}
 }
