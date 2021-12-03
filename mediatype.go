@@ -15,17 +15,18 @@ const (
 	MediaTypeVideo       = "video"
 )
 
-// MediaType MIME media type representation.
+// MediaType represents a MIME type.
 type MediaType struct {
-	// Type The top-level type identifier. The valid values are text, application, image, audio and video.
+	// Type is the top-level type identifier.
+	// The valid values are text, application, image, audio and video.
 	Type string
-	// Subtype The media type subtype.
+	// Subtype is the MIME subtype.
 	Subtype string
-	// Suffix Media type suffix.
+	// Suffix is the MIME suffix.
 	Suffix string
 }
 
-// IsJson Indicates if the MIME represents a JSON type.
+// IsJson indicates if the MIME represents a JSON type.
 func (m MediaType) IsJson() bool {
 	return m.Suffix == "json"
 }
@@ -71,15 +72,16 @@ func (m *MediaType) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// Unexported to avoid changing
 var mediaTypeApplicationJson MediaType = MediaType{MediaTypeApplication, "json", ""}
 var mediaTypeTextPlain MediaType = MediaType{MediaTypeText, "plain", ""}
 var documentFactories = map[MediaType]func() Document{}
 
-func GetTextPlainMediaType() MediaType {
+func MediaTypeTextPlain() MediaType {
 	return mediaTypeTextPlain
 }
 
-func GetApplicationJsonMediaType() MediaType {
+func MediaTypeApplicationJson() MediaType {
 	return mediaTypeApplicationJson
 }
 

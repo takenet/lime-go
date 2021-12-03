@@ -31,18 +31,20 @@ type Document interface {
 type JsonDocument map[string]interface{}
 
 func (d *JsonDocument) GetMediaType() MediaType {
-	return mediaTypeApplicationJson
+	return MediaTypeApplicationJson()
 }
 
 // PlainDocument represents a plain document.
 type PlainDocument string
 
-func (d *PlainDocument) GetMediaType() MediaType {
-	return mediaTypeTextPlain
+func (d PlainDocument) GetMediaType() MediaType {
+	return MediaTypeTextPlain()
 }
 
-// DocumentContainer represents a generic container for a document, providing a media type for the correct handling of its value by the nodes.
-// This class can be used along with DocumentCollection to transport distinct document types in a single message.
+// DocumentContainer represents a generic container for a document,
+// providing a media type for the correct handling of its value by the nodes.
+// This type can be used along with DocumentCollection to transport distinct
+// document types in a single message.
 type DocumentContainer struct {
 	// The media type of the contained document.
 	Type MediaType
@@ -50,8 +52,19 @@ type DocumentContainer struct {
 	Value Document
 }
 
+func NewDocumentContainer(d Document) *DocumentContainer {
+	return &DocumentContainer{
+		Type:  d.GetMediaType(),
+		Value: d,
+	}
+}
+
 func (d *DocumentContainer) GetMediaType() MediaType {
-	return MediaType{MediaTypeApplication, "vnd.lime.container", "json"}
+	return MediaType{
+		MediaTypeApplication,
+		"vnd.lime.container",
+		"json",
+	}
 }
 
 // rawDocumentContainer is a wrapper for custom marshalling
@@ -69,14 +82,14 @@ func (d DocumentContainer) MarshalJSON() ([]byte, error) {
 }
 
 func (d *DocumentContainer) UnmarshalJSON(b []byte) error {
-	dw := rawDocumentContainer{}
-	err := json.Unmarshal(b, &dw)
+	raw := rawDocumentContainer{}
+	err := json.Unmarshal(b, &raw)
 	if err != nil {
 		return err
 	}
 
 	documentContainer := DocumentContainer{}
-	err = documentContainer.populate(&dw)
+	err = documentContainer.populate(&raw)
 	if err != nil {
 		return err
 	}
@@ -86,7 +99,7 @@ func (d *DocumentContainer) UnmarshalJSON(b []byte) error {
 }
 
 func (d *DocumentContainer) raw() (rawDocumentContainer, error) {
-	dw := rawDocumentContainer{
+	raw := rawDocumentContainer{
 		Type: &d.Type,
 	}
 
@@ -95,9 +108,9 @@ func (d *DocumentContainer) raw() (rawDocumentContainer, error) {
 		return rawDocumentContainer{}, err
 	}
 	r := json.RawMessage(b)
-	dw.Value = &r
+	raw.Value = &r
 
-	return dw, nil
+	return raw, nil
 }
 
 func (d *DocumentContainer) populate(raw *rawDocumentContainer) error {
@@ -119,9 +132,11 @@ func (d *DocumentContainer) populate(raw *rawDocumentContainer) error {
 // DocumentCollection represents a collection of documents.
 type DocumentCollection struct {
 	// The total of items in the collection.
-	// This value refers to the original source collection, without any applied filter that may exist in the items on this instance.
+	// This value refers to the original source collection,
+	// without any applied filter that may exist in the
+	// items on this instance.
 	Total int
-	// The media type of all items of the collection
+	// The media type of all items of the collection.
 	ItemType MediaType
 	// The collection items.
 	Items []Document

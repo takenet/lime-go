@@ -48,7 +48,7 @@ func TestMessage_MarshalJSON_TextUnknownPlain(t *testing.T) {
 	m.To.Domain = "limeprotocol.org"
 	m.To.Instance = "default"
 	var d PlainDocument = "Hello world"
-	m.Content = &d
+	m.Content = d
 	m.Type = MediaType{"text", "unknown", ""}
 
 	// Act
