@@ -159,105 +159,106 @@ type WebsocketTransportListener struct {
 	upgrader          *websocket.Upgrader
 	transportBuffer   int
 	transportChan     chan *websocketTransport
+	done              chan bool
 	errChan           chan error
 	mu                sync.Mutex
 }
 
-func (t *WebsocketTransportListener) Listen(ctx context.Context, addr net.Addr) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (l *WebsocketTransportListener) Listen(ctx context.Context, addr net.Addr) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-	if t.srv != nil {
+	if l.srv != nil {
 		return errors.New("ws listener already started")
 	}
 
 	var lc net.ListenConfig
-	l, err := lc.Listen(ctx, "tcp", addr.String())
+	ln, err := lc.Listen(ctx, "tcp", addr.String())
 	if err != nil {
 		return err
 	}
 
-	t.transportChan = make(chan *websocketTransport, t.transportBuffer)
-	t.errChan = make(chan error)
-	t.upgrader = &websocket.Upgrader{
+	l.transportChan = make(chan *websocketTransport, l.transportBuffer)
+	l.done = make(chan bool)
+	l.errChan = make(chan error)
+	l.upgrader = &websocket.Upgrader{
 		Subprotocols:      []string{"lime"},
-		EnableCompression: t.EnableCompression,
+		EnableCompression: l.EnableCompression,
 	}
 	srv := &http.Server{
 		Addr:      addr.String(),
-		Handler:   t,
-		TLSConfig: t.TLSConfig,
+		Handler:   l,
+		TLSConfig: l.TLSConfig,
 	}
-	t.srv = srv
+	l.srv = srv
 
 	go func() {
-		if t.tls() {
-			if err := srv.ServeTLS(l, t.CertFile, t.KeyFile); err != nil {
-				t.errChan <- fmt.Errorf("ws listener: %w", err)
-				_ = t.Close()
-				return
+		if l.tls() {
+			if err := srv.ServeTLS(ln, l.CertFile, l.KeyFile); err != nil {
+				l.errChan <- fmt.Errorf("ws listener: %w", err)
 			}
 		} else {
-			if err := srv.Serve(l); err != nil {
-				t.errChan <- fmt.Errorf("ws listener: %w", err)
-				_ = t.Close()
-				return
+			if err := srv.Serve(ln); err != nil {
+				l.errChan <- fmt.Errorf("ws listener: %w", err)
 			}
 		}
+		_ = l.Close()
 	}()
 
 	return nil
 }
 
-func (t *WebsocketTransportListener) tls() bool {
-	return t.TLSConfig != nil || (t.CertFile != "" && t.KeyFile != "")
+func (l *WebsocketTransportListener) tls() bool {
+	return l.TLSConfig != nil || (l.CertFile != "" && l.KeyFile != "")
 }
 
-func (t *WebsocketTransportListener) Accept(ctx context.Context) (Transport, error) {
-	if err := t.ensureStarted(); err != nil {
+func (l *WebsocketTransportListener) Accept(ctx context.Context) (Transport, error) {
+	if err := l.ensureStarted(); err != nil {
 		return nil, err
 	}
 
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("ws listener: %w", ctx.Err())
-	case err := <-t.errChan:
+	case <-l.done:
+		return nil, errors.New("ws listener closed")
+	case err := <-l.errChan:
 		return nil, err
-	case t, ok := <-t.transportChan:
+	case transport, ok := <-l.transportChan:
 		if !ok {
 			return nil, errors.New("ws listener closed")
 		}
-		return t, nil
+		return transport, nil
 	}
 }
 
-func (t *WebsocketTransportListener) Close() error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (l *WebsocketTransportListener) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-	if err := t.ensureStarted(); err != nil {
+	if err := l.ensureStarted(); err != nil {
 		return err
 	}
 
-	if err := t.srv.Close(); err != nil {
+	if err := l.srv.Close(); err != nil {
 		return err
 	}
 
-	t.srv = nil
-	close(t.transportChan)
+	l.srv = nil
+	close(l.done)
 	return nil
 }
 
-func (t *WebsocketTransportListener) ensureStarted() error {
-	if t.srv == nil {
+func (l *WebsocketTransportListener) ensureStarted() error {
+	if l.srv == nil {
 		return errors.New("ws listener: listener is not started")
 	}
 
 	return nil
 }
 
-func (t *WebsocketTransportListener) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	conn, err := t.upgrader.Upgrade(writer, request, nil)
+func (l *WebsocketTransportListener) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	conn, err := l.upgrader.Upgrade(writer, request, nil)
 	if err != nil {
 		log.Println(err)
 		return
@@ -268,11 +269,11 @@ func (t *WebsocketTransportListener) ServeHTTP(writer http.ResponseWriter, reque
 		c:    SessionCompressionNone,
 	}
 
-	if t.tls() {
+	if l.tls() {
 		ws.e = SessionEncryptionTLS
 	} else {
 		ws.e = SessionEncryptionNone
 	}
 
-	t.transportChan <- ws
+	l.transportChan <- ws
 }
