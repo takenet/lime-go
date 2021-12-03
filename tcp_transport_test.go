@@ -156,7 +156,7 @@ func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer listener.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -172,7 +172,7 @@ func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -191,7 +191,7 @@ func TestTCPTransport_Dial_AfterListenerClosed(t *testing.T) {
 	if err := listener.Close(); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -253,7 +253,7 @@ func TestTCPTransport_SetEncryption_None(t *testing.T) {
 	listener := createTCPListener(t, addr, nil)
 	defer listener.Close()
 	client := createClientTCPTransport(t, createTCPAddress())
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -272,7 +272,7 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	defer listener.Close()
 	client := createClientTCPTransportTLS(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	if err := doTLSHandshake(ctx, server, client); err != nil {
 		t.Fatal(err)
@@ -293,7 +293,7 @@ func TestTCPTransport_Send_Session(t *testing.T) {
 	defer listener.Close()
 	client := createClientTCPTransport(t, createTCPAddress())
 	s := createSession()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -312,7 +312,7 @@ func TestTCPTransport_Receive_Session(t *testing.T) {
 	client := createClientTCPTransport(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
 	s := createSession()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	if err := client.Send(ctx, s); err != nil {
 		t.Fatal(err)
@@ -336,7 +336,7 @@ func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 	defer listener.Close()
 	client := createClientTCPTransportTLS(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	if err := doTLSHandshake(ctx, server, client); err != nil {
 		t.Fatal(err)
@@ -358,7 +358,7 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 	defer listener.Close()
 	client := createClientTCPTransportTLS(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	if err := doTLSHandshake(ctx, server, client); err != nil {
 		t.Fatal(err)

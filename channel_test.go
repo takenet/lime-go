@@ -53,7 +53,7 @@ func TestChannel_SendMessage_WhenEstablished(t *testing.T) {
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
 	m := createMessage()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -72,7 +72,7 @@ func TestChannel_SendMessage_Batch(t *testing.T) {
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	messages := make([]*Message, count)
 	for i := 0; i < count; i++ {
@@ -161,7 +161,7 @@ func TestChannel_SendMessage_NoBuffer(t *testing.T) {
 	m1 := createMessage() // Will wait in the transport chan
 	m2 := createMessage() // Will not be sent
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	_ = c.SendMessage(ctx, m1)
 
 	// Act
@@ -171,7 +171,7 @@ func TestChannel_SendMessage_NoBuffer(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "send message: context deadline exceeded", err.Error())
 	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	actual, err := server.Receive(ctx)
 	assert.NoError(t, err)
@@ -186,7 +186,7 @@ func TestChannel_SendMessage_FullBuffer(t *testing.T) {
 	m1 := createMessage() // Will wait in the transport chan
 	m2 := createMessage() // Will wait in the channel buffer
 	m3 := createMessage() // Will not be sent
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	_ = c.SendMessage(ctx, m1)
 	_ = c.SendMessage(ctx, m2)
 
@@ -197,7 +197,7 @@ func TestChannel_SendMessage_FullBuffer(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "send message: context deadline exceeded", err.Error())
 	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	actual1, err := server.Receive(ctx)
 	assert.NoError(t, err)
@@ -213,7 +213,7 @@ func TestChannel_SendMessage_NilMessage(t *testing.T) {
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
 	var m *Message = nil
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act / Assert
@@ -227,7 +227,7 @@ func TestChannel_SendMessage_WhenNew(t *testing.T) {
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	m := createMessage()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -244,7 +244,7 @@ func TestChannel_ReceiveMessage_WhenEstablished(t *testing.T) {
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
 	m := createMessage()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	_ = server.Send(ctx, m)
 
@@ -286,12 +286,12 @@ func receiveMessageWithState(t *testing.T, state SessionState) {
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		c.setState(state)
 	}()
 	actual, err := c.ReceiveMessage(ctx)
@@ -308,7 +308,7 @@ func TestChannel_SendNotification_WhenEstablished(t *testing.T) {
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
 	n := createNotification()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -327,7 +327,7 @@ func TestChannel_SendNotification_Batch(t *testing.T) {
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	notifications := make([]*Notification, count)
 	for i := 0; i < count; i++ {
@@ -416,7 +416,7 @@ func TestChannel_SendNotification_NoBuffer(t *testing.T) {
 	m1 := createNotification() // Will wait in the transport chan
 	m2 := createNotification() // Will not be sent
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	_ = c.SendNotification(ctx, m1)
 
 	// Act
@@ -426,7 +426,7 @@ func TestChannel_SendNotification_NoBuffer(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "send notification: context deadline exceeded", err.Error())
 	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	actual, err := server.Receive(ctx)
 	assert.NoError(t, err)
@@ -441,7 +441,7 @@ func TestChannel_SendNotification_FullBuffer(t *testing.T) {
 	m1 := createNotification() // Will wait in the transport chan
 	m2 := createNotification() // Will wait in the channel buffer
 	m3 := createNotification() // Will not be sent
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	_ = c.SendNotification(ctx, m1)
 	_ = c.SendNotification(ctx, m2)
 
@@ -452,7 +452,7 @@ func TestChannel_SendNotification_FullBuffer(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "send notification: context deadline exceeded", err.Error())
 	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	actual1, err := server.Receive(ctx)
 	assert.NoError(t, err)
@@ -468,7 +468,7 @@ func TestChannel_SendNotification_NilNotification(t *testing.T) {
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
 	var n *Notification = nil
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act / Assert
@@ -482,7 +482,7 @@ func TestChannel_SendNotification_WhenNew(t *testing.T) {
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	n := createNotification()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -499,7 +499,7 @@ func TestChannel_ReceiveNotification_WhenEstablished(t *testing.T) {
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
 	n := createNotification()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	_ = server.Send(ctx, n)
 
@@ -541,12 +541,12 @@ func receiveNotificationWithState(t *testing.T, state SessionState) {
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		c.setState(state)
 	}()
 	actual, err := c.ReceiveNotification(ctx)
@@ -563,7 +563,7 @@ func TestChannel_SendCommand_WhenEstablished(t *testing.T) {
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
 	cmd := createGetPingCommand()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -582,7 +582,7 @@ func TestChannel_SendCommand_Batch(t *testing.T) {
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	commands := make([]*Command, count)
 	for i := 0; i < count; i++ {
@@ -671,7 +671,7 @@ func TestChannel_SendCommand_NoBuffer(t *testing.T) {
 	m1 := createGetPingCommand() // Will wait in the transport chan
 	m2 := createGetPingCommand() // Will not be sent
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	_ = c.SendCommand(ctx, m1)
 
 	// Act
@@ -681,7 +681,7 @@ func TestChannel_SendCommand_NoBuffer(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "send command: context deadline exceeded", err.Error())
 	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	actual, err := server.Receive(ctx)
 	assert.NoError(t, err)
@@ -696,7 +696,7 @@ func TestChannel_SendCommand_FullBuffer(t *testing.T) {
 	m1 := createGetPingCommand() // Will wait in the transport chan
 	m2 := createGetPingCommand() // Will wait in the channel buffer
 	m3 := createGetPingCommand() // Will not be sent
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	_ = c.SendCommand(ctx, m1)
 	_ = c.SendCommand(ctx, m2)
 
@@ -707,7 +707,7 @@ func TestChannel_SendCommand_FullBuffer(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "send command: context deadline exceeded", err.Error())
 	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	actual1, err := server.Receive(ctx)
 	assert.NoError(t, err)
@@ -723,7 +723,7 @@ func TestChannel_SendCommand_NilCommand(t *testing.T) {
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
 	var cmd *Command = nil
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act / Assert
@@ -737,7 +737,7 @@ func TestChannel_SendCommand_WhenNew(t *testing.T) {
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	cmd := createGetPingCommand()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -754,7 +754,7 @@ func TestChannel_ReceiveCommand_WhenEstablished(t *testing.T) {
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
 	cmd := createGetPingCommand()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	_ = server.Send(ctx, cmd)
 
@@ -796,12 +796,12 @@ func receiveCommandWithState(t *testing.T, state SessionState) {
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		c.setState(state)
 	}()
 	actual, err := c.ReceiveCommand(ctx)
@@ -819,7 +819,7 @@ func TestChannel_ProcessCommand(t *testing.T) {
 	c.setState(SessionStateEstablished)
 	reqCmd := createGetPingCommand()
 	respCmd := createResponseCommand()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	go func() {
@@ -846,7 +846,7 @@ func TestChannel_ProcessCommand_WhenContextCancelled(t *testing.T) {
 	c := newChannel(client, 1)
 	c.setState(SessionStateEstablished)
 	reqCmd := createGetPingCommand()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act
@@ -866,7 +866,7 @@ func TestChannel_ProcessCommand_ResponseWithAnotherId(t *testing.T) {
 	reqCmd := createGetPingCommand()
 	respCmd := createResponseCommand()
 	respCmd.ID = "other-id"
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	go func() {
 		_, err := server.Receive(ctx)
@@ -885,7 +885,7 @@ func TestChannel_ProcessCommand_ResponseWithAnotherId(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "process command: context deadline exceeded", err.Error())
 	assert.Nil(t, actual)
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	actualRespCmd, err := c.ReceiveCommand(ctx)
 	assert.NoError(t, err)

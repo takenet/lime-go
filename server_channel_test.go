@@ -17,7 +17,7 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
@@ -125,7 +125,7 @@ func TestServerChannel_FailSession(t *testing.T) {
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	c.setState(SessionStateEstablished)
 	r := &Reason{

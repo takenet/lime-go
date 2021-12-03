@@ -122,6 +122,7 @@ func TestInProcessTransport_Send_Session(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 }
+
 func TestInProcessTransport_Receive_Session(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
@@ -131,7 +132,7 @@ func TestInProcessTransport_Receive_Session(t *testing.T) {
 	client := createClientInProcessTransport(t, addr)
 	server := receiveTransport(t, transportChan)
 	s := createSession()
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancelFunc()
 	if err := client.Send(ctx, s); err != nil {
 		t.Fatal(err)

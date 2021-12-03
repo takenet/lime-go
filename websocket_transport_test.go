@@ -79,7 +79,7 @@ func createWSAddr() net.Addr {
 
 func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	url := fmt.Sprintf("ws://%s", addr)
@@ -97,7 +97,7 @@ func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
 
 func TestWebsocketTransport_Dial_WhenNotListening(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	url := fmt.Sprintf("ws://%s", addr)
@@ -113,7 +113,7 @@ func TestWebsocketTransport_Dial_WhenNotListening(t *testing.T) {
 
 func TestWebsocketTransport_Dial_AfterListenerClosed(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	url := fmt.Sprintf("ws://%s", addr)
@@ -133,7 +133,7 @@ func TestWebsocketTransport_Dial_AfterListenerClosed(t *testing.T) {
 
 func TestWebsocketTransport_Close_WhenOpen(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
@@ -150,7 +150,7 @@ func TestWebsocketTransport_Close_WhenOpen(t *testing.T) {
 
 func TestWebsocketTransport_Close_WhenAlreadyClosed(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
@@ -171,7 +171,7 @@ func TestWebsocketTransport_Close_WhenAlreadyClosed(t *testing.T) {
 
 func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
@@ -189,7 +189,7 @@ func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
 
 func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
@@ -207,7 +207,7 @@ func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
 
 func TestWebsocketTransport_Send_Session(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
@@ -225,7 +225,7 @@ func TestWebsocketTransport_Send_Session(t *testing.T) {
 
 func TestWebsocketTransport_Receive_Session(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	var transportChan = make(chan Transport, 1)
@@ -251,7 +251,7 @@ func TestWebsocketTransport_Receive_Session(t *testing.T) {
 
 func TestWebsocketTransport_Send_SessionTLS(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
@@ -269,7 +269,7 @@ func TestWebsocketTransport_Send_SessionTLS(t *testing.T) {
 
 func TestWebsocketTransport_Receive_SessionTLS(t *testing.T) {
 	// Arrange
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
 	var transportChan = make(chan Transport, 1)
