@@ -68,7 +68,7 @@ func TestClientChannel_EstablishSession_WhenStateEstablished(t *testing.T) {
 	assert.Equal(t, clientNode, c.GetLocalNode())
 	assert.Equal(t, SessionStateEstablished, c.state)
 	assert.True(t, c.Established())
-	assert.True(t, c.transport.IsConnected())
+	assert.True(t, c.transport.Connected())
 }
 
 func TestClientChannel_EstablishSession_WhenStateFailed(t *testing.T) {
@@ -138,7 +138,7 @@ func TestClientChannel_EstablishSession_WhenStateFailed(t *testing.T) {
 	assert.Zero(t, c.GetLocalNode())
 	assert.Equal(t, SessionStateFailed, c.state)
 	assert.False(t, c.Established())
-	assert.False(t, c.transport.IsConnected())
+	assert.False(t, c.transport.Connected())
 }
 
 func TestClientChannel_FinishSession(t *testing.T) {
@@ -187,5 +187,5 @@ func TestClientChannel_FinishSession(t *testing.T) {
 	assert.Equal(t, SessionStateFinished, actual.State)
 	assert.Equal(t, SessionStateFinished, c.state)
 	assert.False(t, c.Established())
-	assert.False(t, c.transport.IsConnected())
+	assert.False(t, c.transport.Connected())
 }

@@ -62,7 +62,7 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 	assert.Equal(t, clientNode, c.GetRemoteNode())
 	assert.Equal(t, SessionStateEstablished, c.state)
 	assert.True(t, c.Established())
-	assert.True(t, c.transport.IsConnected())
+	assert.True(t, c.transport.Connected())
 }
 
 func TestServerChannel_FinishSession(t *testing.T) {
@@ -101,7 +101,7 @@ func TestServerChannel_FinishSession(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, SessionStateFinished, c.state)
 	assert.False(t, c.Established())
-	assert.False(t, c.transport.IsConnected())
+	assert.False(t, c.transport.Connected())
 	var s *Session
 	select {
 	case <-ctx.Done():
@@ -156,7 +156,7 @@ func TestServerChannel_FailSession(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, SessionStateFailed, c.state)
 	assert.False(t, c.Established())
-	assert.False(t, c.transport.IsConnected())
+	assert.False(t, c.transport.Connected())
 	var s *Session
 	select {
 	case <-ctx.Done():

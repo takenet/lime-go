@@ -92,7 +92,7 @@ func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
-	assert.True(t, client.IsConnected())
+	assert.True(t, client.Connected())
 }
 
 func TestWebsocketTransport_Dial_WhenNotListening(t *testing.T) {

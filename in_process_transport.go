@@ -5,28 +5,37 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 )
 
 type inProcessTransport struct {
-	remote  *inProcessTransport // The remote party
-	addr    InProcessAddr
-	envChan chan Envelope
-	done    chan bool
-	closed  bool
+	remote   *inProcessTransport // The remote party
+	addr     InProcessAddr
+	envChan  chan Envelope
+	done     chan bool
+	closed   bool
+	closedMu sync.RWMutex
 }
 
 func (t *inProcessTransport) Close() error {
+	t.closedMu.Lock()
+	defer t.closedMu.Unlock()
+
 	if !t.closed {
 		t.closed = true
 		t.done <- true
+	}
+
+	if !t.remote.closed {
 		// We are not closing the envChan here to avoid panics on Send method
 		return t.remote.Close()
 	}
+
 	return nil
 }
 
 func (t *inProcessTransport) Send(_ context.Context, e Envelope) error {
-	if t.closed {
+	if !t.Connected() {
 		return errors.New("transport is closed")
 	}
 	t.remote.envChan <- e
@@ -34,7 +43,7 @@ func (t *inProcessTransport) Send(_ context.Context, e Envelope) error {
 }
 
 func (t *inProcessTransport) Receive(ctx context.Context) (Envelope, error) {
-	if t.closed {
+	if !t.Connected() {
 		return nil, errors.New("transport is closed")
 	}
 	select {
@@ -87,23 +96,26 @@ func (t *inProcessTransport) SetEncryption(context.Context, SessionEncryption) e
 	return errors.New("encryption is not supported by in process transport")
 }
 
-func (t *inProcessTransport) IsConnected() bool {
+func (t *inProcessTransport) Connected() bool {
+	t.closedMu.RLock()
+	defer t.closedMu.RUnlock()
 	return !t.closed
 }
 
 func (t *inProcessTransport) LocalAddr() net.Addr {
-
-	panic("implement me")
+	return t.addr
 }
 
 func (t *inProcessTransport) RemoteAddr() net.Addr {
-	panic("implement me")
+	return t.remote.addr
 }
 
 type inProcessTransportListener struct {
 	addr       InProcessAddr
 	transports chan *inProcessTransport
 	done       chan bool
+	closed     bool
+	closedMu   sync.RWMutex
 }
 
 func NewInProcessTransportListener(addr InProcessAddr) TransportListener {
@@ -116,8 +128,10 @@ func NewInProcessTransportListener(addr InProcessAddr) TransportListener {
 }
 
 func (l *inProcessTransportListener) Close() error {
+	l.closedMu.Lock()
+	defer l.closedMu.Unlock()
 	delete(listeners, l.addr)
-	l.addr = ""
+	l.closed = true
 	l.done <- true
 	return nil
 }
@@ -141,7 +155,7 @@ func (l *inProcessTransportListener) Listen(ctx context.Context, addr net.Addr) 
 }
 
 func (l *inProcessTransportListener) Accept(ctx context.Context) (Transport, error) {
-	if l.addr == "" {
+	if !l.listening() {
 		return nil, errors.New("listener is not active")
 	}
 
@@ -153,6 +167,13 @@ func (l *inProcessTransportListener) Accept(ctx context.Context) (Transport, err
 	case t := <-l.transports:
 		return t, nil
 	}
+}
+
+func (l *inProcessTransportListener) listening() bool {
+	l.closedMu.RLock()
+	defer l.closedMu.RUnlock()
+
+	return !l.closed
 }
 
 func (l *inProcessTransportListener) newClient(addr InProcessAddr, bufferSize int) *inProcessTransport {

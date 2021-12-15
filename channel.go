@@ -68,6 +68,7 @@ type channel struct {
 	remoteNode Node
 	localNode  Node
 	state      SessionState
+	stateMu    sync.RWMutex
 	outChan    chan Envelope
 	inMsgChan  chan *Message
 	inNotChan  chan *Notification
@@ -102,7 +103,7 @@ func newChannel(t Transport, bufferSize int) *channel {
 }
 
 func (c *channel) Established() bool {
-	return c.state == SessionStateEstablished && c.transport.IsConnected()
+	return c.GetState() == SessionStateEstablished && c.transport.Connected()
 }
 
 func (c *channel) startGoroutines() {
@@ -114,6 +115,9 @@ func (c *channel) startGoroutines() {
 }
 
 func (c *channel) setState(state SessionState) {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+
 	if state.Step() < c.state.Step() {
 		panic(fmt.Errorf("cannot change from state %s to %s", c.state, state))
 	}
@@ -211,6 +215,8 @@ func (c *channel) GetLocalNode() Node {
 }
 
 func (c *channel) GetState() SessionState {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
 	return c.state
 }
 
@@ -219,8 +225,9 @@ func (c *channel) sendSession(ctx context.Context, ses *Session) error {
 		return err
 	}
 	// check the current channel state
-	if c.state == SessionStateFinished || c.state == SessionStateFailed {
-		return fmt.Errorf("send session: cannot do in the %v state", c.state)
+	state := c.GetState()
+	if state == SessionStateFinished || state == SessionStateFailed {
+		return fmt.Errorf("send session: cannot do in the %v state", state)
 	}
 
 	err := c.transport.Send(ctx, ses)
@@ -238,9 +245,11 @@ func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 		return nil, err
 	}
 
-	switch c.state {
+	state := c.GetState()
+
+	switch state {
 	case SessionStateFinished:
-		return nil, fmt.Errorf("receive session: cannot do in the %v state", c.state)
+		return nil, fmt.Errorf("receive session: cannot do in the %v state", state)
 	case SessionStateEstablished:
 		select {
 		case <-ctx.Done():
@@ -342,8 +351,9 @@ func (c *channel) ensureState(state SessionState, action string) error {
 		return err
 	}
 
-	if c.state != state {
-		return fmt.Errorf("%v: cannot do in the %v state", action, c.state)
+	s := c.GetState()
+	if s != state {
+		return fmt.Errorf("%v: cannot do in the %v state", action, s)
 	}
 	return nil
 }
@@ -353,7 +363,7 @@ func (c *channel) ensureTransportOK(action string) error {
 		return fmt.Errorf("%v: transport is nil", action)
 	}
 
-	if !c.transport.IsConnected() {
+	if !c.transport.Connected() {
 		return fmt.Errorf("%v: transport is not connected", action)
 	}
 	return nil

@@ -130,7 +130,7 @@ func (t *websocketTransport) SetEncryption(ctx context.Context, e SessionEncrypt
 	return nil
 }
 
-func (t *websocketTransport) IsConnected() bool {
+func (t *websocketTransport) Connected() bool {
 	return t.conn != nil
 }
 

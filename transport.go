@@ -19,7 +19,7 @@ type Transport interface {
 	GetSupportedEncryption() []SessionEncryption                    // GetSupportedEncryption enumerates the supported encryption options for the transport.
 	GetEncryption() SessionEncryption                               // GetEncryption gets the current transport encryption option.
 	SetEncryption(ctx context.Context, e SessionEncryption) error   // SetEncryption defines the encryption mode for the transport.
-	IsConnected() bool                                              // IsConnected indicates if the transport is connected.
+	Connected() bool                                                // Connected indicates if the transport is connected.
 	LocalAddr() net.Addr                                            // LocalAddr gets the local endpoint address.
 	RemoteAddr() net.Addr                                           // RemoteAddr gets the remote endpoint address.
 }
@@ -44,7 +44,7 @@ type StdoutTraceWriter struct {
 	receiveWriter io.Writer
 }
 
-func NewStdoutTraceWriter() *StdoutTraceWriter {
+func NewStdoutTraceWriter() TraceWriter {
 	sendReader, sendWriter := io.Pipe()
 	receiveReader, receiveWriter := io.Pipe()
 	sendDecoder := json.NewDecoder(sendReader)

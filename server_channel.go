@@ -244,7 +244,7 @@ func (c *ServerChannel) EstablishSession(
 	}
 
 	// If the channel state is not final at this point, fail the session
-	if c.state != SessionStateEstablished && c.state != SessionStateFailed && c.transport.IsConnected() {
+	if c.state != SessionStateEstablished && c.state != SessionStateFailed && c.transport.Connected() {
 		return c.FailSession(ctx, &Reason{
 			Code:        1,
 			Description: "The session establishment failed",
