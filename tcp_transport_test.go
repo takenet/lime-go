@@ -11,6 +11,7 @@ import (
 	"crypto/x509/pkix"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
+	"io"
 	"math/big"
 	"net"
 	"strings"
@@ -93,6 +94,7 @@ func receiveTransport(t testing.TB, transportChan chan Transport) Transport {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Transport listener timeout")
 	}
+	//goland:noinspection GoUnreachableCode
 	panic("something very wrong has occurred")
 }
 
@@ -103,8 +105,8 @@ func createTCPAddress() net.Addr {
 	}
 }
 
-func publicKey(priv interface{}) interface{} {
-	switch k := priv.(type) {
+func publicKey(p interface{}) interface{} {
+	switch k := p.(type) {
 	case *rsa.PrivateKey:
 		return &k.PublicKey
 	case *ecdsa.PrivateKey:
@@ -176,7 +178,7 @@ func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
-	defer listener.Close()
+	defer silentClose(listener)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
@@ -228,7 +230,7 @@ func TestTCPTransport_Close_WhenOpen(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientTCPTransport(t, createTCPAddress())
 
 	// Act
@@ -242,7 +244,7 @@ func TestTCPTransport_Close_WhenAlreadyClosed(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientTCPTransport(t, createTCPAddress())
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
@@ -272,7 +274,7 @@ func TestTCPTransport_SetEncryption_None(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientTCPTransport(t, createTCPAddress())
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -290,7 +292,7 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientTCPTransportTLS(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -311,7 +313,7 @@ func TestTCPTransport_Send_Session(t *testing.T) {
 	// Arrange
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientTCPTransport(t, createTCPAddress())
 	s := createSession()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -329,7 +331,7 @@ func TestTCPTransport_Receive_Session(t *testing.T) {
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListener(t, addr, transportChan)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientTCPTransport(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
 	s := createSession()
@@ -354,7 +356,7 @@ func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientTCPTransportTLS(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -376,7 +378,7 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientTCPTransportTLS(t, createTCPAddress())
 	server := receiveTransport(t, transportChan)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -407,7 +409,7 @@ func BenchmarkTCPTransport_Send_Message(b *testing.B) {
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListener(b, addr, transportChan)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientTCPTransport(b, createTCPAddress())
 	server := receiveTransport(b, transportChan)
 	messages := make([]*Message, b.N)
@@ -449,7 +451,7 @@ func BenchmarkTCPTransport_Send_MessageTLS(b *testing.B) {
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(b, addr, transportChan)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientTCPTransportTLS(b, createTCPAddress())
 	server := receiveTransport(b, transportChan)
 	if err := doTLSHandshake(ctx, server, client); err != nil {
@@ -485,4 +487,8 @@ func BenchmarkTCPTransport_Send_MessageTLS(b *testing.B) {
 	case <-done:
 		break
 	}
+}
+
+func silentClose(c io.Closer) {
+	_ = c.Close()
 }
