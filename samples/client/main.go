@@ -19,14 +19,16 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	t, err := lime.DialTcp(context.Background(), addr, &tls.Config{ServerName: "localhost", InsecureSkipVerify: true})
+	config := &lime.TCPConfig{
+		TLSConfig:   &tls.Config{ServerName: "localhost", InsecureSkipVerify: true},
+		TraceWriter: lime.NewStdoutTraceWriter(),
+	}
+
+	t, err := lime.DialTcp(context.Background(), addr, config)
 
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	tw := lime.NewStdoutTraceWriter()
-	t.TraceWriter = tw
 
 	client := lime.NewClientChannel(t, 1)
 

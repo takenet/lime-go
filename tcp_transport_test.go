@@ -18,8 +18,8 @@ import (
 	"time"
 )
 
-func createTCPListener(t testing.TB, addr net.Addr, transportChan chan Transport) *TCPTransportListener {
-	listener := TCPTransportListener{}
+func createTCPListener(t testing.TB, addr net.Addr, transportChan chan Transport) TransportListener {
+	listener := NewTCPTransportListener(nil)
 	if err := listener.Listen(context.Background(), addr); err != nil {
 		t.Fatal(err)
 		return nil
@@ -37,21 +37,39 @@ func createTCPListener(t testing.TB, addr net.Addr, transportChan chan Transport
 		}()
 	}
 
-	return &listener
-}
-
-func createTCPListenerTLS(t testing.TB, addr net.Addr, transportChan chan Transport) *TCPTransportListener {
-	listener := createTCPListener(t, addr, transportChan)
-	listener.TLSConfig = &tls.Config{
-		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			return createCertificate("127.0.0.1")
-		},
-	}
 	return listener
 }
 
-func createClientTCPTransport(t testing.TB, addr net.Addr) *TCPTransport {
-	client, err := DialTcp(context.Background(), addr, &tls.Config{})
+func createTCPListenerTLS(t testing.TB, addr net.Addr, transportChan chan Transport) TransportListener {
+	config := &TCPConfig{TLSConfig: &tls.Config{
+		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return createCertificate("127.0.0.1")
+		},
+	}}
+
+	listener := NewTCPTransportListener(config)
+	if err := listener.Listen(context.Background(), addr); err != nil {
+		t.Fatal(err)
+		return nil
+	}
+
+	if transportChan != nil {
+		go func() {
+			for {
+				t, err := listener.Accept(context.Background())
+				if err != nil {
+					break
+				}
+				transportChan <- t
+			}
+		}()
+	}
+
+	return listener
+}
+
+func createClientTCPTransport(t testing.TB, addr net.Addr) Transport {
+	client, err := DialTcp(context.Background(), addr, nil)
 	if err != nil {
 		t.Fatal(err)
 		return nil
@@ -59,9 +77,12 @@ func createClientTCPTransport(t testing.TB, addr net.Addr) *TCPTransport {
 	return client
 }
 
-func createClientTCPTransportTLS(t testing.TB, addr net.Addr) *TCPTransport {
-	client := createClientTCPTransport(t, addr)
-	client.TLSConfig = &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true}
+func createClientTCPTransportTLS(t testing.TB, addr net.Addr) Transport {
+	client, err := DialTcp(context.Background(), addr, &TCPConfig{TLSConfig: &tls.Config{ServerName: "127.0.0.1", InsecureSkipVerify: true}})
+	if err != nil {
+		t.Fatal(err)
+		return nil
+	}
 	return client
 }
 
@@ -160,12 +181,12 @@ func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	defer cancel()
 
 	// Act
-	client, err := DialTcp(ctx, addr, &tls.Config{})
+	client, err := DialTcp(ctx, addr, nil)
 
 	// Assert
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
-	assert.True(t, client.IsConnected())
+	assert.True(t, client.Connected())
 
 }
 
@@ -176,7 +197,7 @@ func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 	defer cancel()
 
 	// Act
-	client, err := DialTcp(ctx, addr, &tls.Config{})
+	client, err := DialTcp(ctx, addr, nil)
 
 	// Assert
 	assert.Error(t, err)
@@ -195,7 +216,7 @@ func TestTCPTransport_Dial_AfterListenerClosed(t *testing.T) {
 	defer cancel()
 
 	// Act
-	client, err := DialTcp(ctx, addr, &tls.Config{})
+	client, err := DialTcp(ctx, addr, nil)
 
 	// Assert
 	assert.Error(t, err)
@@ -237,7 +258,7 @@ func TestTCPTransport_Close_WhenAlreadyClosed(t *testing.T) {
 
 func TestTCPTransport_Close_WhenNotOpen(t *testing.T) {
 	// Arrange
-	client := TCPTransport{}
+	client := tcpTransport{}
 
 	// Act
 	err := client.Close()

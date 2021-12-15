@@ -14,21 +14,18 @@ import (
 
 const DefaultReadLimit int64 = 8192 * 1024
 
-type TCPTransport struct {
-	ReadLimit     int64       // ReadLimit defines the limit for buffered data in read operations.
-	TraceWriter   TraceWriter // TraceWriter sets the trace writer for tracing connection envelopes
+type tcpTransport struct {
+	TCPConfig
 	conn          net.Conn
 	encoder       *json.Encoder
 	decoder       *json.Decoder
 	limitedReader io.LimitedReader
-	// TLSConfig The configuration for TLS session encryption
-	TLSConfig  *tls.Config
-	encryption SessionEncryption
-	server     bool
+	encryption    SessionEncryption
+	server        bool
 }
 
 // DialTcp opens a TCP  transport connection with the specified Uri.
-func DialTcp(ctx context.Context, addr net.Addr, tls *tls.Config) (*TCPTransport, error) {
+func DialTcp(ctx context.Context, addr net.Addr, config *TCPConfig) (Transport, error) {
 	if addr.Network() != "tcp" {
 		return nil, errors.New("address network should be tcp")
 	}
@@ -39,36 +36,38 @@ func DialTcp(ctx context.Context, addr net.Addr, tls *tls.Config) (*TCPTransport
 		return nil, err
 	}
 
-	t := TCPTransport{
-		TLSConfig: tls,
+	if config == nil {
+		config = &defaultTCPConfig
 	}
+
+	t := tcpTransport{TCPConfig: *config}
 
 	t.setConn(conn)
 	t.encryption = SessionEncryptionNone
 	return &t, nil
 }
 
-func (t *TCPTransport) GetSupportedCompression() []SessionCompression {
+func (t *tcpTransport) GetSupportedCompression() []SessionCompression {
 	return []SessionCompression{SessionCompressionNone}
 }
 
-func (t *TCPTransport) GetCompression() SessionCompression {
+func (t *tcpTransport) GetCompression() SessionCompression {
 	return SessionCompressionNone
 }
 
-func (t *TCPTransport) SetCompression(_ context.Context, c SessionCompression) error {
+func (t *tcpTransport) SetCompression(_ context.Context, c SessionCompression) error {
 	return fmt.Errorf("compression '%v' is not supported", c)
 }
 
-func (t *TCPTransport) GetSupportedEncryption() []SessionEncryption {
+func (t *tcpTransport) GetSupportedEncryption() []SessionEncryption {
 	return []SessionEncryption{SessionEncryptionNone, SessionEncryptionTLS}
 }
 
-func (t *TCPTransport) GetEncryption() SessionEncryption {
+func (t *tcpTransport) GetEncryption() SessionEncryption {
 	return t.encryption
 }
 
-func (t *TCPTransport) SetEncryption(ctx context.Context, e SessionEncryption) error {
+func (t *tcpTransport) SetEncryption(ctx context.Context, e SessionEncryption) error {
 	if e == t.encryption {
 		return nil
 	}
@@ -108,7 +107,7 @@ func (t *TCPTransport) SetEncryption(ctx context.Context, e SessionEncryption) e
 	return nil
 }
 
-func (t *TCPTransport) Send(ctx context.Context, e Envelope) error {
+func (t *tcpTransport) Send(ctx context.Context, e Envelope) error {
 	if ctx == nil {
 		panic("nil context")
 	}
@@ -131,7 +130,7 @@ func (t *TCPTransport) Send(ctx context.Context, e Envelope) error {
 	return t.encoder.Encode(e)
 }
 
-func (t *TCPTransport) Receive(ctx context.Context) (Envelope, error) {
+func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
 	if ctx == nil {
 		panic("nil context")
 	}
@@ -159,7 +158,7 @@ func (t *TCPTransport) Receive(ctx context.Context) (Envelope, error) {
 	return raw.ToEnvelope()
 }
 
-func (t *TCPTransport) Close() error {
+func (t *tcpTransport) Close() error {
 	if err := t.ensureOpen(); err != nil {
 		return err
 	}
@@ -169,25 +168,25 @@ func (t *TCPTransport) Close() error {
 	return err
 }
 
-func (t *TCPTransport) IsConnected() bool {
+func (t *tcpTransport) Connected() bool {
 	return t.conn != nil
 }
 
-func (t *TCPTransport) LocalAddr() net.Addr {
+func (t *tcpTransport) LocalAddr() net.Addr {
 	if t.conn == nil {
 		return nil
 	}
 	return t.conn.LocalAddr()
 }
 
-func (t *TCPTransport) RemoteAddr() net.Addr {
+func (t *tcpTransport) RemoteAddr() net.Addr {
 	if t.conn == nil {
 		return nil
 	}
 	return t.conn.RemoteAddr()
 }
 
-func (t *TCPTransport) setConn(conn net.Conn) {
+func (t *tcpTransport) setConn(conn net.Conn) {
 	t.conn = conn
 
 	var writer io.Writer = t.conn
@@ -217,7 +216,7 @@ func (t *TCPTransport) setConn(conn net.Conn) {
 	t.decoder = json.NewDecoder(&t.limitedReader)
 }
 
-func (t *TCPTransport) ensureOpen() error {
+func (t *tcpTransport) ensureOpen() error {
 	if t.conn == nil {
 		return errors.New("transport is not open")
 	}
@@ -226,12 +225,25 @@ func (t *TCPTransport) ensureOpen() error {
 }
 
 type TCPTransportListener struct {
+	TCPConfig
+	listener net.Listener
+	mu       sync.Mutex
+}
+
+func NewTCPTransportListener(config *TCPConfig) TransportListener {
+	if config == nil {
+		config = &defaultTCPConfig
+	}
+	return &TCPTransportListener{TCPConfig: *config}
+}
+
+type TCPConfig struct {
 	ReadLimit   int64       // ReadLimit defines the limit for buffered data in read operations.
 	TraceWriter TraceWriter // TraceWriter sets the trace writer for tracing connection envelopes
 	TLSConfig   *tls.Config
-	listener    net.Listener
-	mu          sync.Mutex
 }
+
+var defaultTCPConfig = TCPConfig{}
 
 func (t *TCPTransportListener) Listen(ctx context.Context, addr net.Addr) error {
 	if addr.Network() != "tcp" {
@@ -270,8 +282,8 @@ func (t *TCPTransportListener) Accept(ctx context.Context) (Transport, error) {
 		return nil, err
 	}
 
-	transport := TCPTransport{
-		TLSConfig:  t.TLSConfig,
+	transport := tcpTransport{
+		TCPConfig:  t.TCPConfig,
 		encryption: SessionEncryptionNone,
 	}
 	transport.server = true
