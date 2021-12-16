@@ -45,7 +45,7 @@ func (i *Identity) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// ToNode Creates a Node instance based on the identity, with a
+// ToNode Creates a Node instance based on the identity, with an
 // empty value for the instance property.
 func (i Identity) ToNode() Node {
 	return Node{i, ""}

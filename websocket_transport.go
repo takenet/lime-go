@@ -108,7 +108,7 @@ func (t *websocketTransport) GetCompression() SessionCompression {
 	return t.c
 }
 
-func (t *websocketTransport) SetCompression(ctx context.Context, c SessionCompression) error {
+func (t *websocketTransport) SetCompression(_ context.Context, c SessionCompression) error {
 	if c != t.c {
 		return errors.New("compression cannot be changed")
 	}
@@ -123,7 +123,7 @@ func (t *websocketTransport) GetEncryption() SessionEncryption {
 	return t.e
 }
 
-func (t *websocketTransport) SetEncryption(ctx context.Context, e SessionEncryption) error {
+func (t *websocketTransport) SetEncryption(_ context.Context, e SessionEncryption) error {
 	if e != t.e {
 		return errors.New("encryption cannot be changed")
 	}

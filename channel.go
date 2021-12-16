@@ -37,29 +37,17 @@ type CommandProcessor interface {
 }
 
 type SessionInfoProvider interface {
-	// GetID gets the session ID.
-	GetID() string
-
-	// GetRemoteNode gets the remote party identifier.
-	GetRemoteNode() Node
-
-	// GetLocalNode gets the local node identifier.
-	GetLocalNode() Node
-
-	// GetState gets the current session state.
-	GetState() SessionState
+	ID() string          // ID returns the session ID.
+	RemoteNode() Node    // RemoteNode returns the remote party identifier.
+	LocalNode() Node     // LocalNode returns the local node identifier.
+	State() SessionState // State returns the current session state.
 }
 
 // ChannelModule defines a proxy interface for executing actions to the envelope channels.
 type ChannelModule interface {
-	// OnStateChanged is called when the session state is changed.
-	OnStateChanged(ctx context.Context, state SessionState)
-
-	// OnReceiving is called when an envelope is being received by the channel.
-	OnReceiving(ctx context.Context, env Envelope)
-
-	// OnSending is called when an envelope is being sent by the channel.
-	OnSending(ctx context.Context, env Envelope)
+	StateChanged(ctx context.Context, state SessionState) // StateChanged is called when the session state is changed.
+	Receiving(ctx context.Context, env Envelope) Envelope // Receiving is called when an envelope is being received by the channel.
+	Sending(ctx context.Context, env Envelope) Envelope   // Sending is called when an envelope is being sent by the channel.
 }
 
 type channel struct {
@@ -103,7 +91,7 @@ func newChannel(t Transport, bufferSize int) *channel {
 }
 
 func (c *channel) Established() bool {
-	return c.GetState() == SessionStateEstablished && c.transport.Connected()
+	return c.State() == SessionStateEstablished && c.transport.Connected()
 }
 
 func (c *channel) startGoroutines() {
@@ -202,19 +190,19 @@ func sendToTransport(ctx context.Context, c *channel) {
 	close(c.outChan)
 }
 
-func (c *channel) GetID() string {
+func (c *channel) ID() string {
 	return c.sessionID
 }
 
-func (c *channel) GetRemoteNode() Node {
+func (c *channel) RemoteNode() Node {
 	return c.remoteNode
 }
 
-func (c *channel) GetLocalNode() Node {
+func (c *channel) LocalNode() Node {
 	return c.localNode
 }
 
-func (c *channel) GetState() SessionState {
+func (c *channel) State() SessionState {
 	c.stateMu.RLock()
 	defer c.stateMu.RUnlock()
 	return c.state
@@ -225,7 +213,7 @@ func (c *channel) sendSession(ctx context.Context, ses *Session) error {
 		return err
 	}
 	// check the current channel state
-	state := c.GetState()
+	state := c.State()
 	if state == SessionStateFinished || state == SessionStateFailed {
 		return fmt.Errorf("send session: cannot do in the %v state", state)
 	}
@@ -245,7 +233,7 @@ func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 		return nil, err
 	}
 
-	state := c.GetState()
+	state := c.State()
 
 	switch state {
 	case SessionStateFinished:
@@ -351,7 +339,7 @@ func (c *channel) ensureState(state SessionState, action string) error {
 		return err
 	}
 
-	s := c.GetState()
+	s := c.State()
 	if s != state {
 		return fmt.Errorf("%v: cannot do in the %v state", action, s)
 	}

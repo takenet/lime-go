@@ -11,7 +11,7 @@ import (
 type Envelope interface {
 	GetID() string                  // Gets the envelope identifier
 	GetFrom() Node                  // Gets the identifier of the sender node of the envelope.
-	GetPP() Node                    // Gets the delegation node. Its an acronym for 'per procurationem'.
+	GetPP() Node                    // Gets the delegation node. It's an acronym for 'per procurationem'.
 	GetTo() Node                    // Gets the identifier of the destination node of the envelope.
 	GetMetadata() map[string]string // Gets additional information to be delivered with the envelope.
 	populate(raw *rawEnvelope) error
@@ -25,7 +25,7 @@ type EnvelopeBase struct {
 	// The identifier of the sender node of the envelope.
 	// If a node receives an envelope without this value, it means that the envelope was originated by the remote party.
 	From Node
-	// The delegation node. Its an acronym for 'per procurationem'.
+	// The delegation node. It's an acronym for 'per procurationem'.
 	// Identifier of a delegate node (a node that received a permission To send on behalf of another).
 	// Allows a node to send an envelope on behalf of another identity.
 	PP Node

@@ -42,7 +42,7 @@ func TestInProcessTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
-	defer listener.Close()
+	defer silentClose(listener)
 
 	// Act
 	_, err := DialInProcess(addr, 1)
@@ -83,7 +83,7 @@ func TestInProcessTransport_Dial_OtherAddress(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
-	defer listener.Close()
+	defer silentClose(listener)
 	var addr2 InProcessAddr = "remote"
 
 	// Act
@@ -98,7 +98,7 @@ func TestInProcessTransport_Close_WhenOpen(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientInProcessTransport(t, addr)
 
 	// Act
@@ -112,7 +112,7 @@ func TestInProcessTransport_Send_Session(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientInProcessTransport(t, addr)
 	s := createSession()
 
@@ -128,7 +128,7 @@ func TestInProcessTransport_Receive_Session(t *testing.T) {
 	var addr InProcessAddr = "localhost"
 	var transportChan = make(chan Transport, 1)
 	listener := createInProcessListener(t, addr, transportChan)
-	defer listener.Close()
+	defer silentClose(listener)
 	client := createClientInProcessTransport(t, addr)
 	server := receiveTransport(t, transportChan)
 	s := createSession()

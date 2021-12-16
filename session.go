@@ -163,7 +163,7 @@ func (s *Session) populate(raw *rawEnvelope) error {
 type SessionState string
 
 const (
-	// SessionStateNew indicates that the session is new and doesn't exists an established context.
+	// SessionStateNew indicates that the session is new and doesn't exist an established context.
 	// It is sent by a client node To start a session with a server.
 	SessionStateNew = SessionState("new")
 	// SessionStateNegotiating indicates that the server and the client are negotiating the session options,
@@ -177,10 +177,10 @@ const (
 	// SessionStateAuthenticating indicates that the session is being authenticated. The server sends To
 	// the client the available authentication schemes list and
 	// the client must choose one and send the specific authentication
-	// data. The authentication can occurs in multiple round trips,
+	// data. The authentication can occur in multiple round trips,
 	// according To the selected schema.
 	SessionStateAuthenticating = SessionState("authenticating")
-	// SessionStateEstablished indicates that the session is active and it is possible To send and receive
+	// SessionStateEstablished indicates that the session is active, and it is possible To send and receive
 	// messages and commands. The server sends this state
 	// after the session was authenticated.
 	SessionStateEstablished = SessionState("established")
@@ -189,7 +189,7 @@ const (
 	// SessionStateFinished indicates that the session was gracefully finished by the server.
 	SessionStateFinished = SessionState("finished")
 	// SessionStateFailed indicates that a problem occurred while the session was established, under
-	// negotiation or authentication and it was closed by the server.
+	// negotiation or authentication, and it was closed by the server.
 	// In this case, the property reason MUST be present to provide
 	// more details about the problem.
 	SessionStateFailed = SessionState("failed")
@@ -350,7 +350,7 @@ func (a *TransportAuthentication) GetAuthenticationScheme() AuthenticationScheme
 	return AuthenticationSchemeTransport
 }
 
-// ExternalAuthentication defines a external authentication scheme, that uses third-party validation.
+// ExternalAuthentication defines an external authentication scheme, that uses third-party validation.
 type ExternalAuthentication struct {
 	// The authentication token on base64 representation.
 	Token string `json:"token"`

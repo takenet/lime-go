@@ -58,8 +58,8 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 
 	// Assert
 	assert.NoError(t, err)
-	assert.Equal(t, serverNode, c.GetLocalNode())
-	assert.Equal(t, clientNode, c.GetRemoteNode())
+	assert.Equal(t, serverNode, c.LocalNode())
+	assert.Equal(t, clientNode, c.RemoteNode())
 	assert.Equal(t, SessionStateEstablished, c.state)
 	assert.True(t, c.Established())
 	assert.True(t, c.transport.Connected())

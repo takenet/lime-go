@@ -8,7 +8,7 @@ import (
 )
 
 func createPlainDocument() PlainDocument {
-	return PlainDocument("Hello world!")
+	return "Hello world!"
 }
 
 func createJsonDocument() *JsonDocument {

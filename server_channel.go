@@ -168,7 +168,7 @@ const (
 	DomainRoleUnknown       = DomainRole("unknown")       // The identity is not part of the domain.
 	DomainRoleMember        = DomainRole("member")        // The identity is a member of the domain.
 	DomainRoleAuthority     = DomainRole("authority")     // The identity is an authority of the domain.
-	DomainRoleRootAuthority = DomainRole("rootAuthority") // The identity is an authority of the domain and its sub-domains.
+	DomainRoleRootAuthority = DomainRole("rootAuthority") // The identity is an authority of the domain and its subdomains.
 )
 
 // AuthenticationResult represents the result of a session authentication.

@@ -150,11 +150,11 @@ const (
 	// originator do not want To receive further notifications about the resource.
 	CommandMethodUnsubscribe = CommandMethod("unsubscribe")
 	// CommandMethodObserve Notify the destination about a change in a resource value of the sender.
-	// If the resource value is absent, it represent that the resource in the specified URI was deleted in the originator.
+	// If the resource value is absent, it represents that the resource in the specified URI was deleted in the originator.
 	// This method can be one way and the destination may not send a response for it.
 	// Because of that, a command envelope with this method may not have an ID.
 	CommandMethodObserve = CommandMethod("observe")
-	// CommandMethodMerge Merge a resource document with an existing one. If the resource doesn't exists, it is created.
+	// CommandMethodMerge Merge a resource document with an existing one. If the resource doesn't exist, it is created.
 	CommandMethodMerge = CommandMethod("merge")
 )
 

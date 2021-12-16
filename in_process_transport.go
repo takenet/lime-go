@@ -136,7 +136,7 @@ func (l *inProcessTransportListener) Close() error {
 	return nil
 }
 
-func (l *inProcessTransportListener) Listen(ctx context.Context, addr net.Addr) error {
+func (l *inProcessTransportListener) Listen(_ context.Context, addr net.Addr) error {
 	inProcAddr, ok := addr.(InProcessAddr)
 	if !ok {
 		return fmt.Errorf("invalid in process address %s", addr)
