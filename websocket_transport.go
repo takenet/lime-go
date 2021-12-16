@@ -100,11 +100,11 @@ func (t *websocketTransport) Close() error {
 	return nil
 }
 
-func (t *websocketTransport) GetSupportedCompression() []SessionCompression {
+func (t *websocketTransport) SupportedCompression() []SessionCompression {
 	return []SessionCompression{t.c}
 }
 
-func (t *websocketTransport) GetCompression() SessionCompression {
+func (t *websocketTransport) Compression() SessionCompression {
 	return t.c
 }
 
@@ -115,11 +115,11 @@ func (t *websocketTransport) SetCompression(_ context.Context, c SessionCompress
 	return nil
 }
 
-func (t *websocketTransport) GetSupportedEncryption() []SessionEncryption {
+func (t *websocketTransport) SupportedEncryption() []SessionEncryption {
 	return []SessionEncryption{t.e}
 }
 
-func (t *websocketTransport) GetEncryption() SessionEncryption {
+func (t *websocketTransport) Encryption() SessionEncryption {
 	return t.e
 }
 

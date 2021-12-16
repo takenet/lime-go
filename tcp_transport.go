@@ -47,11 +47,11 @@ func DialTcp(ctx context.Context, addr net.Addr, config *TCPConfig) (Transport, 
 	return &t, nil
 }
 
-func (t *tcpTransport) GetSupportedCompression() []SessionCompression {
+func (t *tcpTransport) SupportedCompression() []SessionCompression {
 	return []SessionCompression{SessionCompressionNone}
 }
 
-func (t *tcpTransport) GetCompression() SessionCompression {
+func (t *tcpTransport) Compression() SessionCompression {
 	return SessionCompressionNone
 }
 
@@ -59,11 +59,11 @@ func (t *tcpTransport) SetCompression(_ context.Context, c SessionCompression) e
 	return fmt.Errorf("compression '%v' is not supported", c)
 }
 
-func (t *tcpTransport) GetSupportedEncryption() []SessionEncryption {
+func (t *tcpTransport) SupportedEncryption() []SessionEncryption {
 	return []SessionEncryption{SessionEncryptionNone, SessionEncryptionTLS}
 }
 
-func (t *tcpTransport) GetEncryption() SessionEncryption {
+func (t *tcpTransport) Encryption() SessionEncryption {
 	return t.encryption
 }
 

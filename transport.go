@@ -13,15 +13,15 @@ type Transport interface {
 	io.Closer
 	Send(ctx context.Context, e Envelope) error                     // Send sends an envelope to the remote node.
 	Receive(ctx context.Context) (Envelope, error)                  // Receive receives an envelope from the remote node.
-	GetSupportedCompression() []SessionCompression                  // GetSupportedCompression enumerates the supported compression options for the transport.
-	GetCompression() SessionCompression                             // GetCompression gets the current transport compression option.
+	SupportedCompression() []SessionCompression                     // SupportedCompression enumerates the supported compression options for the transport.
+	Compression() SessionCompression                                // Compression returns the current transport compression option.
 	SetCompression(ctx context.Context, c SessionCompression) error // SetCompression defines the compression mode for the transport.
-	GetSupportedEncryption() []SessionEncryption                    // GetSupportedEncryption enumerates the supported encryption options for the transport.
-	GetEncryption() SessionEncryption                               // GetEncryption gets the current transport encryption option.
+	SupportedEncryption() []SessionEncryption                       // SupportedEncryption enumerates the supported encryption options for the transport.
+	Encryption() SessionEncryption                                  // Encryption returns the current transport encryption option.
 	SetEncryption(ctx context.Context, e SessionEncryption) error   // SetEncryption defines the encryption mode for the transport.
 	Connected() bool                                                // Connected indicates if the transport is connected.
-	LocalAddr() net.Addr                                            // LocalAddr gets the local endpoint address.
-	RemoteAddr() net.Addr                                           // RemoteAddr gets the remote endpoint address.
+	LocalAddr() net.Addr                                            // LocalAddr returns the local endpoint address.
+	RemoteAddr() net.Addr                                           // RemoteAddr returns the remote endpoint address.
 }
 
 // TransportListener Defines a listener interface for the transports.

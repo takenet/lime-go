@@ -179,13 +179,13 @@ func (c *ClientChannel) EstablishSession(
 		}
 
 		if ses.State == SessionStateNegotiating {
-			if ses.Compression != "" && ses.Compression != c.transport.GetCompression() {
+			if ses.Compression != "" && ses.Compression != c.transport.Compression() {
 				err = c.transport.SetCompression(ctx, ses.Compression)
 				if err != nil {
 					return nil, fmt.Errorf("error setting the session compression: %w", err)
 				}
 			}
-			if ses.Encryption != "" && ses.Encryption != c.transport.GetEncryption() {
+			if ses.Encryption != "" && ses.Encryption != c.transport.Encryption() {
 				err = c.transport.SetEncryption(ctx, ses.Encryption)
 				if err != nil {
 					return nil, fmt.Errorf("error setting the session encryption: %w", err)

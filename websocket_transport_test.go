@@ -184,7 +184,7 @@ func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
 
 	// Assert
 	assert.NoError(t, err)
-	assert.Equal(t, SessionEncryptionNone, client.GetEncryption())
+	assert.Equal(t, SessionEncryptionNone, client.Encryption())
 }
 
 func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
@@ -202,7 +202,7 @@ func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
 
 	// Assert
 	assert.NoError(t, err)
-	assert.Equal(t, SessionEncryptionTLS, client.GetEncryption())
+	assert.Equal(t, SessionEncryptionTLS, client.Encryption())
 }
 
 func TestWebsocketTransport_Send_Session(t *testing.T) {

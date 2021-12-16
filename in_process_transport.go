@@ -72,11 +72,11 @@ func newInProcessTransportPair(addr InProcessAddr, bufferSize int) (client *inPr
 	return
 }
 
-func (t *inProcessTransport) GetSupportedCompression() []SessionCompression {
+func (t *inProcessTransport) SupportedCompression() []SessionCompression {
 	return []SessionCompression{SessionCompressionNone}
 }
 
-func (t *inProcessTransport) GetCompression() SessionCompression {
+func (t *inProcessTransport) Compression() SessionCompression {
 	return SessionCompressionNone
 }
 
@@ -84,11 +84,11 @@ func (t *inProcessTransport) SetCompression(context.Context, SessionCompression)
 	return errors.New("compression is not supported by in process transport")
 }
 
-func (t *inProcessTransport) GetSupportedEncryption() []SessionEncryption {
+func (t *inProcessTransport) SupportedEncryption() []SessionEncryption {
 	return []SessionEncryption{SessionEncryptionNone}
 }
 
-func (t *inProcessTransport) GetEncryption() SessionEncryption {
+func (t *inProcessTransport) Encryption() SessionEncryption {
 	return SessionEncryptionNone
 }
 

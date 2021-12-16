@@ -217,14 +217,14 @@ func (c *ServerChannel) EstablishSession(
 	if ses.State == SessionStateNew {
 		// Check if there's any transport negotiation option to be presented to the client
 		negCompOpts := make([]SessionCompression, 0)
-		for _, v := range intersect(compOpts, c.transport.GetSupportedCompression()) {
+		for _, v := range intersect(compOpts, c.transport.SupportedCompression()) {
 			negCompOpts = append(negCompOpts, v.(SessionCompression))
 		}
 		if encryptOpts == nil {
 			encryptOpts = []SessionEncryption{}
 		}
 		negEncryptOpts := make([]SessionEncryption, 0)
-		for _, v := range intersect(encryptOpts, c.transport.GetSupportedEncryption()) {
+		for _, v := range intersect(encryptOpts, c.transport.SupportedEncryption()) {
 			negEncryptOpts = append(negEncryptOpts, v.(SessionEncryption))
 		}
 
@@ -284,13 +284,13 @@ func (c *ServerChannel) negotiateSession(ctx context.Context, compOpts []Session
 					return err
 				}
 
-				if c.transport.GetCompression() != ses.Compression {
+				if c.transport.Compression() != ses.Compression {
 					if err = c.transport.SetCompression(ctx, ses.Compression); err != nil {
 						return err
 					}
 				}
 
-				if c.transport.GetEncryption() != ses.Encryption {
+				if c.transport.Encryption() != ses.Encryption {
 					if err = c.transport.SetEncryption(ctx, ses.Encryption); err != nil {
 						return err
 					}

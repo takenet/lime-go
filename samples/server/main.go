@@ -143,24 +143,20 @@ func register(lime.Node, *lime.ServerChannel) (lime.Node, error) {
 	}, Instance: lime.NewEnvelopeId()}, nil
 }
 
-func createListenerTLS(addr net.Addr) *lime.TCPTransportListener {
-	listener := createListener(addr)
-	listener.TLSConfig = &tls.Config{
+func createListenerTLS(addr net.Addr) lime.TransportListener {
+	config := &lime.TCPConfig{TLSConfig: &tls.Config{
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return createCertificate(addr.String())
 		},
-	}
-	return listener
-}
+	}}
 
-func createListener(addr net.Addr) *lime.TCPTransportListener {
-	listener := lime.TCPTransportListener{}
+	listener := lime.NewTCPTransportListener(config)
 	if err := listener.Listen(context.Background(), addr); err != nil {
 		log.Fatal(err)
 		return nil
 	}
 
-	return &listener
+	return listener
 }
 
 func createCertificate(host string) (*tls.Certificate, error) {
