@@ -82,7 +82,7 @@ func main() {
 			},
 		},
 		Method: lime.CommandMethodSet,
-		Uri:    &presenceUri,
+		URI:    &presenceUri,
 		Type: &lime.MediaType{
 			Type:    "application",
 			Subtype: "vnd.lime.presence",

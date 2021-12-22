@@ -12,7 +12,7 @@ import (
 type Command struct {
 	EnvelopeBase
 	Method   CommandMethod // Method defines the action to be taken to the resource.
-	Uri      *URI          // Uri is the universal identifier of the resource.
+	URI      *URI          // URI is the universal identifier of the resource.
 	Type     *MediaType    // Type defines MIME declaration of the resource type of the command.
 	Resource Document      // Resource defines the document that is subject of the command.
 	Status   CommandStatus // Status indicates the status of the action taken To the resource, in case of a response command.
@@ -77,7 +77,7 @@ func (c *Command) toRawEnvelope() (*rawEnvelope, error) {
 	if c.Status != "" {
 		raw.Status = &c.Status
 	}
-	raw.Uri = c.Uri
+	raw.URI = c.URI
 	raw.Reason = c.Reason
 
 	return raw, nil
@@ -114,7 +114,7 @@ func (c *Command) populate(raw *rawEnvelope) error {
 		c.Status = *raw.Status
 	}
 
-	c.Uri = raw.Uri
+	c.URI = raw.URI
 	c.Reason = raw.Reason
 
 	return nil

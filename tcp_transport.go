@@ -24,7 +24,7 @@ type tcpTransport struct {
 	server        bool
 }
 
-// DialTcp opens a TCP  transport connection with the specified Uri.
+// DialTcp opens a TCP  transport connection with the specified URI.
 func DialTcp(ctx context.Context, addr net.Addr, config *TCPConfig) (Transport, error) {
 	if addr.Network() != "tcp" {
 		return nil, errors.New("address network should be tcp")

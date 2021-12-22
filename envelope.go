@@ -31,22 +31,6 @@ type EnvelopeBase struct {
 	Metadata map[string]string
 }
 
-func (env *EnvelopeBase) GetID() string {
-	return env.ID
-}
-
-func (env *EnvelopeBase) GetFrom() Node {
-	return env.From
-}
-
-func (env *EnvelopeBase) GetPP() Node {
-	return env.PP
-}
-
-func (env *EnvelopeBase) GetTo() Node {
-	return env.To
-}
-
 func (env *EnvelopeBase) GetMetadata() map[string]string {
 	return env.Metadata
 }
@@ -128,7 +112,7 @@ type rawEnvelope struct {
 	// Command properties
 
 	Method   *CommandMethod   `json:"method,omitempty"`
-	Uri      *URI             `json:"uri,omitempty"`
+	URI      *URI             `json:"uri,omitempty"`
 	Resource *json.RawMessage `json:"resource,omitempty"`
 	Status   *CommandStatus   `json:"status,omitempty"`
 
@@ -173,16 +157,12 @@ func (re *rawEnvelope) ToEnvelope() (Envelope, error) {
 	switch t {
 	case "Command":
 		env = &Command{}
-		break
 	case "Notification":
 		env = &Notification{}
-		break
 	case "Message":
 		env = &Message{}
-		break
 	case "Session":
 		env = &Session{}
-		break
 	default:
 		return nil, errors.New("unknown or unsupported envelope type")
 	}
