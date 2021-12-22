@@ -87,7 +87,7 @@ func MediaTypeApplicationJson() MediaType {
 
 func RegisterDocumentFactory(f func() Document) {
 	d := f()
-	documentFactories[d.GetMediaType()] = f
+	documentFactories[d.MediaType()] = f
 }
 
 func GetDocumentFactory(t MediaType) (func() Document, error) {

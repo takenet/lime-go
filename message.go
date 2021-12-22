@@ -18,7 +18,7 @@ type Message struct {
 
 func (m *Message) SetContent(d Document) {
 	m.Content = d
-	m.Type = d.GetMediaType()
+	m.Type = d.MediaType()
 }
 
 func (m *Message) MarshalJSON() ([]byte, error) {

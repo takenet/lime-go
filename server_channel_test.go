@@ -32,10 +32,15 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 		if err != nil {
 			return
 		}
-		s, err := client.Receive(ctx)
+		env, err := client.Receive(ctx)
 		if err != nil {
 			return
 		}
+		s, ok := env.(*Session)
+		if !ok {
+			return
+		}
+
 		err = client.Send(ctx, &Session{
 			EnvelopeBase:   EnvelopeBase{ID: s.GetID(), From: clientNode},
 			State:          SessionStateAuthenticating,

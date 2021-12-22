@@ -9,11 +9,6 @@ import (
 
 // Envelope is a base interface for envelopes types.
 type Envelope interface {
-	GetID() string                  // Gets the envelope identifier
-	GetFrom() Node                  // Gets the identifier of the sender node of the envelope.
-	GetPP() Node                    // Gets the delegation node. It's an acronym for 'per procurationem'.
-	GetTo() Node                    // Gets the identifier of the destination node of the envelope.
-	GetMetadata() map[string]string // Gets additional information to be delivered with the envelope.
 	populate(raw *rawEnvelope) error
 	toRawEnvelope() (*rawEnvelope, error)
 }
@@ -133,7 +128,7 @@ type rawEnvelope struct {
 	// Command properties
 
 	Method   *CommandMethod   `json:"method,omitempty"`
-	Uri      *LimeUri         `json:"uri,omitempty"`
+	Uri      *URI             `json:"uri,omitempty"`
 	Resource *json.RawMessage `json:"resource,omitempty"`
 	Status   *CommandStatus   `json:"status,omitempty"`
 

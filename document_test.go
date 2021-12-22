@@ -41,7 +41,7 @@ func mediaTypeTestJson() MediaType {
 	}
 }
 
-func (t *testJsonDocument) GetMediaType() MediaType {
+func (t *testJsonDocument) MediaType() MediaType {
 	return mediaTypeTestJson()
 }
 

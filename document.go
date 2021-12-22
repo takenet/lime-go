@@ -23,21 +23,21 @@ func init() {
 
 // Document defines an entity with a media type.
 type Document interface {
-	// GetMediaType gets the type of the media for the document.
-	GetMediaType() MediaType
+	// MediaType gets the type of the media for the document.
+	MediaType() MediaType
 }
 
 // JsonDocument represents a generic JSON document.
 type JsonDocument map[string]interface{}
 
-func (d *JsonDocument) GetMediaType() MediaType {
+func (d *JsonDocument) MediaType() MediaType {
 	return MediaTypeApplicationJson()
 }
 
 // PlainDocument represents a plain document.
 type PlainDocument string
 
-func (d PlainDocument) GetMediaType() MediaType {
+func (d PlainDocument) MediaType() MediaType {
 	return MediaTypeTextPlain()
 }
 
@@ -54,12 +54,12 @@ type DocumentContainer struct {
 
 func NewDocumentContainer(d Document) *DocumentContainer {
 	return &DocumentContainer{
-		Type:  d.GetMediaType(),
+		Type:  d.MediaType(),
 		Value: d,
 	}
 }
 
-func (d *DocumentContainer) GetMediaType() MediaType {
+func (d *DocumentContainer) MediaType() MediaType {
 	return MediaType{
 		MediaTypeApplication,
 		"vnd.lime.container",
@@ -142,7 +142,7 @@ type DocumentCollection struct {
 	Items []Document
 }
 
-func (d *DocumentCollection) GetMediaType() MediaType {
+func (d *DocumentCollection) MediaType() MediaType {
 	return MediaType{MediaTypeApplication, "vnd.lime.collection", "json"}
 }
 

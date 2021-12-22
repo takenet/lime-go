@@ -14,6 +14,7 @@ type MessageSender interface {
 
 type MessageReceiver interface {
 	ReceiveMessage(ctx context.Context) (*Message, error)
+	MsgChan() <-chan *Message
 }
 
 type NotificationSender interface {
@@ -22,6 +23,7 @@ type NotificationSender interface {
 
 type NotificationReceiver interface {
 	ReceiveNotification(ctx context.Context) (*Notification, error)
+	NotChan() <-chan *Notification
 }
 
 type CommandSender interface {
@@ -30,10 +32,23 @@ type CommandSender interface {
 
 type CommandReceiver interface {
 	ReceiveCommand(ctx context.Context) (*Command, error)
+	CmdChan() <-chan *Command
 }
 
 type CommandProcessor interface {
 	ProcessCommand(ctx context.Context, cmd *Command) (*Command, error)
+}
+
+type Receiver interface {
+	MessageReceiver
+	NotificationReceiver
+	CommandReceiver
+}
+
+type Sender interface {
+	MessageSender
+	NotificationSender
+	CommandSender
 }
 
 type SessionInfoProvider interface {
@@ -268,6 +283,10 @@ func (c *channel) SendMessage(ctx context.Context, msg *Message) error {
 }
 
 func (c *channel) ReceiveMessage(ctx context.Context) (*Message, error) {
+	if err := c.ensureEstablished("receive message"); err != nil {
+		return nil, err
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("receive message: %w", ctx.Err())
@@ -283,6 +302,10 @@ func (c *channel) SendNotification(ctx context.Context, not *Notification) error
 }
 
 func (c *channel) ReceiveNotification(ctx context.Context) (*Notification, error) {
+	if err := c.ensureEstablished("receive notification"); err != nil {
+		return nil, err
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("receive notification: %w", ctx.Err())
@@ -299,6 +322,10 @@ func (c *channel) SendCommand(ctx context.Context, cmd *Command) error {
 }
 
 func (c *channel) ReceiveCommand(ctx context.Context) (*Command, error) {
+	if err := c.ensureEstablished("receive command"); err != nil {
+		return nil, err
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("receive command: %w", ctx.Err())

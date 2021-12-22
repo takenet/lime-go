@@ -51,6 +51,6 @@ func MediaTypeAccount() lime.MediaType {
 	}
 }
 
-func (a *Account) GetMediaType() lime.MediaType {
+func (a *Account) MediaType() lime.MediaType {
 	return MediaTypeAccount()
 }

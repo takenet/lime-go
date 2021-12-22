@@ -7,34 +7,21 @@ import (
 	"net/url"
 )
 
-// Command Allows the manipulation of node resources, like server session parameters or
+// Command allows the manipulation of node resources, like server session parameters or
 // information related to the network nodes.
 type Command struct {
 	EnvelopeBase
-
-	// Action To be taken To the resource.
-	Method CommandMethod
-
-	// The universal identifier of the resource.
-	Uri *LimeUri
-
-	// MIME declaration of the resource type of the command.
-	Type *MediaType
-
-	// Node resource that is subject of the command.
-	Resource Document
-
-	// Indicates the status of the action taken To the resource, in case of
-	// a response command.
-	Status CommandStatus
-
-	// Indicates the reason for a failure response command.
-	Reason *Reason
+	Method   CommandMethod // Method defines the action to be taken to the resource.
+	Uri      *URI          // Uri is the universal identifier of the resource.
+	Type     *MediaType    // Type defines MIME declaration of the resource type of the command.
+	Resource Document      // Resource defines the document that is subject of the command.
+	Status   CommandStatus // Status indicates the status of the action taken To the resource, in case of a response command.
+	Reason   *Reason       // Reason indicates the cause for a failure response command.
 }
 
 func (c *Command) SetResource(d Document) {
 	c.Resource = d
-	t := d.GetMediaType()
+	t := d.MediaType()
 	c.Type = &t
 }
 
@@ -192,30 +179,30 @@ const (
 	CommandStatusFailure = CommandStatus("failure")
 )
 
-const UriSchemeLime = "lime"
+const URISchemeLime = "lime"
 
-type LimeUri struct {
+type URI struct {
 	url *url.URL
 }
 
-func (u LimeUri) ToURL() url.URL {
+func (u URI) ToURL() url.URL {
 	return *u.url
 }
 
-func ParseLimeUri(s string) (LimeUri, error) {
+func ParseLimeURI(s string) (URI, error) {
 	u, err := url.Parse(s)
 	if err != nil {
-		return LimeUri{}, err
+		return URI{}, err
 	}
 
-	if u.IsAbs() && u.Scheme != UriSchemeLime {
-		return LimeUri{}, fmt.Errorf("invalid scheme '%v'", u.Scheme)
+	if u.IsAbs() && u.Scheme != URISchemeLime {
+		return URI{}, fmt.Errorf("invalid scheme '%v'", u.Scheme)
 	}
 
-	return LimeUri{u}, nil
+	return URI{u}, nil
 }
 
-func (u LimeUri) MarshalText() ([]byte, error) {
+func (u URI) MarshalText() ([]byte, error) {
 	if u.url == nil {
 		return nil, nil
 	}
@@ -223,8 +210,8 @@ func (u LimeUri) MarshalText() ([]byte, error) {
 	return []byte(u.url.String()), nil
 }
 
-func (u *LimeUri) UnmarshalText(text []byte) error {
-	uri, err := ParseLimeUri(string(text))
+func (u *URI) UnmarshalText(text []byte) error {
+	uri, err := ParseLimeURI(string(text))
 	if err != nil {
 		return err
 	}
