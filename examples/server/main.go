@@ -27,7 +27,7 @@ func main() {
 		Zone: "",
 	}
 
-	l := createListenerTLS(&addr)
+	l := createTCPListenerTLS(&addr)
 	c := make(chan lime.Transport, 1)
 	go func(l lime.TransportListener, c chan<- lime.Transport) {
 		for {
@@ -143,7 +143,7 @@ func register(lime.Node, *lime.ServerChannel) (lime.Node, error) {
 	}, Instance: lime.NewEnvelopeId()}, nil
 }
 
-func createListenerTLS(addr net.Addr) lime.TransportListener {
+func createTCPListenerTLS(addr net.Addr) lime.TransportListener {
 	config := &lime.TCPConfig{TLSConfig: &tls.Config{
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return createCertificate(addr.String())
