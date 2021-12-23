@@ -150,22 +150,29 @@ func (t *websocketTransport) ensureOpen() error {
 	return nil
 }
 
-type WebsocketTransportListener struct {
-	CertFile          string // CertFile
-	KeyFile           string
+type WebsocketConfig struct {
 	TLSConfig         *tls.Config
+	TraceWriter       TraceWriter // TraceWriter sets the trace writer for tracing connection envelopes
 	EnableCompression bool
-	listener          net.Listener
-	srv               *http.Server
-	upgrader          *websocket.Upgrader
-	transportBuffer   int
-	transportChan     chan *websocketTransport
-	done              chan bool
-	errChan           chan error
-	mu                sync.Mutex
+	TransportBuffer   int
 }
 
-func (l *WebsocketTransportListener) Listen(ctx context.Context, addr net.Addr) error {
+type websocketTransportListener struct {
+	WebsocketConfig
+	listener      net.Listener
+	srv           *http.Server
+	upgrader      *websocket.Upgrader
+	transportChan chan *websocketTransport
+	done          chan bool
+	errChan       chan error
+	mu            sync.Mutex
+}
+
+func NewWebsocketTransportListener(config *WebsocketConfig) TransportListener {
+	return &websocketTransportListener{WebsocketConfig: *config}
+}
+
+func (l *websocketTransportListener) Listen(ctx context.Context, addr net.Addr) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -189,13 +196,13 @@ func (l *WebsocketTransportListener) Listen(ctx context.Context, addr net.Addr) 
 		Subprotocols:      []string{"lime"},
 		EnableCompression: l.EnableCompression,
 	}
-	l.transportChan = make(chan *websocketTransport, l.transportBuffer)
+	l.transportChan = make(chan *websocketTransport, l.TransportBuffer)
 	l.done = make(chan bool)
 	l.errChan = make(chan error)
 
 	go func() {
 		if l.tls() {
-			if err := srv.ServeTLS(listener, l.CertFile, l.KeyFile); err != nil {
+			if err := srv.ServeTLS(listener, "", ""); err != nil {
 				l.errChan <- fmt.Errorf("ws listener: %w", err)
 			}
 		} else {
@@ -209,11 +216,11 @@ func (l *WebsocketTransportListener) Listen(ctx context.Context, addr net.Addr) 
 	return nil
 }
 
-func (l *WebsocketTransportListener) tls() bool {
-	return l.TLSConfig != nil || (l.CertFile != "" && l.KeyFile != "")
+func (l *websocketTransportListener) tls() bool {
+	return l.TLSConfig != nil
 }
 
-func (l *WebsocketTransportListener) Accept(ctx context.Context) (Transport, error) {
+func (l *websocketTransportListener) Accept(ctx context.Context) (Transport, error) {
 	if err := l.ensureStarted(); err != nil {
 		return nil, err
 	}
@@ -233,7 +240,7 @@ func (l *WebsocketTransportListener) Accept(ctx context.Context) (Transport, err
 	}
 }
 
-func (l *WebsocketTransportListener) Close() error {
+func (l *websocketTransportListener) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -254,7 +261,7 @@ func (l *WebsocketTransportListener) Close() error {
 	return nil
 }
 
-func (l *WebsocketTransportListener) ensureStarted() error {
+func (l *websocketTransportListener) ensureStarted() error {
 	if l.srv == nil {
 		return errors.New("ws listener: listener is not started")
 	}
@@ -262,7 +269,7 @@ func (l *WebsocketTransportListener) ensureStarted() error {
 	return nil
 }
 
-func (l *WebsocketTransportListener) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+func (l *websocketTransportListener) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	conn, err := l.upgrader.Upgrade(writer, request, nil)
 	if err != nil {
 		log.Println(err)

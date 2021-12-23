@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-func createWebsocketListener(ctx context.Context, t testing.TB, addr net.Addr, transportChan chan Transport) *WebsocketTransportListener {
-	listener := &WebsocketTransportListener{}
+func createWebsocketListener(ctx context.Context, t testing.TB, addr net.Addr, transportChan chan Transport) TransportListener {
+	listener := NewWebsocketTransportListener(&WebsocketConfig{})
 	if err := listener.Listen(ctx, addr); err != nil {
 		t.Fatal(err)
 		return nil
@@ -36,13 +36,12 @@ func listenTransports(transportChan chan Transport, listener TransportListener) 
 	}
 }
 
-func createWebsocketListenerTLS(ctx context.Context, t testing.TB, addr net.Addr, transportChan chan Transport) *WebsocketTransportListener {
-	listener := &WebsocketTransportListener{}
-	listener.TLSConfig = &tls.Config{
+func createWebsocketListenerTLS(ctx context.Context, t testing.TB, addr net.Addr, transportChan chan Transport) TransportListener {
+	listener := NewWebsocketTransportListener(&WebsocketConfig{TLSConfig: &tls.Config{
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return createCertificate("127.0.0.1")
 		},
-	}
+	}})
 	if err := listener.Listen(ctx, addr); err != nil {
 		t.Fatal(err)
 		return nil

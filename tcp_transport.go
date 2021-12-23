@@ -224,7 +224,7 @@ func (t *tcpTransport) ensureOpen() error {
 	return nil
 }
 
-type TCPTransportListener struct {
+type tcpTransportListener struct {
 	TCPConfig
 	listener net.Listener
 	mu       sync.Mutex
@@ -234,7 +234,7 @@ func NewTCPTransportListener(config *TCPConfig) TransportListener {
 	if config == nil {
 		config = &defaultTCPConfig
 	}
-	return &TCPTransportListener{TCPConfig: *config}
+	return &tcpTransportListener{TCPConfig: *config}
 }
 
 type TCPConfig struct {
@@ -245,7 +245,7 @@ type TCPConfig struct {
 
 var defaultTCPConfig = TCPConfig{}
 
-func (t *TCPTransportListener) Listen(ctx context.Context, addr net.Addr) error {
+func (t *tcpTransportListener) Listen(ctx context.Context, addr net.Addr) error {
 	if addr.Network() != "tcp" {
 		return errors.New("address network should be tcp")
 	}
@@ -267,7 +267,7 @@ func (t *TCPTransportListener) Listen(ctx context.Context, addr net.Addr) error 
 	return nil
 }
 
-func (t *TCPTransportListener) Accept(ctx context.Context) (Transport, error) {
+func (t *tcpTransportListener) Accept(ctx context.Context) (Transport, error) {
 	if t.listener == nil {
 		return nil, errors.New("tcp listener is not started")
 	}
@@ -294,7 +294,7 @@ func (t *TCPTransportListener) Accept(ctx context.Context) (Transport, error) {
 	return &transport, nil
 }
 
-func (t *TCPTransportListener) Close() error {
+func (t *tcpTransportListener) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
