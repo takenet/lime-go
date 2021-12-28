@@ -163,7 +163,7 @@ type websocketTransportListener struct {
 	srv           *http.Server
 	upgrader      *websocket.Upgrader
 	transportChan chan *websocketTransport
-	done          chan bool
+	done          chan struct{}
 	errChan       chan error
 	mu            sync.Mutex
 }
@@ -197,20 +197,19 @@ func (l *websocketTransportListener) Listen(ctx context.Context, addr net.Addr) 
 		EnableCompression: l.EnableCompression,
 	}
 	l.transportChan = make(chan *websocketTransport, l.TransportBuffer)
-	l.done = make(chan bool)
+	l.done = make(chan struct{})
 	l.errChan = make(chan error)
 
 	go func() {
 		if l.tls() {
 			if err := srv.ServeTLS(listener, "", ""); err != nil {
-				l.errChan <- fmt.Errorf("ws listener: %w", err)
+				l.reportError(err)
 			}
 		} else {
 			if err := srv.Serve(listener); err != nil {
-				l.errChan <- fmt.Errorf("ws listener: %w", err)
+				l.reportError(err)
 			}
 		}
-		_ = l.Close()
 	}()
 
 	return nil
@@ -248,16 +247,19 @@ func (l *websocketTransportListener) Close() error {
 		return err
 	}
 
-	if err := l.srv.Close(); err != nil {
-		return err
-	}
-
-	if err := l.listener.Close(); err != nil {
-		return err
-	}
-
-	l.srv = nil
 	close(l.done)
+
+	srvErr := l.srv.Close()
+	listErr := l.listener.Close()
+
+	if srvErr != nil {
+		return srvErr
+	}
+
+	if listErr != nil {
+		return listErr
+	}
+
 	return nil
 }
 
@@ -272,7 +274,7 @@ func (l *websocketTransportListener) ensureStarted() error {
 func (l *websocketTransportListener) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	conn, err := l.upgrader.Upgrade(writer, request, nil)
 	if err != nil {
-		log.Println(err)
+		log.Printf("ws listener: serveHTTP: %v\n", err)
 		return
 	}
 
@@ -287,5 +289,15 @@ func (l *websocketTransportListener) ServeHTTP(writer http.ResponseWriter, reque
 		ws.e = SessionEncryptionNone
 	}
 
-	l.transportChan <- ws
+	select {
+	case l.transportChan <- ws:
+	case <-l.done:
+	}
+}
+
+func (l *websocketTransportListener) reportError(err error) {
+	select {
+	case l.errChan <- fmt.Errorf("ws listener: %w", err):
+	case <-l.done:
+	}
 }

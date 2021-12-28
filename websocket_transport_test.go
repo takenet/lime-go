@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 	"net"
 	"testing"
 	"time"
@@ -78,6 +79,7 @@ func createWSAddr() net.Addr {
 
 func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
@@ -87,6 +89,7 @@ func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
 
 	// Act
 	client, err := DialWebsocket(ctx, url, nil, nil)
+	defer silentClose(client)
 
 	// Assert
 	assert.NoError(t, err)
@@ -96,6 +99,7 @@ func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
 
 func TestWebsocketTransport_Dial_WhenNotListening(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
@@ -112,6 +116,7 @@ func TestWebsocketTransport_Dial_WhenNotListening(t *testing.T) {
 
 func TestWebsocketTransport_Dial_AfterListenerClosed(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
@@ -132,6 +137,7 @@ func TestWebsocketTransport_Dial_AfterListenerClosed(t *testing.T) {
 
 func TestWebsocketTransport_Close_WhenOpen(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
@@ -149,6 +155,7 @@ func TestWebsocketTransport_Close_WhenOpen(t *testing.T) {
 
 func TestWebsocketTransport_Close_WhenAlreadyClosed(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
@@ -170,6 +177,7 @@ func TestWebsocketTransport_Close_WhenAlreadyClosed(t *testing.T) {
 
 func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
@@ -188,6 +196,7 @@ func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
 
 func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
@@ -206,6 +215,7 @@ func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
 
 func TestWebsocketTransport_Send_Session(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
@@ -224,6 +234,7 @@ func TestWebsocketTransport_Send_Session(t *testing.T) {
 
 func TestWebsocketTransport_Receive_Session(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
@@ -250,6 +261,7 @@ func TestWebsocketTransport_Receive_Session(t *testing.T) {
 
 func TestWebsocketTransport_Send_SessionTLS(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
@@ -268,6 +280,7 @@ func TestWebsocketTransport_Send_SessionTLS(t *testing.T) {
 
 func TestWebsocketTransport_Receive_SessionTLS(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createWSAddr()
