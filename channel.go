@@ -78,6 +78,7 @@ type channel struct {
 	inCmdChan  chan *Command
 	inSesChan  chan *Session
 	errChan    chan error
+	once       sync.Once
 
 	processingCmds   map[string]chan *Command
 	processingCmdsMu sync.RWMutex
@@ -129,10 +130,11 @@ func (c *channel) setState(state SessionState) {
 
 	switch state {
 	case SessionStateEstablished:
-		c.startGoroutines()
+		c.once.Do(c.startGoroutines)
 	case SessionStateFinished, SessionStateFailed:
 		if c.cancel != nil {
 			c.cancel()
+			c.cancel = nil
 		}
 	}
 }
@@ -339,6 +341,18 @@ func (c *channel) ReceiveCommand(ctx context.Context) (*Command, error) {
 
 func (c *channel) ProcessCommand(ctx context.Context, reqCmd *Command) (*Command, error) {
 	return c.processCommand(ctx, c, reqCmd)
+}
+
+func (c *channel) Close() error {
+	if c.cancel != nil {
+		c.cancel()
+		c.cancel = nil
+	}
+	if c.transport.Connected() {
+		return c.transport.Close()
+	}
+
+	return nil
 }
 
 func (c *channel) sendToBuffer(ctx context.Context, e Envelope, action string) error {

@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 	"golang.org/x/sync/errgroup"
 	"io"
 	"math/big"
@@ -176,6 +177,7 @@ func doTLSHandshake(ctx context.Context, server Transport, client Transport) err
 
 func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
@@ -194,6 +196,7 @@ func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 
 func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -209,6 +212,7 @@ func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 
 func TestTCPTransport_Dial_AfterListenerClosed(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	if err := listener.Close(); err != nil {
@@ -228,10 +232,12 @@ func TestTCPTransport_Dial_AfterListenerClosed(t *testing.T) {
 
 func TestTCPTransport_Close_WhenOpen(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
 	client := createClientTCPTransport(t, createTCPAddress())
+	defer silentClose(client)
 
 	// Act
 	err := client.Close()
@@ -242,10 +248,12 @@ func TestTCPTransport_Close_WhenOpen(t *testing.T) {
 
 func TestTCPTransport_Close_WhenAlreadyClosed(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
 	client := createClientTCPTransport(t, createTCPAddress())
+	defer silentClose(client)
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -260,6 +268,7 @@ func TestTCPTransport_Close_WhenAlreadyClosed(t *testing.T) {
 
 func TestTCPTransport_Close_WhenNotOpen(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client := tcpTransport{}
 
 	// Act
@@ -272,10 +281,12 @@ func TestTCPTransport_Close_WhenNotOpen(t *testing.T) {
 
 func TestTCPTransport_SetEncryption_None(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
 	client := createClientTCPTransport(t, createTCPAddress())
+	defer silentClose(client)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
@@ -289,6 +300,7 @@ func TestTCPTransport_SetEncryption_None(t *testing.T) {
 
 func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)
@@ -311,10 +323,12 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 
 func TestTCPTransport_Send_Session(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
 	client := createClientTCPTransport(t, createTCPAddress())
+	defer silentClose(client)
 	s := createSession()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -328,11 +342,13 @@ func TestTCPTransport_Send_Session(t *testing.T) {
 
 func TestTCPTransport_Receive_Session(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListener(t, addr, transportChan)
 	defer silentClose(listener)
 	client := createClientTCPTransport(t, createTCPAddress())
+	defer silentClose(client)
 	server := receiveTransport(t, transportChan)
 	s := createSession()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -353,6 +369,7 @@ func TestTCPTransport_Receive_Session(t *testing.T) {
 
 func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)
@@ -375,6 +392,7 @@ func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 
 func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	addr := createTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)

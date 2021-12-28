@@ -11,6 +11,7 @@ func TestClientChannel_EstablishSession_WhenStateEstablished(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := NewClientChannel(client, 1)
+	defer silentClose(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
@@ -75,6 +76,7 @@ func TestClientChannel_EstablishSession_WhenStateFailed(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := NewClientChannel(client, 1)
+	defer silentClose(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
@@ -145,6 +147,7 @@ func TestClientChannel_FinishSession(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := NewClientChannel(client, 1)
+	defer silentClose(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	c.setState(SessionStateEstablished)

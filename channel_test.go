@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 	"testing"
 	"time"
 )
 
 func TestChannel_Established_WhenEstablished(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 
 	// Act
@@ -23,8 +26,10 @@ func TestChannel_Established_WhenEstablished(t *testing.T) {
 
 func TestChannel_Established_WhenNew(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 
 	// Act
 	established := c.Established()
@@ -35,8 +40,10 @@ func TestChannel_Established_WhenNew(t *testing.T) {
 
 func TestChannel_Established_WhenTransportClosed(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	_ = client.Close()
 
@@ -49,8 +56,10 @@ func TestChannel_Established_WhenTransportClosed(t *testing.T) {
 
 func TestChannel_SendMessage_WhenEstablished(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	m := createMessage()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -68,9 +77,11 @@ func TestChannel_SendMessage_WhenEstablished(t *testing.T) {
 
 func TestChannel_SendMessage_Batch(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	count := 100
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -118,6 +129,7 @@ func BenchmarkChannel_SendMessage(b *testing.B) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 0)
 	c := newChannel(client, 0)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -155,8 +167,10 @@ func BenchmarkChannel_SendMessage(b *testing.B) {
 
 func TestChannel_SendMessage_NoBuffer(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 0)
 	c := newChannel(client, 0)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	m1 := createMessage() // Will wait in the transport chan
 	m2 := createMessage() // Will not be sent
@@ -180,8 +194,10 @@ func TestChannel_SendMessage_NoBuffer(t *testing.T) {
 
 func TestChannel_SendMessage_FullBuffer(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 0)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	m1 := createMessage() // Will wait in the transport chan
 	m2 := createMessage() // Will wait in the channel buffer
@@ -209,8 +225,10 @@ func TestChannel_SendMessage_FullBuffer(t *testing.T) {
 
 func TestChannel_SendMessage_NilMessage(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	var m *Message = nil
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -224,8 +242,10 @@ func TestChannel_SendMessage_NilMessage(t *testing.T) {
 
 func TestChannel_SendMessage_WhenNew(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	m := createMessage()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -240,8 +260,10 @@ func TestChannel_SendMessage_WhenNew(t *testing.T) {
 
 func TestChannel_ReceiveMessage_WhenEstablished(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	m := createMessage()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -258,8 +280,10 @@ func TestChannel_ReceiveMessage_WhenEstablished(t *testing.T) {
 
 func TestChannel_ReceiveMessage_WhenContextCanceled(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
@@ -283,8 +307,10 @@ func TestChannel_ReceiveMessage_WhenFailedState(t *testing.T) {
 
 func receiveMessageWithState(t *testing.T, state SessionState) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -304,8 +330,10 @@ func receiveMessageWithState(t *testing.T, state SessionState) {
 
 func TestChannel_SendNotification_WhenEstablished(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	n := createNotification()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -323,9 +351,11 @@ func TestChannel_SendNotification_WhenEstablished(t *testing.T) {
 
 func TestChannel_SendNotification_Batch(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	count := 100
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -375,6 +405,7 @@ func BenchmarkChannel_SendNotification(b *testing.B) {
 	defer cancel()
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	notifications := make([]*Notification, b.N)
 	for i := 0; i < len(notifications); i++ {
@@ -410,8 +441,10 @@ func BenchmarkChannel_SendNotification(b *testing.B) {
 
 func TestChannel_SendNotification_NoBuffer(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 0)
 	c := newChannel(client, 0)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	m1 := createNotification() // Will wait in the transport chan
 	m2 := createNotification() // Will not be sent
@@ -435,8 +468,10 @@ func TestChannel_SendNotification_NoBuffer(t *testing.T) {
 
 func TestChannel_SendNotification_FullBuffer(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 0)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	m1 := createNotification() // Will wait in the transport chan
 	m2 := createNotification() // Will wait in the channel buffer
@@ -464,8 +499,10 @@ func TestChannel_SendNotification_FullBuffer(t *testing.T) {
 
 func TestChannel_SendNotification_NilNotification(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	var n *Notification = nil
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -479,8 +516,10 @@ func TestChannel_SendNotification_NilNotification(t *testing.T) {
 
 func TestChannel_SendNotification_WhenNew(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	n := createNotification()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -495,8 +534,10 @@ func TestChannel_SendNotification_WhenNew(t *testing.T) {
 
 func TestChannel_ReceiveNotification_WhenEstablished(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	n := createNotification()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -513,8 +554,10 @@ func TestChannel_ReceiveNotification_WhenEstablished(t *testing.T) {
 
 func TestChannel_ReceiveNotification_WhenContextCanceled(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
@@ -530,16 +573,19 @@ func TestChannel_ReceiveNotification_WhenContextCanceled(t *testing.T) {
 
 func TestChannel_ReceiveNotification_WhenFinishedState(t *testing.T) {
 	receiveNotificationWithState(t, SessionStateFinished)
+	defer goleak.VerifyNone(t)
 }
 
 func TestChannel_ReceiveNotification_WhenFailedState(t *testing.T) {
 	receiveNotificationWithState(t, SessionStateFailed)
+	defer goleak.VerifyNone(t)
 }
 
 func receiveNotificationWithState(t *testing.T, state SessionState) {
 	// Arrange
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -559,8 +605,10 @@ func receiveNotificationWithState(t *testing.T, state SessionState) {
 
 func TestChannel_SendCommand_WhenEstablished(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	cmd := createGetPingCommand()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -578,9 +626,11 @@ func TestChannel_SendCommand_WhenEstablished(t *testing.T) {
 
 func TestChannel_SendCommand_Batch(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	count := 100
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -628,6 +678,7 @@ func BenchmarkChannel_SendCommand(b *testing.B) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -665,8 +716,10 @@ func BenchmarkChannel_SendCommand(b *testing.B) {
 
 func TestChannel_SendCommand_NoBuffer(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 0)
 	c := newChannel(client, 0)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	m1 := createGetPingCommand() // Will wait in the transport chan
 	m2 := createGetPingCommand() // Will not be sent
@@ -690,8 +743,10 @@ func TestChannel_SendCommand_NoBuffer(t *testing.T) {
 
 func TestChannel_SendCommand_FullBuffer(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 0)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	m1 := createGetPingCommand() // Will wait in the transport chan
 	m2 := createGetPingCommand() // Will wait in the channel buffer
@@ -719,8 +774,10 @@ func TestChannel_SendCommand_FullBuffer(t *testing.T) {
 
 func TestChannel_SendCommand_NilCommand(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	var cmd *Command = nil
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -734,8 +791,10 @@ func TestChannel_SendCommand_NilCommand(t *testing.T) {
 
 func TestChannel_SendCommand_WhenNew(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	cmd := createGetPingCommand()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -750,8 +809,10 @@ func TestChannel_SendCommand_WhenNew(t *testing.T) {
 
 func TestChannel_ReceiveCommand_WhenEstablished(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	cmd := createGetPingCommand()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -768,8 +829,10 @@ func TestChannel_ReceiveCommand_WhenEstablished(t *testing.T) {
 
 func TestChannel_ReceiveCommand_WhenContextCanceled(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
@@ -785,16 +848,19 @@ func TestChannel_ReceiveCommand_WhenContextCanceled(t *testing.T) {
 
 func TestChannel_ReceiveCommand_WhenFinishedState(t *testing.T) {
 	receiveCommandWithState(t, SessionStateFinished)
+	defer goleak.VerifyNone(t)
 }
 
 func TestChannel_ReceiveCommand_WhenFailedState(t *testing.T) {
 	receiveCommandWithState(t, SessionStateFailed)
+	defer goleak.VerifyNone(t)
 }
 
 func receiveCommandWithState(t *testing.T, state SessionState) {
 	// Arrange
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -814,8 +880,10 @@ func receiveCommandWithState(t *testing.T, state SessionState) {
 
 func TestChannel_ProcessCommand(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	reqCmd := createGetPingCommand()
 	respCmd := createResponseCommand()
@@ -842,8 +910,10 @@ func TestChannel_ProcessCommand(t *testing.T) {
 
 func TestChannel_ProcessCommand_WhenContextCancelled(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	reqCmd := createGetPingCommand()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -860,8 +930,10 @@ func TestChannel_ProcessCommand_WhenContextCancelled(t *testing.T) {
 
 func TestChannel_ProcessCommand_ResponseWithAnotherId(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
+	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	reqCmd := createGetPingCommand()
 	respCmd := createResponseCommand()

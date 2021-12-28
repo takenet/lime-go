@@ -3,6 +3,7 @@ package lime
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 	"testing"
 	"time"
 )
@@ -110,6 +111,7 @@ func TestInProcessTransport_Close_WhenOpen(t *testing.T) {
 
 func TestInProcessTransport_Send_Session(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
 	defer silentClose(listener)
@@ -125,6 +127,7 @@ func TestInProcessTransport_Send_Session(t *testing.T) {
 
 func TestInProcessTransport_Receive_Session(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	var addr InProcessAddr = "localhost"
 	var transportChan = make(chan Transport, 1)
 	listener := createInProcessListener(t, addr, transportChan)

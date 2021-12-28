@@ -17,6 +17,7 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
+	defer silentClose(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
@@ -79,6 +80,7 @@ func TestServerChannel_FinishSession(t *testing.T) {
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
+	defer silentClose(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	c.setState(SessionStateEstablished)
@@ -130,6 +132,7 @@ func TestServerChannel_FailSession(t *testing.T) {
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
+	defer silentClose(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	c.setState(SessionStateEstablished)

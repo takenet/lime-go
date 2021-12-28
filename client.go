@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
+	"math"
 	"sync"
 	"time"
 )
@@ -89,26 +91,39 @@ func (c *client) ProcessCommand(ctx context.Context, cmd *Command) (*Command, er
 	panic("implement me")
 }
 
+func (c *client) channelOK() bool {
+	return c.channel != nil && c.channel.Established()
+}
+
 func (c *client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) {
-	if c.channel != nil && c.channel.Established() {
+	if c.channelOK() {
 		return c.channel, nil
 	}
 
 	c.buildMu.Lock()
 	defer c.buildMu.Unlock()
-	if c.channel != nil && c.channel.Established() {
+	if c.channelOK() {
 		return c.channel, nil
 	}
 
-	return c.buildChannel(ctx)
+	count := 0.0
+
+	for ctx.Err() == nil {
+		channel, err := c.buildChannel(ctx)
+		if channel != nil {
+			return channel, nil
+		}
+
+		interval := time.Duration(math.Pow(count, 2) * 100)
+		log.Printf("build channel error on attempt %v, sleeping %v ms: %v", count, interval, err)
+		time.Sleep(interval * time.Millisecond)
+		count++
+	}
+
+	return nil, fmt.Errorf("getOrBuildChannel: %w", ctx.Err())
 }
 
 func (c *client) buildChannel(ctx context.Context) (*ClientChannel, error) {
-
-	if c.channel != nil {
-
-	}
-
 	channel, err := c.builder.Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getOrBuildChannel: %w", err)
