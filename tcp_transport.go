@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"reflect"
 	"sync"
@@ -227,7 +228,9 @@ func (t *tcpTransport) ensureOpen() error {
 type tcpTransportListener struct {
 	TCPConfig
 	listener net.Listener
-	mu       sync.Mutex
+	mu       sync.RWMutex
+	connChan chan net.Conn
+	done     chan struct{}
 }
 
 func NewTCPTransportListener(config *TCPConfig) TransportListener {
@@ -241,69 +244,106 @@ type TCPConfig struct {
 	ReadLimit   int64       // ReadLimit defines the limit for buffered data in read operations.
 	TraceWriter TraceWriter // TraceWriter sets the trace writer for tracing connection envelopes
 	TLSConfig   *tls.Config
+	ConnBuffer  int
 }
 
 var defaultTCPConfig = TCPConfig{}
 
-func (t *tcpTransportListener) Listen(ctx context.Context, addr net.Addr) error {
+func (l *tcpTransportListener) Listen(ctx context.Context, addr net.Addr) error {
 	if addr.Network() != "tcp" {
 		return errors.New("address network should be tcp")
 	}
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-	if t.listener != nil {
+	if l.listener != nil {
 		return errors.New("tcp listener is already started")
 	}
 
 	var lc net.ListenConfig
-	l, err := lc.Listen(ctx, "tcp", addr.String())
+	listener, err := lc.Listen(ctx, "tcp", addr.String())
 	if err != nil {
 		return err
 	}
 
-	t.listener = l
+	l.listener = listener
+	l.done = make(chan struct{})
+	l.connChan = make(chan net.Conn, l.ConnBuffer)
+
+	go l.serve()
+
 	return nil
 }
 
-func (t *tcpTransportListener) Accept(ctx context.Context) (Transport, error) {
-	if t.listener == nil {
-		return nil, errors.New("tcp listener is not started")
+func (l *tcpTransportListener) serve() {
+	defer close(l.connChan)
+
+	for listener := l.listener; listener != nil; {
+		conn, err := listener.Accept()
+		if err != nil {
+			select {
+			case <-l.done:
+				return
+			default:
+				log.Printf("tcp serve error: %v", err)
+			}
+		} else {
+			select {
+			case <-l.done:
+				return
+			case l.connChan <- conn:
+			}
+		}
 	}
-
-	err := ctx.Err()
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := t.listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-
-	transport := tcpTransport{
-		TCPConfig:  t.TCPConfig,
-		encryption: SessionEncryptionNone,
-	}
-	transport.server = true
-	transport.ReadLimit = t.ReadLimit
-
-	transport.setConn(conn)
-
-	return &transport, nil
 }
 
-func (t *tcpTransportListener) Close() error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (l *tcpTransportListener) Accept(ctx context.Context) (Transport, error) {
+	if err := l.ensureStarted(); err != nil {
+		return nil, err
+	}
 
-	if t.listener == nil {
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("tcp listener: %w", ctx.Err())
+	case <-l.done:
+		return nil, errors.New("tcp listener closed")
+	case conn, ok := <-l.connChan:
+		if !ok {
+			return nil, errors.New("tcp listener not serving")
+		}
+		transport := tcpTransport{
+			TCPConfig:  l.TCPConfig,
+			encryption: SessionEncryptionNone,
+		}
+		transport.server = true
+		transport.ReadLimit = l.ReadLimit
+		transport.setConn(conn)
+		return &transport, nil
+	}
+}
+
+func (l *tcpTransportListener) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.listener == nil {
 		return errors.New("tcp listener is not started")
 	}
 
-	err := t.listener.Close()
-	t.listener = nil
+	close(l.done)
+	err := l.listener.Close()
+	l.listener = nil
 
 	return err
+}
+
+func (l *tcpTransportListener) ensureStarted() error {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if l.listener == nil {
+		return errors.New("tcp listener is not started")
+	}
+
+	return nil
 }
