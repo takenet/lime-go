@@ -165,64 +165,6 @@ func BenchmarkChannel_SendMessage(b *testing.B) {
 	}
 }
 
-func TestChannel_SendMessage_NoBuffer(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t)
-	client, server := newInProcessTransportPair("localhost", 0)
-	c := newChannel(client, 0)
-	defer silentClose(c)
-	c.setState(SessionStateEstablished)
-	m1 := createMessage() // Will wait in the transport chan
-	m2 := createMessage() // Will not be sent
-
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	_ = c.SendMessage(ctx, m1)
-
-	// Act
-	err := c.SendMessage(ctx, m2)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "send message: context deadline exceeded", err.Error())
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	actual, err := server.Receive(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, m1, actual)
-}
-
-func TestChannel_SendMessage_FullBuffer(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t)
-	client, server := newInProcessTransportPair("localhost", 0)
-	c := newChannel(client, 1)
-	defer silentClose(c)
-	c.setState(SessionStateEstablished)
-	m1 := createMessage() // Will wait in the transport chan
-	m2 := createMessage() // Will wait in the channel buffer
-	m3 := createMessage() // Will not be sent
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	_ = c.SendMessage(ctx, m1)
-	_ = c.SendMessage(ctx, m2)
-
-	// Act
-	err := c.SendMessage(ctx, m3)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "send message: context deadline exceeded", err.Error())
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	actual1, err := server.Receive(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, m1, actual1)
-	actual2, err := server.Receive(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, m2, actual2)
-}
-
 func TestChannel_SendMessage_NilMessage(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
@@ -437,64 +379,6 @@ func BenchmarkChannel_SendNotification(b *testing.B) {
 	case <-done:
 		break
 	}
-}
-
-func TestChannel_SendNotification_NoBuffer(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t)
-	client, server := newInProcessTransportPair("localhost", 0)
-	c := newChannel(client, 0)
-	defer silentClose(c)
-	c.setState(SessionStateEstablished)
-	m1 := createNotification() // Will wait in the transport chan
-	m2 := createNotification() // Will not be sent
-
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	_ = c.SendNotification(ctx, m1)
-
-	// Act
-	err := c.SendNotification(ctx, m2)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "send notification: context deadline exceeded", err.Error())
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	actual, err := server.Receive(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, m1, actual)
-}
-
-func TestChannel_SendNotification_FullBuffer(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t)
-	client, server := newInProcessTransportPair("localhost", 0)
-	c := newChannel(client, 1)
-	defer silentClose(c)
-	c.setState(SessionStateEstablished)
-	m1 := createNotification() // Will wait in the transport chan
-	m2 := createNotification() // Will wait in the channel buffer
-	m3 := createNotification() // Will not be sent
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	_ = c.SendNotification(ctx, m1)
-	_ = c.SendNotification(ctx, m2)
-
-	// Act
-	err := c.SendNotification(ctx, m3)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "send notification: context deadline exceeded", err.Error())
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	actual1, err := server.Receive(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, m1, actual1)
-	actual2, err := server.Receive(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, m2, actual2)
 }
 
 func TestChannel_SendNotification_NilNotification(t *testing.T) {
@@ -712,64 +596,6 @@ func BenchmarkChannel_SendCommand(b *testing.B) {
 	case <-done:
 		break
 	}
-}
-
-func TestChannel_SendCommand_NoBuffer(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t)
-	client, server := newInProcessTransportPair("localhost", 0)
-	c := newChannel(client, 0)
-	defer silentClose(c)
-	c.setState(SessionStateEstablished)
-	m1 := createGetPingCommand() // Will wait in the transport chan
-	m2 := createGetPingCommand() // Will not be sent
-
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	_ = c.SendCommand(ctx, m1)
-
-	// Act
-	err := c.SendCommand(ctx, m2)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "send command: context deadline exceeded", err.Error())
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	actual, err := server.Receive(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, m1, actual)
-}
-
-func TestChannel_SendCommand_FullBuffer(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t)
-	client, server := newInProcessTransportPair("localhost", 0)
-	c := newChannel(client, 1)
-	defer silentClose(c)
-	c.setState(SessionStateEstablished)
-	m1 := createGetPingCommand() // Will wait in the transport chan
-	m2 := createGetPingCommand() // Will wait in the channel buffer
-	m3 := createGetPingCommand() // Will not be sent
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	_ = c.SendCommand(ctx, m1)
-	_ = c.SendCommand(ctx, m2)
-
-	// Act
-	err := c.SendCommand(ctx, m3)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "send command: context deadline exceeded", err.Error())
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	actual1, err := server.Receive(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, m1, actual1)
-	actual2, err := server.Receive(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, m2, actual2)
 }
 
 func TestChannel_SendCommand_NilCommand(t *testing.T) {

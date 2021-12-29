@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"sync"
 )
@@ -72,13 +73,14 @@ type channel struct {
 	localNode  Node
 	state      SessionState
 	stateMu    sync.RWMutex
-	outChan    chan Envelope
 	inMsgChan  chan *Message
 	inNotChan  chan *Notification
 	inCmdChan  chan *Command
 	inSesChan  chan *Session
-	errChan    chan error
-	once       sync.Once
+	sendMu     sync.Mutex
+	startRcv   sync.Once
+	stopRcv    sync.Once
+	rcvDone    chan struct{}
 
 	processingCmds   map[string]chan *Command
 	processingCmdsMu sync.RWMutex
@@ -94,12 +96,11 @@ func newChannel(t Transport, bufferSize int) *channel {
 	c := channel{
 		transport:        t,
 		state:            SessionStateNew,
-		outChan:          make(chan Envelope, bufferSize),
 		inMsgChan:        make(chan *Message, bufferSize),
 		inNotChan:        make(chan *Notification, bufferSize),
 		inCmdChan:        make(chan *Command, bufferSize),
 		inSesChan:        make(chan *Session, bufferSize),
-		errChan:          make(chan error, 2),
+		rcvDone:          make(chan struct{}),
 		processingCmds:   make(map[string]chan *Command),
 		processingCmdsMu: sync.RWMutex{},
 	}
@@ -110,12 +111,17 @@ func (c *channel) Established() bool {
 	return c.State() == SessionStateEstablished && c.transport.Connected()
 }
 
-func (c *channel) startGoroutines() {
+func (c *channel) startReceiver() {
 	ctx, cancel := context.WithCancel(context.Background())
 	c.cancel = cancel
+	go receiveFromTransport(ctx, c, c.rcvDone)
+}
 
-	go receiveFromTransport(ctx, c)
-	go sendToTransport(ctx, c)
+func (c *channel) stopReceiver() {
+	if c.cancel != nil {
+		c.cancel()
+		<-c.rcvDone
+	}
 }
 
 func (c *channel) setState(state SessionState) {
@@ -130,12 +136,9 @@ func (c *channel) setState(state SessionState) {
 
 	switch state {
 	case SessionStateEstablished:
-		c.once.Do(c.startGoroutines)
+		c.startRcv.Do(c.startReceiver)
 	case SessionStateFinished, SessionStateFailed:
-		if c.cancel != nil {
-			c.cancel()
-			c.cancel = nil
-		}
+		c.stopRcv.Do(c.stopReceiver)
 	}
 }
 
@@ -155,56 +158,55 @@ func (c *channel) SesChan() <-chan *Session {
 	return c.inSesChan
 }
 
-func (c *channel) ErrChan() <-chan error {
-	return c.errChan
-}
+func receiveFromTransport(ctx context.Context, c *channel, done chan<- struct{}) {
+	defer func() {
+		close(done)
+		close(c.inMsgChan)
+		close(c.inNotChan)
+		close(c.inCmdChan)
+		close(c.inSesChan)
+	}()
 
-func receiveFromTransport(ctx context.Context, c *channel) {
 	for c.Established() {
 		env, err := c.transport.Receive(ctx)
 		if err != nil {
-			c.errChan <- err
-			break
+			if ctx.Err() == nil {
+				log.Printf("receiveFromTransport: %v", err)
+			}
+			return
 		}
 
 		switch e := env.(type) {
 		case *Message:
-			c.inMsgChan <- e
+			select {
+			case <-ctx.Done():
+				return
+			case c.inMsgChan <- e:
+			}
 		case *Notification:
-			c.inNotChan <- e
+			select {
+			case <-ctx.Done():
+				return
+			case c.inNotChan <- e:
+			}
 		case *Command:
 			if !c.trySubmitCommandResult(e) {
-				c.inCmdChan <- e
+				select {
+				case <-ctx.Done():
+					return
+				case c.inCmdChan <- e:
+				}
 			}
 		case *Session:
-			c.inSesChan <- e
-		default:
-			panic(fmt.Errorf("unknown envelope type %v", e))
-		}
-	}
-	close(c.inMsgChan)
-	close(c.inNotChan)
-	close(c.inCmdChan)
-	close(c.inSesChan)
-}
-
-func sendToTransport(ctx context.Context, c *channel) {
-	for c.Established() {
-		select {
-		case <-ctx.Done():
-			break
-		case e, ok := <-c.outChan:
-			if !ok {
+			select {
+			case <-ctx.Done():
 				return
+			case c.inSesChan <- e:
 			}
-			err := c.transport.Send(ctx, e)
-			if err != nil {
-				c.errChan <- err
-				break
-			}
+		default:
+			panic(fmt.Errorf("unknown envelope type %v", reflect.ValueOf(e)))
 		}
 	}
-	close(c.outChan)
 }
 
 func (c *channel) ID() string {
@@ -281,7 +283,7 @@ func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 }
 
 func (c *channel) SendMessage(ctx context.Context, msg *Message) error {
-	return c.sendToBuffer(ctx, msg, "send message")
+	return c.sendToTransport(ctx, msg, "send message")
 }
 
 func (c *channel) ReceiveMessage(ctx context.Context) (*Message, error) {
@@ -300,7 +302,7 @@ func (c *channel) ReceiveMessage(ctx context.Context) (*Message, error) {
 	}
 }
 func (c *channel) SendNotification(ctx context.Context, not *Notification) error {
-	return c.sendToBuffer(ctx, not, "send notification")
+	return c.sendToTransport(ctx, not, "send notification")
 }
 
 func (c *channel) ReceiveNotification(ctx context.Context) (*Notification, error) {
@@ -320,7 +322,7 @@ func (c *channel) ReceiveNotification(ctx context.Context) (*Notification, error
 }
 
 func (c *channel) SendCommand(ctx context.Context, cmd *Command) error {
-	return c.sendToBuffer(ctx, cmd, "send command")
+	return c.sendToTransport(ctx, cmd, "send command")
 }
 
 func (c *channel) ReceiveCommand(ctx context.Context) (*Command, error) {
@@ -344,10 +346,7 @@ func (c *channel) ProcessCommand(ctx context.Context, reqCmd *Command) (*Command
 }
 
 func (c *channel) Close() error {
-	if c.cancel != nil {
-		c.cancel()
-		c.cancel = nil
-	}
+	c.stopRcv.Do(c.stopReceiver)
 	if c.transport.Connected() {
 		return c.transport.Close()
 	}
@@ -355,7 +354,7 @@ func (c *channel) Close() error {
 	return nil
 }
 
-func (c *channel) sendToBuffer(ctx context.Context, e Envelope, action string) error {
+func (c *channel) sendToTransport(ctx context.Context, e Envelope, action string) error {
 	if e == nil || reflect.ValueOf(e).IsNil() {
 		panic(fmt.Errorf("%v: envelope cannot be nil", action))
 	}
@@ -363,12 +362,14 @@ func (c *channel) sendToBuffer(ctx context.Context, e Envelope, action string) e
 		return err
 	}
 
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("%v: %w", action, ctx.Err())
-	case c.outChan <- e:
-		return nil
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+
+	if err := c.transport.Send(ctx, e); err != nil {
+		return fmt.Errorf("%v: %w", action, err)
 	}
+
+	return nil
 }
 
 func (c *channel) ensureEstablished(action string) error {
