@@ -92,12 +92,9 @@ func (t *websocketTransport) Close() error {
 		return err
 	}
 
-	if err := t.conn.Close(); err != nil {
-		return err
-	}
-
+	err := t.conn.Close()
 	t.conn = nil
-	return nil
+	return err
 }
 
 func (t *websocketTransport) SupportedCompression() []SessionCompression {
@@ -154,18 +151,17 @@ type WebsocketConfig struct {
 	TLSConfig         *tls.Config
 	TraceWriter       TraceWriter // TraceWriter sets the trace writer for tracing connection envelopes
 	EnableCompression bool
-	TransportBuffer   int
+	ConnBuffer        int
 }
 
 type websocketTransportListener struct {
 	WebsocketConfig
-	listener      net.Listener
-	srv           *http.Server
-	upgrader      *websocket.Upgrader
-	transportChan chan *websocketTransport
-	done          chan struct{}
-	errChan       chan error
-	mu            sync.Mutex
+	listener net.Listener
+	srv      *http.Server
+	upgrader *websocket.Upgrader
+	connChan chan *websocket.Conn
+	done     chan struct{}
+	mu       sync.RWMutex
 }
 
 func NewWebsocketTransportListener(config *WebsocketConfig) TransportListener {
@@ -196,18 +192,17 @@ func (l *websocketTransportListener) Listen(ctx context.Context, addr net.Addr) 
 		Subprotocols:      []string{"lime"},
 		EnableCompression: l.EnableCompression,
 	}
-	l.transportChan = make(chan *websocketTransport, l.TransportBuffer)
+	l.connChan = make(chan *websocket.Conn, l.ConnBuffer)
 	l.done = make(chan struct{})
-	l.errChan = make(chan error)
 
 	go func() {
 		if l.tls() {
-			if err := srv.ServeTLS(listener, "", ""); err != nil {
-				l.reportError(err)
+			if err := srv.ServeTLS(listener, "", ""); err != nil && err != net.ErrClosed {
+				log.Printf("ws listen: %v", err)
 			}
 		} else {
-			if err := srv.Serve(listener); err != nil {
-				l.reportError(err)
+			if err := srv.Serve(listener); err != nil && err != net.ErrClosed {
+				log.Printf("ws listen: %v", err)
 			}
 		}
 	}()
@@ -229,13 +224,18 @@ func (l *websocketTransportListener) Accept(ctx context.Context) (Transport, err
 		return nil, fmt.Errorf("ws listener: %w", ctx.Err())
 	case <-l.done:
 		return nil, errors.New("ws listener closed")
-	case err := <-l.errChan:
-		return nil, err
-	case transport, ok := <-l.transportChan:
-		if !ok {
-			return nil, errors.New("ws listener closed")
+	case conn := <-l.connChan:
+		ws := &websocketTransport{
+			conn: conn,
+			c:    SessionCompressionNone,
 		}
-		return transport, nil
+		if l.tls() {
+			ws.e = SessionEncryptionTLS
+		} else {
+			ws.e = SessionEncryptionNone
+		}
+
+		return ws, nil
 	}
 }
 
@@ -243,19 +243,17 @@ func (l *websocketTransportListener) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if err := l.ensureStarted(); err != nil {
-		return err
+	if l.srv == nil {
+		return errors.New("ws listener: listener is not started")
 	}
 
 	close(l.done)
-
 	srvErr := l.srv.Close()
+	l.srv = nil
 	listErr := l.listener.Close()
-
 	if srvErr != nil {
 		return srvErr
 	}
-
 	if listErr != nil {
 		return listErr
 	}
@@ -264,6 +262,8 @@ func (l *websocketTransportListener) Close() error {
 }
 
 func (l *websocketTransportListener) ensureStarted() error {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	if l.srv == nil {
 		return errors.New("ws listener: listener is not started")
 	}
@@ -278,26 +278,8 @@ func (l *websocketTransportListener) ServeHTTP(writer http.ResponseWriter, reque
 		return
 	}
 
-	ws := &websocketTransport{
-		conn: conn,
-		c:    SessionCompressionNone,
-	}
-
-	if l.tls() {
-		ws.e = SessionEncryptionTLS
-	} else {
-		ws.e = SessionEncryptionNone
-	}
-
 	select {
-	case l.transportChan <- ws:
 	case <-l.done:
-	}
-}
-
-func (l *websocketTransportListener) reportError(err error) {
-	select {
-	case l.errChan <- fmt.Errorf("ws listener: %w", err):
-	case <-l.done:
+	case l.connChan <- conn:
 	}
 }
