@@ -9,17 +9,17 @@ import (
 )
 
 type inProcessTransport struct {
-	remote   *inProcessTransport // The remote party
-	addr     InProcessAddr
-	envChan  chan Envelope
-	done     chan bool
-	closed   bool
-	closedMu sync.RWMutex
+	remote  *inProcessTransport // The remote party
+	addr    InProcessAddr
+	envChan chan Envelope
+	done    chan bool
+	closed  bool
+	mu      sync.RWMutex
 }
 
 func (t *inProcessTransport) Close() error {
-	t.closedMu.Lock()
-	defer t.closedMu.Unlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	if !t.closed {
 		t.closed = true
@@ -97,8 +97,8 @@ func (t *inProcessTransport) SetEncryption(context.Context, SessionEncryption) e
 }
 
 func (t *inProcessTransport) Connected() bool {
-	t.closedMu.RLock()
-	defer t.closedMu.RUnlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	return !t.closed
 }
 
