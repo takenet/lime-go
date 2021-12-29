@@ -77,6 +77,46 @@ func createWSAddr() net.Addr {
 	}
 }
 
+func TestWebsocketTransportListener_Accept_WhenContextDeadline(t *testing.T) {
+	// Arrange
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+	addr := createWSAddr()
+	listener := createWebsocketListener(ctx, t, addr, nil)
+	defer silentClose(listener)
+
+	// Act
+	server, err := listener.Accept(ctx)
+
+	// Assert
+	assert.Nil(t, server)
+	assert.Error(t, err)
+	assert.Equal(t, "ws listener: context deadline exceeded", err.Error())
+}
+
+func TestWebsocketTransportListener_Accept_WhenClosed(t *testing.T) {
+	// Arrange
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+	addr := createWSAddr()
+	listener := createWebsocketListener(ctx, t, addr, nil)
+	defer silentClose(listener)
+
+	// Act
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		_ = listener.Close()
+	}()
+	server, err := listener.Accept(ctx)
+
+	// Assert
+	assert.Nil(t, server)
+	assert.Error(t, err)
+	assert.Equal(t, "ws listener closed", err.Error())
+}
+
 func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)

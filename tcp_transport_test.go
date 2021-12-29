@@ -175,6 +175,45 @@ func doTLSHandshake(ctx context.Context, server Transport, client Transport) err
 	return eg.Wait()
 }
 
+func TestTCPTransportListener_Accept_WhenContextDeadline(t *testing.T) {
+	// Arrange
+	defer goleak.VerifyNone(t)
+	addr := createTCPAddress()
+	listener := createTCPListener(t, addr, nil)
+	defer silentClose(listener)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+
+	// Act
+	server, err := listener.Accept(ctx)
+
+	// Assert
+	assert.Nil(t, server)
+	assert.Error(t, err)
+	assert.Equal(t, "tcp listener: context deadline exceeded", err.Error())
+}
+
+func TestTCPTransportListener_Accept_WhenClosed(t *testing.T) {
+	// Arrange
+	defer goleak.VerifyNone(t)
+	addr := createTCPAddress()
+	listener := createTCPListener(t, addr, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+
+	// Act
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		_ = listener.Close()
+	}()
+	server, err := listener.Accept(ctx)
+
+	// Assert
+	assert.Nil(t, server)
+	assert.Error(t, err)
+	assert.Equal(t, "tcp listener closed", err.Error())
+}
+
 func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
@@ -191,7 +230,6 @@ func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
 	assert.True(t, client.Connected())
-
 }
 
 func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
