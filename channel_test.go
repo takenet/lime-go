@@ -278,7 +278,7 @@ func TestChannel_ReceiveMessage_WhenEstablished(t *testing.T) {
 	assert.Equal(t, m, actual)
 }
 
-func TestChannel_ReceiveMessage_WhenContextCanceled(t *testing.T) {
+func TestChannel_ReceiveMessage_WhenContextDeadline(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -908,7 +908,7 @@ func TestChannel_ProcessCommand(t *testing.T) {
 	assert.Equal(t, respCmd, actual)
 }
 
-func TestChannel_ProcessCommand_WhenContextCancelled(t *testing.T) {
+func TestChannel_ProcessCommand_WhenContextCanceled(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
