@@ -3,12 +3,14 @@ package lime
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 	"testing"
 	"time"
 )
 
 func TestClientChannel_EstablishSession_WhenStateEstablished(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := NewClientChannel(client, 1)
 	defer silentClose(c)
@@ -74,6 +76,7 @@ func TestClientChannel_EstablishSession_WhenStateEstablished(t *testing.T) {
 
 func TestClientChannel_EstablishSession_WhenStateFailed(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := NewClientChannel(client, 1)
 	defer silentClose(c)
@@ -145,6 +148,7 @@ func TestClientChannel_EstablishSession_WhenStateFailed(t *testing.T) {
 
 func TestClientChannel_FinishSession(t *testing.T) {
 	// Arrange
+	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := NewClientChannel(client, 1)
 	defer silentClose(c)
