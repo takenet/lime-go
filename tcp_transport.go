@@ -271,22 +271,23 @@ func (l *tcpTransportListener) Listen(ctx context.Context, addr net.Addr) error 
 	l.done = make(chan struct{})
 	l.connChan = make(chan net.Conn, l.ConnBuffer)
 
-	go l.serve()
+	go l.serve(listener)
 
 	return nil
 }
 
-func (l *tcpTransportListener) serve() {
+func (l *tcpTransportListener) serve(listener net.Listener) {
 	defer close(l.connChan)
 
-	for listener := l.listener; listener != nil; {
+	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			select {
 			case <-l.done:
 				return
 			default:
-				log.Printf("tcp serve error: %v", err)
+				log.Printf("tcp listener: serve: %v", err)
+				return
 			}
 		} else {
 			select {
