@@ -115,7 +115,7 @@ func main() {
 		}
 	}()
 
-	sig := make(chan os.Signal)
+	sig := make(chan os.Signal, 1)
 	signal.Notify(sig)
 	fmt.Println("Press Ctrl+C key to exit")
 	<-sig

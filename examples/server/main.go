@@ -43,7 +43,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	go listen(ctx, c)
 
-	sig := make(chan os.Signal)
+	sig := make(chan os.Signal, 1)
 	signal.Notify(sig)
 	fmt.Printf("Listening at %v. Press Ctrl+C to stop.\n", addr)
 	<-sig
@@ -66,7 +66,6 @@ func listen(ctx context.Context, c <-chan lime.Transport) {
 			if err := acceptTransport(ctx, t); err != nil {
 				_ = t.Close()
 				log.Printf("Accepting transport failed: %v\n", err)
-				break
 			}
 		}
 	}
