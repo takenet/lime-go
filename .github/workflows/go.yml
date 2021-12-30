@@ -32,6 +32,8 @@ jobs:
 
     - name: Build
       run: go build -v .
+      
+    - name: Go-Linty
 
     - name: Test
       run: go test -v .
