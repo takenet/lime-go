@@ -1,3 +1,5 @@
+//lint:file-ignore U1000 Not done yet
+
 package lime
 
 import (

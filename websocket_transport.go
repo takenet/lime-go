@@ -194,7 +194,6 @@ func (l *websocketTransportListener) Listen(ctx context.Context, addr net.Addr) 
 	}
 	l.connChan = make(chan *websocket.Conn, l.ConnBuffer)
 	l.done = make(chan struct{})
-
 	go func() {
 		if l.tls() {
 			if err := srv.ServeTLS(listener, "", ""); err != nil && err != net.ErrClosed {

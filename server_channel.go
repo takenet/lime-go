@@ -38,10 +38,10 @@ func (c *ServerChannel) receiveNewSession(ctx context.Context) (*Session, error)
 
 // sendNegotiatingOptionsSession changes the session state and sends a "negotiating" session envelope with the available options to the client node and awaits for the selected option.
 func (c *ServerChannel) sendNegotiatingOptionsSession(ctx context.Context, compOptions []SessionCompression, encryptOptions []SessionEncryption) (*Session, error) {
-	if compOptions == nil || len(compOptions) == 0 {
+	if len(compOptions) == 0 {
 		return nil, errors.New("no available options for compression negotiation")
 	}
-	if encryptOptions == nil || len(encryptOptions) == 0 {
+	if len(encryptOptions) == 0 {
 		return nil, errors.New("no available options for encryption negotiation")
 	}
 	if err := c.ensureState(SessionStateNew, "negotiate session"); err != nil {
@@ -86,7 +86,7 @@ func (c *ServerChannel) sendNegotiatingConfirmationSession(ctx context.Context, 
 
 // sendAuthenticatingSession changes the session state and sends an "authenticating" envelope with the available scheme options to the client node and awaits for the authentication.
 func (c *ServerChannel) sendAuthenticatingSession(ctx context.Context, schemeOpts []AuthenticationScheme) (*Session, error) {
-	if schemeOpts == nil || len(schemeOpts) == 0 {
+	if len(schemeOpts) == 0 {
 		return nil, errors.New("there's no available options for authentication")
 	}
 	if err := c.ensureTransportOK("authenticate session"); err != nil {
