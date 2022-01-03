@@ -2,6 +2,7 @@ package lime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -38,15 +39,24 @@ func (m *EnvelopeMux) listen(ctx context.Context, c *channel) error {
 			return ctx.Err()
 		case <-c.SesChan():
 			return nil
-		case msg := <-c.MsgChan():
+		case msg, ok := <-c.MsgChan():
+			if !ok {
+				return errors.New("msg chan: channel closed")
+			}
 			if err := m.handleMessage(ctx, msg, c); err != nil {
 				return err
 			}
-		case not := <-c.NotChan():
+		case not, ok := <-c.NotChan():
+			if !ok {
+				return errors.New("not chan: channel closed")
+			}
 			if err := m.handleNotification(ctx, not); err != nil {
 				return err
 			}
-		case cmd := <-c.CmdChan():
+		case cmd, ok := <-c.CmdChan():
+			if !ok {
+				return errors.New("cmd chan: channel closed")
+			}
 			if err := m.handleCommand(ctx, cmd, c); err != nil {
 				return err
 			}
