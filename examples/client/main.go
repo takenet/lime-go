@@ -99,31 +99,36 @@ func main() {
 	}
 
 	ctx, cancel = context.WithCancel(context.Background())
+
+	mux := lime.EnvelopeMux{}
+	mux.MessageHandlerFunc(
+		func(*lime.Message) bool {
+			return true
+		},
+		func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
+			fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)
+			return nil
+		})
+	mux.CommandHandlerFunc(
+		func(*lime.Command) bool {
+			return true
+		},
+		func(ctx context.Context, cmd *lime.Command, s lime.Sender) error {
+			fmt.Printf("Command received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
+			return nil
+		})
+	mux.NotificationHandlerFunc(
+		func(*lime.Notification) bool {
+			return true
+		},
+		func(ctx context.Context, not *lime.Notification) error {
+			fmt.Printf("Notification received - ID: %v - From: %v - Event: %v - Reason: %v\n", not.ID, not.From, not.Event, not.Reason)
+			return nil
+		})
+
 	go func() {
-		for client.Established() {
-			select {
-			case <-ctx.Done():
-				fmt.Println("Listener stopped")
-				return
-			case msg, ok := <-client.MsgChan():
-				if !ok {
-					fmt.Printf("Channel closed")
-					return
-				}
-				fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)
-			case not, ok := <-client.NotChan():
-				if !ok {
-					fmt.Printf("Channel closed")
-					return
-				}
-				fmt.Printf("Notification received - ID: %v - From: %v - Event: %v - Reason: %v\n", not.ID, not.From, not.Event, not.Reason)
-			case cmd, ok := <-client.CmdChan():
-				if !ok {
-					fmt.Printf("Channel closed")
-					return
-				}
-				fmt.Printf("Command received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
-			}
+		if err := mux.ListenClient(ctx, client); err != nil {
+			fmt.Printf("Listener error: %v", err)
 		}
 	}()
 

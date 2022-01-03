@@ -18,6 +18,10 @@ func (i Identity) String() string {
 		return ""
 	}
 
+	if i.Domain == "" {
+		return i.Name
+	}
+
 	return fmt.Sprintf("%v@%v", i.Name, i.Domain)
 }
 
