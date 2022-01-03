@@ -105,11 +105,23 @@ func main() {
 			case <-ctx.Done():
 				fmt.Println("Listener stopped")
 				return
-			case msg := <-client.MsgChan():
+			case msg, ok := <-client.MsgChan():
+				if !ok {
+					fmt.Printf("Channel closed")
+					return
+				}
 				fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)
-			case not := <-client.NotChan():
+			case not, ok := <-client.NotChan():
+				if !ok {
+					fmt.Printf("Channel closed")
+					return
+				}
 				fmt.Printf("Notification received - ID: %v - From: %v - Event: %v - Reason: %v\n", not.ID, not.From, not.Event, not.Reason)
-			case cmd := <-client.CmdChan():
+			case cmd, ok := <-client.CmdChan():
+				if !ok {
+					fmt.Printf("Channel closed")
+					return
+				}
 				fmt.Printf("Command received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
 			}
 		}
