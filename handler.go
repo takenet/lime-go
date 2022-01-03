@@ -137,95 +137,95 @@ func (m *EnvelopeMux) CommandHandler(handler CommandHandler) {
 // MessageHandler defines a handler for processing Message instances received from a channel.
 type MessageHandler interface {
 	// Match indicates if the specified Message should be handled by the instance.
-	Match(m *Message) bool
+	Match(msg *Message) bool
 
 	// Handle execute an action for the specified Message.
 	// If this method returns an error, it signals to the channel listener to stop.
-	Handle(ctx context.Context, m *Message, s Sender) error
+	Handle(ctx context.Context, msg *Message, s Sender) error
 }
 
 // MessagePredicate defines an expression for checking if the specified Message satisfies a condition.
-type MessagePredicate func(m *Message) bool
+type MessagePredicate func(msg *Message) bool
 
 // MessageHandlerFunc defines an action to be executed to a Message.
-type MessageHandlerFunc func(ctx context.Context, m *Message, s Sender) error
+type MessageHandlerFunc func(ctx context.Context, msg *Message, s Sender) error
 
 type messageHandler struct {
 	predicate   MessagePredicate
 	handlerFunc MessageHandlerFunc
 }
 
-func (h *messageHandler) Match(m *Message) bool {
+func (h *messageHandler) Match(msg *Message) bool {
 	if h.predicate == nil {
 		return true
 	}
-	return h.predicate(m)
+	return h.predicate(msg)
 }
 
-func (h *messageHandler) Handle(ctx context.Context, m *Message, s Sender) error {
-	return h.handlerFunc(ctx, m, s)
+func (h *messageHandler) Handle(ctx context.Context, msg *Message, s Sender) error {
+	return h.handlerFunc(ctx, msg, s)
 }
 
 // NotificationHandler defines a handler for processing Notification instances received from a channel.
 type NotificationHandler interface {
 	// Match indicates if the specified Notification should be handled by the instance.
-	Match(n *Notification) bool
+	Match(not *Notification) bool
 
 	// Handle execute an action for the specified Notification.
 	// If this method returns an error, it signals to the channel listener to stop.
-	Handle(ctx context.Context, n *Notification) error
+	Handle(ctx context.Context, not *Notification) error
 }
 
 // NotificationPredicate defines an expression for checking if the specified Notification satisfies a condition.
-type NotificationPredicate func(n *Notification) bool
+type NotificationPredicate func(not *Notification) bool
 
 // NotificationHandlerFunc defines an action to be executed to a Notification.
-type NotificationHandlerFunc func(ctx context.Context, n *Notification) error
+type NotificationHandlerFunc func(ctx context.Context, not *Notification) error
 
 type notificationHandler struct {
 	predicate   NotificationPredicate
 	handlerFunc NotificationHandlerFunc
 }
 
-func (h *notificationHandler) Match(n *Notification) bool {
+func (h *notificationHandler) Match(not *Notification) bool {
 	if h.predicate == nil {
 		return true
 	}
-	return h.predicate(n)
+	return h.predicate(not)
 }
 
-func (h *notificationHandler) Handle(ctx context.Context, n *Notification) error {
-	return h.handlerFunc(ctx, n)
+func (h *notificationHandler) Handle(ctx context.Context, not *Notification) error {
+	return h.handlerFunc(ctx, not)
 }
 
 // CommandHandler defines a handler for processing Command instances received from a channel.
 type CommandHandler interface {
 	// Match indicates if the specified Command should be handled by the instance.
-	Match(c *Command) bool
+	Match(cmd *Command) bool
 
 	// Handle execute an action for the specified Command.
 	// If this method returns an error, it signals to the channel listener to stop.
-	Handle(ctx context.Context, c *Command, s Sender) error
+	Handle(ctx context.Context, cmd *Command, s Sender) error
 }
 
 // CommandPredicate defines an expression for checking if the specified Command satisfies a condition.
-type CommandPredicate func(c *Command) bool
+type CommandPredicate func(cmd *Command) bool
 
 // CommandHandlerFunc defines an action to be executed to a Command.
-type CommandHandlerFunc func(ctx context.Context, c *Command, s Sender) error
+type CommandHandlerFunc func(ctx context.Context, cmd *Command, s Sender) error
 
 type commandHandler struct {
 	predicate   CommandPredicate
 	handlerFunc CommandHandlerFunc
 }
 
-func (h *commandHandler) Match(c *Command) bool {
+func (h *commandHandler) Match(cmd *Command) bool {
 	if h.predicate == nil {
 		return true
 	}
-	return h.predicate(c)
+	return h.predicate(cmd)
 }
 
-func (h *commandHandler) Handle(ctx context.Context, c *Command, s Sender) error {
-	return h.handlerFunc(ctx, c, s)
+func (h *commandHandler) Handle(ctx context.Context, cmd *Command, s Sender) error {
+	return h.handlerFunc(ctx, cmd, s)
 }
