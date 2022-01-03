@@ -46,17 +46,11 @@ type Receiver interface {
 	CommandReceiver
 }
 
+// Sender defines a service for sending envelopes to a remote party.
 type Sender interface {
 	MessageSender
 	NotificationSender
 	CommandSender
-}
-
-type SessionInfoProvider interface {
-	ID() string          // ID returns the session ID.
-	RemoteNode() Node    // RemoteNode returns the remote party identifier.
-	LocalNode() Node     // LocalNode returns the local node identifier.
-	State() SessionState // State returns the current session state.
 }
 
 // ChannelModule defines a proxy interface for executing actions to the envelope channels.
