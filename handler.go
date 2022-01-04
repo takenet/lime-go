@@ -73,6 +73,7 @@ func (m *EnvelopeMux) handleMessage(ctx context.Context, msg *Message, s Sender)
 		if err := h.Handle(ctx, msg, s); err != nil {
 			return fmt.Errorf("handle message: %w", err)
 		}
+		break
 	}
 	return nil
 }
@@ -85,6 +86,7 @@ func (m *EnvelopeMux) handleNotification(ctx context.Context, not *Notification)
 		if err := h.Handle(ctx, not); err != nil {
 			return fmt.Errorf("handle notification: %w", err)
 		}
+		break
 	}
 	return nil
 }
@@ -97,6 +99,7 @@ func (m *EnvelopeMux) handleCommand(ctx context.Context, cmd *Command, s Sender)
 		if err := h.Handle(ctx, cmd, s); err != nil {
 			return fmt.Errorf("handle command: %w", err)
 		}
+		break
 	}
 	return nil
 }
