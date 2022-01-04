@@ -31,8 +31,13 @@ type EnvelopeBase struct {
 	Metadata map[string]string
 }
 
-func (env *EnvelopeBase) GetMetadata() map[string]string {
-	return env.Metadata
+// Sender returns the envelope sender Node.
+func (env *EnvelopeBase) Sender() Node {
+	if env.PP == (Node{}) {
+		return env.PP
+	} else {
+		return env.From
+	}
 }
 
 func (env *EnvelopeBase) toRawEnvelope() (*rawEnvelope, error) {

@@ -120,6 +120,45 @@ func (c *Command) populate(raw *rawEnvelope) error {
 	return nil
 }
 
+// IsRequest indicates if the current command is a request and should have a response.
+func (c *Command) IsRequest() bool {
+	return c.ID != "" && c.Status == ""
+}
+
+// SuccessResponse creates a success response Command for the current request.
+func (c *Command) SuccessResponse() *Command {
+	return &Command{
+		EnvelopeBase: EnvelopeBase{
+			ID:   c.ID,
+			From: c.To,
+			To:   c.Sender(),
+		},
+		Method: c.Method,
+		Status: CommandStatusSuccess,
+	}
+}
+
+// SuccessResponseWithResource creates a success response Command for the current request.
+func (c *Command) SuccessResponseWithResource(resource Document) *Command {
+	respCmd := c.SuccessResponse()
+	respCmd.Resource = resource
+	return respCmd
+}
+
+// FailureResponse creates a failure response Command for the current request.
+func (c *Command) FailureResponse(reason *Reason) *Command {
+	return &Command{
+		EnvelopeBase: EnvelopeBase{
+			ID:   c.ID,
+			From: c.To,
+			To:   c.Sender(),
+		},
+		Method: c.Method,
+		Status: CommandStatusFailure,
+		Reason: reason,
+	}
+}
+
 // CommandMethod Defines methods for the manipulation of resources.
 type CommandMethod string
 
@@ -145,7 +184,7 @@ const (
 	CommandMethodMerge = CommandMethod("merge")
 )
 
-func (m CommandMethod) IsValid() error {
+func (m CommandMethod) Validate() error {
 	switch m {
 	case CommandMethodGet, CommandMethodSet, CommandMethodDelete, CommandMethodSubscribe, CommandMethodUnsubscribe, CommandMethodObserve, CommandMethodMerge:
 		return nil
@@ -155,7 +194,7 @@ func (m CommandMethod) IsValid() error {
 }
 
 func (m CommandMethod) MarshalText() ([]byte, error) {
-	err := m.IsValid()
+	err := m.Validate()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -164,7 +203,7 @@ func (m CommandMethod) MarshalText() ([]byte, error) {
 
 func (m *CommandMethod) UnmarshalText(text []byte) error {
 	method := CommandMethod(text)
-	err := method.IsValid()
+	err := method.Validate()
 	if err != nil {
 		return err
 	}

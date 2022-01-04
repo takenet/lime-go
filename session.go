@@ -195,7 +195,7 @@ const (
 	SessionStateFailed = SessionState("failed")
 )
 
-func (s SessionState) IsValid() error {
+func (s SessionState) Validate() error {
 	switch s {
 	case SessionStateNew, SessionStateNegotiating, SessionStateAuthenticating, SessionStateEstablished, SessionStateFinishing, SessionStateFinished, SessionStateFailed:
 		return nil
@@ -225,7 +225,7 @@ func (s SessionState) Step() int {
 }
 
 func (s SessionState) MarshalText() ([]byte, error) {
-	err := s.IsValid()
+	err := s.Validate()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -234,7 +234,7 @@ func (s SessionState) MarshalText() ([]byte, error) {
 
 func (s *SessionState) UnmarshalText(text []byte) error {
 	state := SessionState(text)
-	err := state.IsValid()
+	err := state.Validate()
 	if err != nil {
 		return err
 	}

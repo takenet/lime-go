@@ -5,11 +5,11 @@ import (
 	"strings"
 )
 
-// Identity Represents a member of a domain.
+// Identity represents a member of a domain.
 type Identity struct {
-	// Name Identity unique name on his domain.
+	// Name represents the Identity unique name on its domain.
 	Name string
-	// Domain Network domain name of the Identity.
+	// Domain represents the network domain name of the Identity.
 	Domain string
 }
 
@@ -25,7 +25,7 @@ func (i Identity) String() string {
 	return fmt.Sprintf("%v@%v", i.Name, i.Domain)
 }
 
-// ParseIdentity Parses the string To a valid Identity.
+// ParseIdentity parses the string To a valid Identity.
 func ParseIdentity(s string) (Identity, error) {
 	var name, domain string
 	values := strings.Split(s, "@")
@@ -49,12 +49,13 @@ func (i *Identity) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// ToNode Creates a Node instance based on the identity, with an
+// ToNode creates a Node instance based on the identity, with an
 // empty value for the instance property.
 func (i Identity) ToNode() Node {
 	return Node{i, ""}
 }
 
+// IsComplete indicates if all Identity fields has values.
 func (i *Identity) IsComplete() bool {
 	return i.Name != "" && i.Domain != ""
 }

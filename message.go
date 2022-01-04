@@ -91,3 +91,23 @@ func (m *Message) populate(raw *rawEnvelope) error {
 	m.Content = document
 	return nil
 }
+
+// Notification creates a notification for the current message.
+func (m *Message) Notification(event NotificationEvent) *Notification {
+	return &Notification{
+		EnvelopeBase: EnvelopeBase{
+			ID:   m.ID,
+			From: m.To,
+			To:   m.Sender(),
+		},
+		Event: event,
+	}
+}
+
+// FailedNotification creates a notification for the current message with
+// the 'failed' event.
+func (m *Message) FailedNotification(reason *Reason) *Notification {
+	not := m.Notification(NotificationEventFailed)
+	not.Reason = reason
+	return not
+}

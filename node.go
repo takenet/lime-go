@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-// Node Represents an element of a network.
+// Node represents an element of a network.
 type Node struct {
 	Identity
-	// Instance The name of the instance used by the node to connect to the network.
+	// Instance represents the name of the instance used by the node to connect to the network.
 	Instance string
 }
 
@@ -51,6 +51,7 @@ func (n *Node) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// IsComplete indicates if all Node fields has values.
 func (n *Node) IsComplete() bool {
 	return n.Identity.IsComplete() && n.Instance != ""
 }

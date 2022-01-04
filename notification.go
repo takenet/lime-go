@@ -93,7 +93,7 @@ const (
 	NotificationEventFailed = NotificationEvent("failed")
 )
 
-func (e *NotificationEvent) IsValid() error {
+func (e *NotificationEvent) Validate() error {
 	switch *e {
 	case NotificationEventAccepted, NotificationEventDispatched, NotificationEventReceived, NotificationEventConsumed, NotificationEventFailed:
 		return nil
@@ -103,7 +103,7 @@ func (e *NotificationEvent) IsValid() error {
 }
 
 func (e NotificationEvent) MarshalText() ([]byte, error) {
-	err := e.IsValid()
+	err := e.Validate()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -112,7 +112,7 @@ func (e NotificationEvent) MarshalText() ([]byte, error) {
 
 func (e *NotificationEvent) UnmarshalText(text []byte) error {
 	event := NotificationEvent(text)
-	err := event.IsValid()
+	err := event.Validate()
 	if err != nil {
 		return err
 	}
