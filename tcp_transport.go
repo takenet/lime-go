@@ -18,7 +18,8 @@ const DefaultReadLimit int64 = 8192 * 1024
 
 type tcpTransport struct {
 	TCPConfig
-	conn          *ctxConn
+	conn          net.Conn
+	ctxConn       *ctxConn
 	encoder       *json.Encoder
 	decoder       *json.Decoder
 	limitedReader io.LimitedReader
@@ -122,7 +123,7 @@ func (t *tcpTransport) Send(ctx context.Context, e Envelope) error {
 		return err
 	}
 
-	t.conn.SetWriteContext(ctx)
+	t.ctxConn.SetWriteContext(ctx)
 
 	if err := t.encoder.Encode(e); err != nil {
 		return fmt.Errorf("tcp transport: send: %w", err)
@@ -140,7 +141,7 @@ func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
 		return nil, err
 	}
 
-	t.conn.SetReadContext(ctx)
+	t.ctxConn.SetReadContext(ctx)
 
 	var raw rawEnvelope
 	if err := t.decoder.Decode(&raw); err != nil {
@@ -180,10 +181,11 @@ func (t *tcpTransport) RemoteAddr() net.Addr {
 }
 
 func (t *tcpTransport) setConn(conn net.Conn) {
-	t.conn = NewCtxConn(conn, 5*time.Second, 5*time.Second)
+	t.conn = conn
+	t.ctxConn = NewCtxConn(conn, 5*time.Second, 5*time.Second)
 
-	var writer io.Writer = t.conn
-	var reader io.Reader = t.conn
+	var writer io.Writer = t.ctxConn
+	var reader io.Reader = t.ctxConn
 
 	// Configure the trace writer, if defined
 	tw := t.TraceWriter
