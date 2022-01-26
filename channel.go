@@ -72,6 +72,7 @@ type channel struct {
 	inCmdChan  chan *Command
 	inSesChan  chan *Session
 	sendMu     sync.Mutex
+	rcvMu      sync.Mutex
 	startRcv   sync.Once
 	stopRcv    sync.Once
 	rcvDone    chan struct{}
@@ -106,12 +107,18 @@ func (c *channel) Established() bool {
 }
 
 func (c *channel) startReceiver() {
+	defer c.rcvMu.Unlock()
+	c.rcvMu.Lock()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	c.cancel = cancel
 	go receiveFromTransport(ctx, c, c.rcvDone)
 }
 
 func (c *channel) stopReceiver() {
+	defer c.rcvMu.Unlock()
+	c.rcvMu.Lock()
+
 	if c.cancel != nil {
 		c.cancel()
 		<-c.rcvDone
