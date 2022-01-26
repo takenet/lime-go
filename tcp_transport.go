@@ -18,7 +18,7 @@ const DefaultReadLimit int64 = 8192 * 1024
 
 type tcpTransport struct {
 	TCPConfig
-	conn          net.Conn
+	conn          *ctxConn
 	encoder       *json.Encoder
 	decoder       *json.Decoder
 	limitedReader io.LimitedReader
@@ -122,24 +122,13 @@ func (t *tcpTransport) Send(ctx context.Context, e Envelope) error {
 		return err
 	}
 
-	errChan := make(chan error)
-	go func() {
-		errChan <- t.encoder.Encode(e)
-	}()
+	t.conn.SetWriteContext(ctx)
 
-	select {
-	case <-ctx.Done():
-		// Effectively fails all pending write operations before returning.
-		// Note that this makes the encoder to be in a permanent error state.
-		_ = t.conn.SetWriteDeadline(time.Now())
-		<-errChan
-		return fmt.Errorf("tcp transport: send: %w", ctx.Err())
-	case err := <-errChan:
-		if err != nil {
-			return fmt.Errorf("tcp transport: send: %w", err)
-		}
-		return nil
+	if err := t.encoder.Encode(e); err != nil {
+		return fmt.Errorf("tcp transport: send: %w", err)
 	}
+
+	return nil
 }
 
 func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
@@ -151,35 +140,15 @@ func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
 		return nil, err
 	}
 
-	rawChan := make(chan rawEnvelope)
-	errChan := make(chan error)
-	go func() {
-		var raw rawEnvelope
-		if err := t.decoder.Decode(&raw); err != nil {
-			errChan <- err
-		} else {
-			rawChan <- raw
-		}
-	}()
+	t.conn.SetReadContext(ctx)
 
-	select {
-	case <-ctx.Done():
-		// Effectively fails all pending read operations before returning.
-		// Note that this makes the decoder to be in a permanent error state.
-		_ = t.conn.SetReadDeadline(time.Now())
-		// wait for the error of the envelope result (which will be discarded)
-		select {
-		case <-errChan:
-		case <-rawChan:
-		}
-		return nil, fmt.Errorf("tcp transport: receive: %w", ctx.Err())
-	case err := <-errChan:
+	var raw rawEnvelope
+	if err := t.decoder.Decode(&raw); err != nil {
 		return nil, fmt.Errorf("tcp transport: receive: %w", err)
-	case raw := <-rawChan:
-		// Reset the read limit
-		t.limitedReader.N = t.ReadLimit
-		return raw.ToEnvelope()
 	}
+
+	t.limitedReader.N = t.ReadLimit
+	return raw.ToEnvelope()
 }
 
 func (t *tcpTransport) Close() error {
@@ -211,7 +180,7 @@ func (t *tcpTransport) RemoteAddr() net.Addr {
 }
 
 func (t *tcpTransport) setConn(conn net.Conn) {
-	t.conn = conn
+	t.conn = NewCtxConn(conn, 5*time.Second, 5*time.Second)
 
 	var writer io.Writer = t.conn
 	var reader io.Reader = t.conn
@@ -369,5 +338,150 @@ func (l *tcpTransportListener) ensureStarted() error {
 		return errors.New("tcp listener is not started")
 	}
 
+	return nil
+}
+
+// ctcConn implement a net.conn with support for context cancellation.
+type ctxConn struct {
+	conn         net.Conn
+	readTimeout  time.Duration
+	writeTimeout time.Duration
+	readCtx      context.Context
+	readCancel   context.CancelFunc
+	writeCtx     context.Context
+	writeCancel  context.CancelFunc
+}
+
+func NewCtxConn(conn net.Conn, readTimeout time.Duration, writeTimeout time.Duration) *ctxConn {
+	if conn == nil {
+		panic("nil conn")
+	}
+
+	return &ctxConn{
+		conn:         conn,
+		readTimeout:  readTimeout,
+		writeTimeout: writeTimeout,
+		readCtx:      context.Background(),
+		writeCtx:     context.Background(),
+	}
+}
+
+func (c *ctxConn) SetReadContext(ctx context.Context) {
+	if ctx == nil {
+		panic("nil read ctx")
+	}
+	c.readCtx = ctx
+}
+
+func (c *ctxConn) SetWriteContext(ctx context.Context) {
+	if ctx == nil {
+		panic("nil write ctx")
+	}
+	c.writeCtx = ctx
+}
+
+func (c *ctxConn) Read(b []byte) (n int, err error) {
+	for c.readCtx.Err() == nil {
+		var deadline time.Time
+		if ctxDeadline, ok := c.readCtx.Deadline(); ok {
+			deadline = ctxDeadline
+		} else {
+			deadline = time.Now().Add(c.readTimeout)
+		}
+
+		if err = c.conn.SetReadDeadline(deadline); err != nil {
+			return 0, err
+		}
+
+		n, err = c.conn.Read(b)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() && netErr.Temporary() {
+				continue
+			}
+			return 0, err
+		}
+
+		return n, nil
+	}
+
+	if c.readCancel != nil {
+		c.readCancel()
+	}
+
+	return 0, c.readCtx.Err()
+}
+
+func (c *ctxConn) Write(b []byte) (n int, err error) {
+	for c.writeCtx.Err() == nil {
+		var deadline time.Time
+		if ctxDeadline, ok := c.writeCtx.Deadline(); ok {
+			deadline = ctxDeadline
+		} else {
+			deadline = time.Now().Add(c.writeTimeout)
+		}
+
+		if err = c.conn.SetWriteDeadline(deadline); err != nil {
+			return 0, err
+		}
+
+		n, err = c.conn.Write(b)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() && netErr.Temporary() {
+				continue
+			}
+			return 0, err
+		}
+
+		return n, nil
+	}
+
+	if c.writeCancel != nil {
+		c.writeCancel()
+	}
+
+	return 0, c.writeCtx.Err()
+}
+
+func (c *ctxConn) Close() error {
+	return c.conn.Close()
+}
+
+func (c *ctxConn) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
+func (c *ctxConn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
+func (c *ctxConn) SetDeadline(t time.Time) error {
+	if err := c.SetReadDeadline(t); err != nil {
+		return err
+	}
+
+	if err := c.SetWriteDeadline(t); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *ctxConn) SetReadDeadline(t time.Time) error {
+	if err := c.conn.SetReadDeadline(t); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), t)
+	c.readCtx = ctx
+	c.readCancel = cancel
+	return nil
+}
+
+func (c *ctxConn) SetWriteDeadline(t time.Time) error {
+	if err := c.conn.SetWriteDeadline(t); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), t)
+	c.writeCtx = ctx
+	c.writeCancel = cancel
 	return nil
 }
