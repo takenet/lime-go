@@ -203,8 +203,8 @@ func receiveFromTransport(ctx context.Context, c *channel, done chan<- struct{})
 			case <-ctx.Done():
 				return
 			case c.inSesChan <- e:
-				// If a session was received while established,
-				// the listener should be ended
+				// If a session is received while established,
+				// the receiver goroutine can stop.
 				return
 			}
 		default:
