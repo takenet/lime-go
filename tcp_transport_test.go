@@ -378,6 +378,55 @@ func TestTCPTransport_Send_Session(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestTCPTransport_Send_SessionTLS(t *testing.T) {
+	// Arrange
+	defer goleak.VerifyNone(t)
+	addr := createTCPAddress()
+	var transportChan = make(chan Transport, 1)
+	listener := createTCPListenerTLS(t, addr, transportChan)
+	defer silentClose(listener)
+	client := createClientTCPTransportTLS(t, createTCPAddress())
+	server := receiveTransport(t, transportChan)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+	if err := doTLSHandshake(ctx, server, client); err != nil {
+		t.Fatal(err)
+	}
+	s := createSession()
+
+	// Act
+	err := client.Send(ctx, s)
+
+	// Assert
+	assert.NoError(t, err)
+}
+
+func TestTCPTransport_Send_Deadline(t *testing.T) {
+	// Arrange
+	defer goleak.VerifyNone(t)
+	addr := createTCPAddress()
+	var transportChan = make(chan Transport, 1)
+	listener := createTCPListenerTLS(t, addr, transportChan)
+	defer silentClose(listener)
+	client := createClientTCPTransportTLS(t, createTCPAddress())
+	server := receiveTransport(t, transportChan)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+	if err := doTLSHandshake(ctx, server, client); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel = context.WithDeadline(context.Background(), time.Now())
+	defer cancel()
+	s := createSession()
+
+	// Act
+	err := client.Send(ctx, s)
+
+	// Assert
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
 func TestTCPTransport_Receive_Session(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
@@ -403,29 +452,6 @@ func TestTCPTransport_Receive_Session(t *testing.T) {
 	received, ok := e.(*Session)
 	assert.True(t, ok)
 	assert.Equal(t, s, received)
-}
-
-func TestTCPTransport_Send_SessionTLS(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
-	var transportChan = make(chan Transport, 1)
-	listener := createTCPListenerTLS(t, addr, transportChan)
-	defer silentClose(listener)
-	client := createClientTCPTransportTLS(t, createTCPAddress())
-	server := receiveTransport(t, transportChan)
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	if err := doTLSHandshake(ctx, server, client); err != nil {
-		t.Fatal(err)
-	}
-	s := createSession()
-
-	// Act
-	err := client.Send(ctx, s)
-
-	// Assert
-	assert.NoError(t, err)
 }
 
 func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
@@ -456,6 +482,32 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 	received, ok := e.(*Session)
 	assert.True(t, ok)
 	assert.Equal(t, s, received)
+}
+
+func TestTCPTransport_Receive_Deadline(t *testing.T) {
+	// Arrange
+	defer goleak.VerifyNone(t)
+	addr := createTCPAddress()
+	var transportChan = make(chan Transport, 1)
+	listener := createTCPListenerTLS(t, addr, transportChan)
+	defer silentClose(listener)
+	client := createClientTCPTransportTLS(t, createTCPAddress())
+	server := receiveTransport(t, transportChan)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+	if err := doTLSHandshake(ctx, server, client); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel = context.WithDeadline(context.Background(), time.Now())
+	defer cancel()
+
+	// Act
+	e, err := server.Receive(ctx)
+
+	// Assert
+	assert.Nil(t, e)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 func BenchmarkTCPTransport_Send_Message(b *testing.B) {

@@ -11,6 +11,7 @@ import (
 	"net"
 	"reflect"
 	"sync"
+	"time"
 )
 
 const DefaultReadLimit int64 = 8192 * 1024
@@ -121,14 +122,24 @@ func (t *tcpTransport) Send(ctx context.Context, e Envelope) error {
 		return err
 	}
 
-	// Sets the timeout for the next write operation
-	deadline, _ := ctx.Deadline()
-	if err := t.conn.SetWriteDeadline(deadline); err != nil {
-		return err
+	errChan := make(chan error)
+	go func() {
+		errChan <- t.encoder.Encode(e)
+	}()
+
+	select {
+	case <-ctx.Done():
+		// Effectively fails all pending write operations before returning.
+		// Note that this makes the encoder to be in a permanent error state.
+		_ = t.conn.SetWriteDeadline(time.Now())
+		<-errChan
+		return fmt.Errorf("tcp transport: send: %w", ctx.Err())
+	case err := <-errChan:
+		if err != nil {
+			return fmt.Errorf("tcp transport: send: %w", err)
+		}
+		return nil
 	}
-	// TODO: Handle context <-Done() signal
-	// TODO: Encode writes a new line after each entry, how we can avoid this?
-	return t.encoder.Encode(e)
 }
 
 func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
@@ -141,22 +152,36 @@ func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
 	}
 
 	// Sets the timeout for the next read operation
-	deadline, _ := ctx.Deadline()
-	if err := t.conn.SetReadDeadline(deadline); err != nil {
-		return nil, err
+	envChan := make(chan rawEnvelope)
+	errChan := make(chan error)
+
+	go func() {
+		var raw rawEnvelope
+		if err := t.decoder.Decode(&raw); err != nil {
+			errChan <- err
+		} else {
+			envChan <- raw
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		// Effectively fails all pending read operations before returning.
+		// Note that this makes the decoder to be in a permanent error state.
+		_ = t.conn.SetReadDeadline(time.Now())
+		// wait for the error of the envelope result (which will be discarded)
+		select {
+		case <-errChan:
+		case <-envChan:
+		}
+		return nil, fmt.Errorf("tcp transport: receive: %w", ctx.Err())
+	case err := <-errChan:
+		return nil, fmt.Errorf("tcp transport: receive: %w", err)
+	case raw := <-envChan:
+		// Reset the read limit
+		t.limitedReader.N = t.ReadLimit
+		return raw.ToEnvelope()
 	}
-
-	var raw rawEnvelope
-
-	// TODO: Handle context <-Done() signal
-	if err := t.decoder.Decode(&raw); err != nil {
-		return nil, err
-	}
-
-	// Reset the read limit
-	t.limitedReader.N = t.ReadLimit
-
-	return raw.ToEnvelope()
 }
 
 func (t *tcpTransport) Close() error {
