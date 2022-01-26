@@ -203,6 +203,9 @@ func receiveFromTransport(ctx context.Context, c *channel, done chan<- struct{})
 			case <-ctx.Done():
 				return
 			case c.inSesChan <- e:
+				// If a session was received while established,
+				// the listener should be ended
+				return
 			}
 		default:
 			panic(fmt.Errorf("unknown envelope type %v", reflect.ValueOf(e)))
