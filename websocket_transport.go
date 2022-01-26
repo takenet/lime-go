@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -59,13 +60,24 @@ func (t *websocketTransport) Send(ctx context.Context, e Envelope) error {
 		return err
 	}
 
-	// Sets the timeout for the next write operation
-	deadline, _ := ctx.Deadline()
-	if err := t.conn.SetWriteDeadline(deadline); err != nil {
-		return err
-	}
+	errChan := make(chan error)
+	go func() {
+		errChan <- t.conn.WriteJSON(e)
+	}()
 
-	return t.conn.WriteJSON(e)
+	select {
+	case <-ctx.Done():
+		// Effectively fails all pending write operations before returning.
+		// Note that this makes the encoder to be in a permanent error state.
+		_ = t.conn.SetWriteDeadline(time.Now())
+		<-errChan
+		return fmt.Errorf("ws transport: send: %w", ctx.Err())
+	case err := <-errChan:
+		if err != nil {
+			return fmt.Errorf("ws transport: send: %w", err)
+		}
+		return nil
+	}
 }
 
 func (t *websocketTransport) Receive(ctx context.Context) (Envelope, error) {
@@ -77,14 +89,33 @@ func (t *websocketTransport) Receive(ctx context.Context) (Envelope, error) {
 		return nil, err
 	}
 
-	var raw rawEnvelope
+	rawChan := make(chan rawEnvelope)
+	errChan := make(chan error)
+	go func() {
+		var raw rawEnvelope
+		if err := t.conn.ReadJSON(&raw); err != nil {
+			errChan <- err
+		} else {
+			rawChan <- raw
+		}
+	}()
 
-	// TODO: Support context
-	if err := t.conn.ReadJSON(&raw); err != nil {
-		return nil, err
+	select {
+	case <-ctx.Done():
+		// Effectively fails all pending read operations before returning.
+		// Note that this makes the decoder to be in a permanent error state.
+		_ = t.conn.SetReadDeadline(time.Now())
+		// wait for the error of the envelope result (which will be discarded)
+		select {
+		case <-errChan:
+		case <-rawChan:
+		}
+		return nil, fmt.Errorf("ws transport: receive: %w", ctx.Err())
+	case err := <-errChan:
+		return nil, fmt.Errorf("ws transport: receive: %w", err)
+	case raw := <-rawChan:
+		return raw.ToEnvelope()
 	}
-
-	return raw.ToEnvelope()
 }
 
 func (t *websocketTransport) Close() error {

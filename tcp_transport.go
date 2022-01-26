@@ -151,16 +151,14 @@ func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
 		return nil, err
 	}
 
-	// Sets the timeout for the next read operation
-	envChan := make(chan rawEnvelope)
+	rawChan := make(chan rawEnvelope)
 	errChan := make(chan error)
-
 	go func() {
 		var raw rawEnvelope
 		if err := t.decoder.Decode(&raw); err != nil {
 			errChan <- err
 		} else {
-			envChan <- raw
+			rawChan <- raw
 		}
 	}()
 
@@ -172,12 +170,12 @@ func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
 		// wait for the error of the envelope result (which will be discarded)
 		select {
 		case <-errChan:
-		case <-envChan:
+		case <-rawChan:
 		}
 		return nil, fmt.Errorf("tcp transport: receive: %w", ctx.Err())
 	case err := <-errChan:
 		return nil, fmt.Errorf("tcp transport: receive: %w", err)
-	case raw := <-envChan:
+	case raw := <-rawChan:
 		// Reset the read limit
 		t.limitedReader.N = t.ReadLimit
 		return raw.ToEnvelope()
