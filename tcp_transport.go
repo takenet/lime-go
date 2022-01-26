@@ -377,6 +377,10 @@ func (c *ctxConn) SetReadContext(ctx context.Context) {
 	if ctx == nil {
 		panic("nil read ctx")
 	}
+	if c.readCancel != nil {
+		c.readCancel()
+		c.readCancel = nil
+	}
 	c.readCtx = ctx
 }
 
@@ -384,11 +388,19 @@ func (c *ctxConn) SetWriteContext(ctx context.Context) {
 	if ctx == nil {
 		panic("nil write ctx")
 	}
+	if c.writeCancel != nil {
+		c.writeCancel()
+		c.writeCancel = nil
+	}
 	c.writeCtx = ctx
 }
 
 func (c *ctxConn) Read(b []byte) (n int, err error) {
-	for err = c.readCtx.Err(); err == nil; {
+	for {
+		if err = c.readCtx.Err(); err != nil {
+			return 0, err
+		}
+
 		deadline := time.Now().Add(c.readTimeout)
 
 		// Use the context deadline only if it is early then the default
@@ -410,20 +422,18 @@ func (c *ctxConn) Read(b []byte) (n int, err error) {
 
 		return n, nil
 	}
-
-	if c.readCancel != nil {
-		c.readCancel()
-	}
-
-	return 0, err
 }
 
 func (c *ctxConn) Write(b []byte) (n int, err error) {
-	for err = c.writeCtx.Err(); err == nil; {
+	for {
+		if err = c.writeCtx.Err(); err != nil {
+			return 0, err
+		}
+
 		deadline := time.Now().Add(c.writeTimeout)
 
 		// Use the context deadline only if it is early then the default
-		if ctxDeadline, ok := c.readCtx.Deadline(); ok && deadline.After(ctxDeadline) {
+		if ctxDeadline, ok := c.writeCtx.Deadline(); ok && deadline.After(ctxDeadline) {
 			deadline = ctxDeadline
 		}
 
@@ -441,12 +451,6 @@ func (c *ctxConn) Write(b []byte) (n int, err error) {
 
 		return n, nil
 	}
-
-	if c.writeCancel != nil {
-		c.writeCancel()
-	}
-
-	return 0, err
 }
 
 func (c *ctxConn) Close() error {
@@ -482,21 +486,15 @@ func (c *ctxConn) SetDeadline(t time.Time) error {
 }
 
 func (c *ctxConn) SetReadDeadline(t time.Time) error {
-	if err := c.conn.SetReadDeadline(t); err != nil {
-		return err
-	}
 	ctx, cancel := context.WithDeadline(context.Background(), t)
-	c.readCtx = ctx
+	c.SetReadContext(ctx)
 	c.readCancel = cancel
 	return nil
 }
 
 func (c *ctxConn) SetWriteDeadline(t time.Time) error {
-	if err := c.conn.SetWriteDeadline(t); err != nil {
-		return err
-	}
 	ctx, cancel := context.WithDeadline(context.Background(), t)
-	c.writeCtx = ctx
+	c.SetWriteContext(ctx)
 	c.writeCancel = cancel
 	return nil
 }
