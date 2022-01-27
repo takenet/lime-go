@@ -52,6 +52,7 @@ func (env *EnvelopeBase) toRawEnvelope() (*rawEnvelope, error) {
 	if env.To != (Node{}) {
 		raw.To = &env.To
 	}
+	raw.Metadata = env.Metadata
 
 	return &raw, nil
 }

@@ -39,6 +39,30 @@ func TestMessage_MarshalJSON_TextPlain(t *testing.T) {
 	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"golang@limeprotocol.org/default","type":"text/plain","content":"Hello world"}`, string(b))
 }
 
+func TestMessage_MarshalJSON_Metadata(t *testing.T) {
+	// Arrange
+	m := Message{}
+	m.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
+	m.To = Node{}
+	m.To.Name = "golang"
+	m.To.Domain = "limeprotocol.org"
+	m.To.Instance = "default"
+	var d PlainDocument = "Hello world"
+	m.SetContent(&d)
+	m.Metadata = make(map[string]string)
+	m.Metadata["property1"] = "value1"
+	m.Metadata["property2"] = "value2"
+
+	// Act
+	b, err := json.Marshal(&m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"golang@limeprotocol.org/default","type":"text/plain","content":"Hello world","metadata":{"property1":"value1","property2":"value2"}}`, string(b))
+}
+
 func TestMessage_MarshalJSON_TextUnknownPlain(t *testing.T) {
 	// Arrange
 	m := Message{}
@@ -125,6 +149,32 @@ func TestMessage_UnmarshalJSON_TextPlain(t *testing.T) {
 		t.Fatal()
 	}
 	assert.Equal(t, PlainDocument("Hello world"), *d)
+}
+func TestMessage_UnmarshalJSON_Metadata(t *testing.T) {
+	// Arrange
+	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"golang@limeprotocol.org/default","type":"text/plain","content":"Hello world","metadata":{"property1":"value1","property2":"value2"}}`)
+	var m Message
+
+	// Act
+	err := json.Unmarshal(j, &m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	assert.Equal(t, "4609d0a3-00eb-4e16-9d44-27d115c6eb31", m.ID)
+	assert.Zero(t, m.From)
+	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, m.To)
+	assert.Equal(t, mediaTypeTextPlain, m.Type)
+	d, ok := m.Content.(*PlainDocument)
+	if !assert.True(t, ok) {
+		t.Fatal()
+	}
+	assert.Equal(t, PlainDocument("Hello world"), *d)
+	assert.Contains(t, m.Metadata, "property1")
+	assert.Equal(t, "value1", m.Metadata["property1"])
+	assert.Contains(t, m.Metadata, "property2")
+	assert.Equal(t, "value2", m.Metadata["property2"])
 }
 
 func TestMessage_UnmarshalJSON_TextUnknownPlain(t *testing.T) {
