@@ -131,8 +131,8 @@ func listenChannel(ctx context.Context, c *lime.ServerChannel) {
 	}
 }
 
-func authenticate(lime.Identity, lime.Authentication) (lime.AuthenticationResult, error) {
-	return lime.AuthenticationResult{Role: lime.DomainRoleMember}, nil
+func authenticate(lime.Identity, lime.Authentication) (*lime.AuthenticationResult, error) {
+	return &lime.AuthenticationResult{Role: lime.DomainRoleMember}, nil
 }
 
 func register(lime.Node, *lime.ServerChannel) (lime.Node, error) {
