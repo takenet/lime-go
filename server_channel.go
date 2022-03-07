@@ -177,13 +177,29 @@ type AuthenticationResult struct {
 	RoundTrip Authentication
 }
 
+func UnknownAuthenticationResult() *AuthenticationResult {
+	return &AuthenticationResult{Role: DomainRoleUnknown}
+}
+
+func MemberAuthenticationResult() *AuthenticationResult {
+	return &AuthenticationResult{Role: DomainRoleMember}
+}
+
+func AuthorityAuthenticationResult() *AuthenticationResult {
+	return &AuthenticationResult{Role: DomainRoleAuthority}
+}
+
+func RootAuthorityAuthenticationResult() *AuthenticationResult {
+	return &AuthenticationResult{Role: DomainRoleRootAuthority}
+}
+
 // EstablishSession establishes a server channel with transport options negotiation and authentication.
 func (c *ServerChannel) EstablishSession(
 	ctx context.Context,
 	compOpts []SessionCompression,
 	encryptOpts []SessionEncryption,
 	schemeOpts []AuthenticationScheme,
-	authFunc func(Identity, Authentication) (AuthenticationResult, error),
+	authFunc func(Identity, Authentication) (*AuthenticationResult, error),
 	registerFunc func(Node, *ServerChannel) (Node, error)) error {
 
 	if err := c.ensureTransportOK("establish session"); err != nil {
@@ -310,7 +326,7 @@ func (c *ServerChannel) negotiateSession(ctx context.Context, compOpts []Session
 func (c *ServerChannel) authenticateSession(
 	ctx context.Context,
 	schemeOpts []AuthenticationScheme,
-	authFunc func(Identity, Authentication) (AuthenticationResult, error),
+	authFunc func(Identity, Authentication) (*AuthenticationResult, error),
 	registerFunc func(Node, *ServerChannel) (Node, error)) error {
 	// Convert the slice to a map for lookup
 	schemeOptsMap := make(map[AuthenticationScheme]struct{})
