@@ -199,8 +199,8 @@ func (c *ServerChannel) EstablishSession(
 	compOpts []SessionCompression,
 	encryptOpts []SessionEncryption,
 	schemeOpts []AuthenticationScheme,
-	authFunc func(Identity, Authentication) (*AuthenticationResult, error),
-	registerFunc func(Node, *ServerChannel) (Node, error)) error {
+	authenticate func(context.Context, Identity, Authentication) (*AuthenticationResult, error),
+	register func(context.Context, Node, *ServerChannel) (Node, error)) error {
 
 	if err := c.ensureTransportOK("establish session"); err != nil {
 		return err
@@ -211,11 +211,11 @@ func (c *ServerChannel) EstablishSession(
 	if encryptOpts == nil {
 		panic("encryptOpts cannot be nil")
 	}
-	if authFunc == nil {
-		panic("authentication func cannot be nil")
+	if authenticate == nil {
+		panic("authenticate cannot be nil")
 	}
-	if registerFunc == nil {
-		panic("registration func cannot be nil")
+	if register == nil {
+		panic("register cannot be nil")
 	}
 
 	ses, err := c.receiveNewSession(ctx)
@@ -253,7 +253,7 @@ func (c *ServerChannel) EstablishSession(
 
 		// Proceed to the authentication if the channel is not failed
 		if c.state != SessionStateFailed {
-			if err = c.authenticateSession(ctx, schemeOpts, authFunc, registerFunc); err != nil {
+			if err = c.authenticateSession(ctx, schemeOpts, authenticate, register); err != nil {
 				return err
 			}
 		}
@@ -326,8 +326,8 @@ func (c *ServerChannel) negotiateSession(ctx context.Context, compOpts []Session
 func (c *ServerChannel) authenticateSession(
 	ctx context.Context,
 	schemeOpts []AuthenticationScheme,
-	authFunc func(Identity, Authentication) (*AuthenticationResult, error),
-	registerFunc func(Node, *ServerChannel) (Node, error)) error {
+	authenticate func(context.Context, Identity, Authentication) (*AuthenticationResult, error),
+	register func(context.Context, Node, *ServerChannel) (Node, error)) error {
 	// Convert the slice to a map for lookup
 	schemeOptsMap := make(map[AuthenticationScheme]struct{})
 	for _, v := range schemeOpts {
@@ -361,14 +361,14 @@ func (c *ServerChannel) authenticateSession(
 		}
 
 		// Authenticate using the provided func
-		authResult, err := authFunc(ses.From.Identity, ses.Authentication)
+		authResult, err := authenticate(ctx, ses.From.Identity, ses.Authentication)
 		if err != nil {
 			return err
 		}
 
 		// If the auth result contains the identity domain role, it has succeeded
 		if authResult.Role != "" && authResult.Role != DomainRoleUnknown {
-			node, err := registerFunc(ses.From, c)
+			node, err := register(ctx, ses.From, c)
 			if err != nil {
 				return err
 			}
