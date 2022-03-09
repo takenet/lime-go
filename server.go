@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
+	"time"
 )
 
 type Server struct {
@@ -24,7 +25,7 @@ type Server struct {
 	shutdown      context.CancelFunc
 }
 
-func NewServer(config *ServerConfig, mux *EnvelopeMux, listeners []BoundListener) *Server {
+func NewServer(config *ServerConfig, mux *EnvelopeMux, listeners ...BoundListener) *Server {
 	if mux == nil || reflect.ValueOf(mux).IsNil() {
 		panic("nil mux")
 	}
@@ -120,6 +121,15 @@ func (srv *Server) handleChannel(ctx context.Context, c *ServerChannel) {
 		log.Printf("server: establish: %v\n", err)
 		return
 	}
+
+	defer func() {
+		if c.Established() {
+			// Do not use the shared context since it could be canceled
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			_ = c.FinishSession(ctx)
+		}
+	}()
 
 	if err = srv.mux.ListenServer(ctx, c); err != nil {
 		log.Printf("server: listen: %v\n", err)
@@ -332,7 +342,7 @@ func (b *ServerBuilder) EnableExternalAuthentication(a ExternalAuthenticator) *S
 
 func (b *ServerBuilder) Build() *Server {
 	b.config.Authenticate = buildAuthenticate(b.plainAuth, b.keyAuth, b.externalAuth)
-	return NewServer(b.config, b.mux, b.listeners)
+	return NewServer(b.config, b.mux, b.listeners...)
 }
 
 func buildAuthenticate(plainAuth PlainAuthenticator, keyAuth KeyAuthenticator, externalAuth ExternalAuthenticator) func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
