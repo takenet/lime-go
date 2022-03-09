@@ -1,71 +1,231 @@
 package lime
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"github.com/google/uuid"
+	"go.uber.org/multierr"
+	"golang.org/x/sync/errgroup"
+	"log"
 	"net"
+	"os"
 	"reflect"
+	"runtime"
+	"sync"
 )
 
 type Server struct {
-	config    *ServerConfig
-	mux       *EnvelopeMux
-	listeners []TransportListener
+	config        *ServerConfig
+	mux           *EnvelopeMux
+	listeners     []BoundListener
+	mu            sync.Mutex
+	transportChan chan Transport
+	shutdown      context.CancelFunc
 }
 
-type ServerConfig struct {
-	Node         Node                   // Node represents the server's address.
-	CompOpts     []SessionCompression   // CompOpts defines the compression options to be used in the session negotiation.
-	EncryptOpts  []SessionEncryption    // EncryptOpts defines the encryption options to be used in the session negotiation.
-	SchemeOpts   []AuthenticationScheme // SchemeOpts defines the authentication schemes that should be presented to the clients during session establishment.
-	Authenticate func(Identity, Authentication) (*AuthenticationResult, error)
-	Register     func(Node, *ServerChannel) (Node, error)
-}
-
-func NewServer(config *ServerConfig, mux *EnvelopeMux, listeners ...TransportListener) *Server {
+func NewServer(config *ServerConfig, mux *EnvelopeMux, listeners []BoundListener) *Server {
 	if mux == nil || reflect.ValueOf(mux).IsNil() {
 		panic("nil mux")
 	}
 	if len(listeners) == 0 {
 		panic("empty listeners")
 	}
-	return &Server{config: config, mux: mux, listeners: listeners}
+	return &Server{
+		config:        config,
+		mux:           mux,
+		listeners:     listeners,
+		transportChan: make(chan Transport, config.Backlog),
+	}
 }
 
-func (s *Server) ListenAndServe() error {
-	return nil
+func (srv *Server) ListenAndServe() error {
+	if srv.shutdown != nil {
+		return errors.New("server already listening")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	srv.shutdown = cancel
+
+	if len(srv.listeners) == 0 {
+		return errors.New("no listeners found")
+	}
+
+	eg, ctx := errgroup.WithContext(ctx)
+
+	for _, l := range srv.listeners {
+		if err := l.Listener.Listen(ctx, l.Addr); err != nil {
+			return fmt.Errorf("listen error: %w", err)
+		}
+
+		listener := l
+
+		eg.Go(func() error {
+			return acceptTransports(ctx, listener.Listener, srv.transportChan)
+		})
+	}
+
+	eg.Go(func() error {
+		srv.consumeTransports(ctx)
+		return nil
+	})
+
+	err := eg.Wait()
+
+	if errors.Is(err, ctx.Err()) {
+		return ErrServerClosed
+	}
+	return err
+}
+
+func acceptTransports(ctx context.Context, listener TransportListener, c chan<- Transport) error {
+	for {
+		transport, err := listener.Accept(ctx)
+		if err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case c <- transport:
+		}
+	}
+}
+
+func (srv *Server) consumeTransports(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case t := <-srv.transportChan:
+			c := NewServerChannel(t, srv.config.ChannelBufferSize, srv.config.Node, uuid.NewString())
+			go func() {
+				srv.handleChannel(ctx, c)
+			}()
+		}
+	}
+}
+
+func (srv *Server) handleChannel(ctx context.Context, c *ServerChannel) {
+	err := c.EstablishSession(
+		ctx,
+		srv.config.CompOpts,
+		srv.config.EncryptOpts,
+		srv.config.SchemeOpts,
+		srv.config.Authenticate,
+		srv.config.Register,
+	)
+
+	if err != nil {
+		log.Printf("server: establish: %v\n", err)
+		return
+	}
+
+	if err = srv.mux.ListenServer(ctx, c); err != nil {
+		log.Printf("server: listen: %v\n", err)
+		return
+	}
+}
+
+func (srv *Server) Close() error {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+
+	if srv.shutdown == nil {
+		return errors.New("server not listening")
+	}
+
+	srv.shutdown()
+	srv.shutdown = nil
+
+	var errs []error
+
+	for _, listener := range srv.listeners {
+		if err := listener.Listener.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	close(srv.transportChan)
+	return multierr.Combine(errs...)
+}
+
+type ServerConfig struct {
+	Node              Node                   // Node represents the server's address.
+	CompOpts          []SessionCompression   // CompOpts defines the compression options to be used in the session negotiation.
+	EncryptOpts       []SessionEncryption    // EncryptOpts defines the encryption options to be used in the session negotiation.
+	SchemeOpts        []AuthenticationScheme // SchemeOpts defines the authentication schemes that should be presented to the clients during session establishment.
+	Backlog           int                    // Backlog defines the size of the listener's pending connections queue.
+	ChannelBufferSize int                    // ChannelBufferSize determines the internal envelope buffer size for the channels.
+
+	// Authenticate is called for authenticating a client session.
+	// It should return an AuthenticationResult instance with DomainRole different of DomainRoleUnknown for a successful authentication.
+	Authenticate func(context.Context, Identity, Authentication) (*AuthenticationResult, error)
+	// Register is called for the client Node address registration.
+	Register func(context.Context, Node, *ServerChannel) (Node, error)
+}
+
+func NewServerConfig() *ServerConfig {
+	instance, err := os.Hostname()
+	if err != nil || instance == "" {
+		instance = uuid.NewString()
+	}
+	return &ServerConfig{
+		Node: Node{
+			Identity: Identity{
+				Name:   "postmaster",
+				Domain: "localhost",
+			},
+			Instance: instance,
+		},
+		CompOpts:          []SessionCompression{SessionCompressionNone},
+		EncryptOpts:       []SessionEncryption{SessionEncryptionNone, SessionEncryptionTLS},
+		SchemeOpts:        []AuthenticationScheme{AuthenticationSchemeGuest},
+		Backlog:           runtime.NumCPU() * 8,
+		ChannelBufferSize: runtime.NumCPU() * 32,
+		Authenticate: func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
+			return MemberAuthenticationResult(), nil
+		},
+		Register: func(ctx context.Context, node Node, serverChannel *ServerChannel) (Node, error) {
+			return Node{
+				Identity: Identity{
+					Name:   uuid.New().String(),
+					Domain: serverChannel.localNode.Domain,
+				},
+				Instance: serverChannel.localNode.Instance}, nil
+		},
+	}
 }
 
 type ServerBuilder struct {
-	node      Node
+	config    *ServerConfig
 	mux       *EnvelopeMux
-	addrs     []net.Addr
-	listeners []TransportListener
+	listeners []BoundListener
+
+	plainAuth    PlainAuthenticator
+	keyAuth      KeyAuthenticator
+	externalAuth ExternalAuthenticator
 }
 
 func NewServerBuilder() *ServerBuilder {
-	return &ServerBuilder{node: Node{
-		Identity: Identity{
-			Name:   "postmaster",
-			Domain: "localhost",
-		},
-		Instance: "",
-	}, mux: &EnvelopeMux{}}
+	return &ServerBuilder{config: NewServerConfig(), mux: &EnvelopeMux{}}
 }
 
 // Name sets the server's node name.
 func (b *ServerBuilder) Name(name string) *ServerBuilder {
-	b.node.Name = name
+	b.config.Node.Name = name
 	return b
 }
 
 // Domain sets the server's node domain.
 func (b *ServerBuilder) Domain(domain string) *ServerBuilder {
-	b.node.Domain = domain
+	b.config.Node.Domain = domain
 	return b
 }
 
 // Instance sets the server's node instance.
 func (b *ServerBuilder) Instance(instance string) *ServerBuilder {
-	b.node.Instance = instance
+	b.config.Node.Instance = instance
 	return b
 }
 
@@ -101,33 +261,127 @@ func (b *ServerBuilder) CommandHandler(handler CommandHandler) *ServerBuilder {
 
 func (b *ServerBuilder) ListenTCP(addr net.TCPAddr, config *TCPConfig) *ServerBuilder {
 	listener := NewTCPTransportListener(config)
-	b.listeners = append(b.listeners, listener)
-	b.addrs = append(b.addrs, &addr)
+	b.listeners = append(b.listeners, NewBoundListener(listener, &addr))
 	return b
 }
 
 func (b *ServerBuilder) ListenWebsocket(addr net.TCPAddr, config *WebsocketConfig) *ServerBuilder {
 	listener := NewWebsocketTransportListener(config)
-	b.listeners = append(b.listeners, listener)
-	b.addrs = append(b.addrs, &addr)
+	b.listeners = append(b.listeners, NewBoundListener(listener, &addr))
 	return b
 }
 
 func (b *ServerBuilder) ListenInProcess(addr InProcessAddr) *ServerBuilder {
 	listener := NewInProcessTransportListener(addr)
-	b.listeners = append(b.listeners, listener)
-	b.addrs = append(b.addrs, &addr)
+	b.listeners = append(b.listeners, NewBoundListener(listener, &addr))
+	return b
+}
+
+func (b *ServerBuilder) EnableGuestAuthentication() *ServerBuilder {
+	if !contains(b.config.SchemeOpts, AuthenticationSchemeGuest) {
+		b.config.SchemeOpts = append(b.config.SchemeOpts, AuthenticationSchemeGuest)
+	}
+	return b
+}
+
+func (b *ServerBuilder) EnableTransportAuthentication() *ServerBuilder {
+	if !contains(b.config.SchemeOpts, AuthenticationSchemeTransport) {
+		b.config.SchemeOpts = append(b.config.SchemeOpts, AuthenticationSchemeTransport)
+	}
+	return b
+}
+
+type PlainAuthenticator func(ctx context.Context, identity Identity, password string) (*AuthenticationResult, error)
+
+func (b *ServerBuilder) EnablePlainAuthentication(a PlainAuthenticator) *ServerBuilder {
+	if a == nil {
+		panic("nil authenticator")
+	}
+
+	if !contains(b.config.SchemeOpts, AuthenticationSchemePlain) {
+		b.config.SchemeOpts = append(b.config.SchemeOpts, AuthenticationSchemePlain)
+	}
+	return b
+}
+
+type KeyAuthenticator func(ctx context.Context, identity Identity, key string) (*AuthenticationResult, error)
+
+func (b *ServerBuilder) EnableKeyAuthentication(a KeyAuthenticator) *ServerBuilder {
+	if a == nil {
+		panic("nil authenticator")
+	}
+
+	if !contains(b.config.SchemeOpts, AuthenticationSchemeKey) {
+		b.config.SchemeOpts = append(b.config.SchemeOpts, AuthenticationSchemeKey)
+	}
+	return b
+}
+
+type ExternalAuthenticator func(ctx context.Context, identity Identity, token string, issuer string) (*AuthenticationResult, error)
+
+func (b *ServerBuilder) EnableExternalAuthentication(a ExternalAuthenticator) *ServerBuilder {
+	if a == nil {
+		panic("nil authenticator")
+	}
+
+	if !contains(b.config.SchemeOpts, AuthenticationSchemeExternal) {
+		b.config.SchemeOpts = append(b.config.SchemeOpts, AuthenticationSchemeExternal)
+	}
 	return b
 }
 
 func (b *ServerBuilder) Build() *Server {
-	config := &ServerConfig{
-		Node:         b.node,
-		CompOpts:     nil,
-		EncryptOpts:  nil,
-		SchemeOpts:   nil,
-		Authenticate: nil,
-		Register:     nil,
-	}
-	return NewServer(config, b.mux, b.listeners...)
+	b.config.Authenticate = buildAuthenticate(b.plainAuth, b.keyAuth, b.externalAuth)
+	return NewServer(b.config, b.mux, b.listeners)
 }
+
+func buildAuthenticate(plainAuth PlainAuthenticator, keyAuth KeyAuthenticator, externalAuth ExternalAuthenticator) func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
+	return func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
+		switch a := authentication.(type) {
+		case *GuestAuthentication:
+			return MemberAuthenticationResult(), nil
+		case *TransportAuthentication:
+			return nil, errors.New("transport auth not implemented yet")
+		case *PlainAuthentication:
+			if plainAuth == nil {
+				return nil, errors.New("plain authenticator is nil")
+			}
+			return plainAuth(ctx, identity, a.Password)
+		case *KeyAuthentication:
+			if keyAuth == nil {
+				return nil, errors.New("key authenticator is nil")
+			}
+			return keyAuth(ctx, identity, a.Key)
+		case *ExternalAuthentication:
+			if externalAuth == nil {
+				return nil, errors.New("external authenticator is nil")
+			}
+			return externalAuth(ctx, identity, a.Token, a.Issuer)
+		}
+
+		return nil, errors.New("unknown authentication scheme")
+	}
+}
+
+// BoundListener represents a pair of a TransportListener and a net.Addr values.
+type BoundListener struct {
+	Listener TransportListener
+	Addr     net.Addr
+}
+
+func NewBoundListener(listener TransportListener, addr net.Addr) BoundListener {
+	if listener == nil || reflect.ValueOf(listener).IsNil() {
+		panic("nil Listener")
+	}
+	if addr == nil || reflect.ValueOf(addr).IsNil() {
+		panic("nil Addr")
+	}
+	return BoundListener{
+		Listener: listener,
+		Addr:     addr,
+	}
+}
+
+// ErrServerClosed is returned by the Server's ListenAndServe,
+// method after a call to Shutdown or Close.
+var ErrServerClosed = errors.New("lime: Server closed")
