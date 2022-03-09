@@ -54,10 +54,10 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 		[]SessionCompression{SessionCompressionNone},
 		[]SessionEncryption{SessionEncryptionTLS},
 		[]AuthenticationScheme{AuthenticationSchemeGuest},
-		func(identity Identity, authentication Authentication) (*AuthenticationResult, error) {
+		func(context.Context, Identity, Authentication) (*AuthenticationResult, error) {
 			return &AuthenticationResult{Role: DomainRoleMember}, nil
 		},
-		func(node Node, serverChannel *ServerChannel) (Node, error) {
+		func(context.Context, Node, *ServerChannel) (Node, error) {
 			return clientNode, nil
 		},
 	)
