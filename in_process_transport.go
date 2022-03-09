@@ -130,7 +130,7 @@ func NewInProcessTransportListener(addr InProcessAddr) TransportListener {
 func (l *inProcessTransportListener) Close() error {
 	l.closedMu.Lock()
 	defer l.closedMu.Unlock()
-	delete(listeners, l.addr)
+	delete(inProcListeners, l.addr)
 	l.closed = true
 	l.done <- true
 	return nil
@@ -146,11 +146,11 @@ func (l *inProcessTransportListener) Listen(_ context.Context, addr net.Addr) er
 		return fmt.Errorf("empty in process address %s", inProcAddr)
 	}
 
-	if _, ok := listeners[inProcAddr]; ok {
+	if _, ok := inProcListeners[inProcAddr]; ok {
 		return fmt.Errorf("a listerer is already active on address %s", inProcAddr)
 	}
 	l.addr = inProcAddr
-	listeners[inProcAddr] = l
+	inProcListeners[inProcAddr] = l
 	return nil
 }
 
@@ -185,11 +185,11 @@ func (l *inProcessTransportListener) newClient(addr InProcessAddr, bufferSize in
 	return client
 }
 
-var listeners = make(map[InProcessAddr]*inProcessTransportListener)
+var inProcListeners = make(map[InProcessAddr]*inProcessTransportListener)
 
 // DialInProcess creates a new in process transport connection to the specified path.
 func DialInProcess(addr InProcessAddr, bufferSize int) (*inProcessTransport, error) {
-	l := listeners[addr]
+	l := inProcListeners[addr]
 	if l == nil {
 		return nil, fmt.Errorf("in process connection refused on %s address", addr)
 	}
