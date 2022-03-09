@@ -131,11 +131,11 @@ func listenChannel(ctx context.Context, c *lime.ServerChannel) {
 	}
 }
 
-func authenticate(lime.Identity, lime.Authentication) (*lime.AuthenticationResult, error) {
+func authenticate(context.Context, lime.Identity, lime.Authentication) (*lime.AuthenticationResult, error) {
 	return &lime.AuthenticationResult{Role: lime.DomainRoleMember}, nil
 }
 
-func register(lime.Node, *lime.ServerChannel) (lime.Node, error) {
+func register(context.Context, lime.Node, *lime.ServerChannel) (lime.Node, error) {
 	return lime.Node{Identity: lime.Identity{
 		Name:   lime.NewEnvelopeId(),
 		Domain: "localhost",
