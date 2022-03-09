@@ -285,7 +285,7 @@ func (l *tcpTransportListener) serve(listener net.Listener) {
 			case <-l.done:
 				return
 			default:
-				log.Printf("tcp listener: serve: %v", err)
+				log.Printf("tcp listener: serve: %v\n", err)
 				return
 			}
 		} else {

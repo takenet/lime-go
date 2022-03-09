@@ -99,7 +99,7 @@ func receiveTransport(t testing.TB, transportChan chan Transport) Transport {
 	panic("something very wrong has occurred")
 }
 
-func createTCPAddress() net.Addr {
+func createLocalhostTCPAddress() net.Addr {
 	return &net.TCPAddr{
 		IP:   net.IPv4(127, 0, 0, 1),
 		Port: 55321,
@@ -178,7 +178,7 @@ func doTLSHandshake(ctx context.Context, server Transport, client Transport) err
 func TestTCPTransportListener_Accept_WhenContextDeadline(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
@@ -196,7 +196,7 @@ func TestTCPTransportListener_Accept_WhenContextDeadline(t *testing.T) {
 func TestTCPTransportListener_Accept_WhenClosed(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -217,7 +217,7 @@ func TestTCPTransportListener_Accept_WhenClosed(t *testing.T) {
 func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -235,7 +235,7 @@ func TestTCPTransport_Dial_WhenListening(t *testing.T) {
 func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
@@ -251,7 +251,7 @@ func TestTCPTransport_Dial_WhenNotListening(t *testing.T) {
 func TestTCPTransport_Dial_AfterListenerClosed(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	if err := listener.Close(); err != nil {
 		t.Fatal(err)
@@ -271,10 +271,10 @@ func TestTCPTransport_Dial_AfterListenerClosed(t *testing.T) {
 func TestTCPTransport_Close_WhenOpen(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
-	client := createClientTCPTransport(t, createTCPAddress())
+	client := createClientTCPTransport(t, createLocalhostTCPAddress())
 	defer silentClose(client)
 
 	// Act
@@ -287,10 +287,10 @@ func TestTCPTransport_Close_WhenOpen(t *testing.T) {
 func TestTCPTransport_Close_WhenAlreadyClosed(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
-	client := createClientTCPTransport(t, createTCPAddress())
+	client := createClientTCPTransport(t, createLocalhostTCPAddress())
 	defer silentClose(client)
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
@@ -320,10 +320,10 @@ func TestTCPTransport_Close_WhenNotOpen(t *testing.T) {
 func TestTCPTransport_SetEncryption_None(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
-	client := createClientTCPTransport(t, createTCPAddress())
+	client := createClientTCPTransport(t, createLocalhostTCPAddress())
 	defer silentClose(client)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -339,11 +339,11 @@ func TestTCPTransport_SetEncryption_None(t *testing.T) {
 func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)
 	defer silentClose(listener)
-	client := createClientTCPTransportTLS(t, createTCPAddress())
+	client := createClientTCPTransportTLS(t, createLocalhostTCPAddress())
 	server := receiveTransport(t, transportChan)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -362,10 +362,10 @@ func TestTCPTransport_SetEncryption_TLS(t *testing.T) {
 func TestTCPTransport_Send_Session(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	listener := createTCPListener(t, addr, nil)
 	defer silentClose(listener)
-	client := createClientTCPTransport(t, createTCPAddress())
+	client := createClientTCPTransport(t, createLocalhostTCPAddress())
 	defer silentClose(client)
 	s := createSession()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -381,11 +381,11 @@ func TestTCPTransport_Send_Session(t *testing.T) {
 func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)
 	defer silentClose(listener)
-	client := createClientTCPTransportTLS(t, createTCPAddress())
+	client := createClientTCPTransportTLS(t, createLocalhostTCPAddress())
 	server := receiveTransport(t, transportChan)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -404,11 +404,11 @@ func TestTCPTransport_Send_SessionTLS(t *testing.T) {
 func TestTCPTransport_Send_Deadline(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)
 	defer silentClose(listener)
-	client := createClientTCPTransportTLS(t, createTCPAddress())
+	client := createClientTCPTransportTLS(t, createLocalhostTCPAddress())
 	server := receiveTransport(t, transportChan)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -430,11 +430,11 @@ func TestTCPTransport_Send_Deadline(t *testing.T) {
 func TestTCPTransport_Receive_Session(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListener(t, addr, transportChan)
 	defer silentClose(listener)
-	client := createClientTCPTransport(t, createTCPAddress())
+	client := createClientTCPTransport(t, createLocalhostTCPAddress())
 	defer silentClose(client)
 	server := receiveTransport(t, transportChan)
 	s := createSession()
@@ -457,11 +457,11 @@ func TestTCPTransport_Receive_Session(t *testing.T) {
 func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)
 	defer silentClose(listener)
-	client := createClientTCPTransportTLS(t, createTCPAddress())
+	client := createClientTCPTransportTLS(t, createLocalhostTCPAddress())
 	server := receiveTransport(t, transportChan)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -487,11 +487,11 @@ func TestTCPTransport_Receive_SessionTLS(t *testing.T) {
 func TestTCPTransport_Receive_Deadline(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(t, addr, transportChan)
 	defer silentClose(listener)
-	client := createClientTCPTransportTLS(t, createTCPAddress())
+	client := createClientTCPTransportTLS(t, createLocalhostTCPAddress())
 	server := receiveTransport(t, transportChan)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
@@ -514,11 +514,11 @@ func BenchmarkTCPTransport_Send_Message(b *testing.B) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListener(b, addr, transportChan)
 	defer silentClose(listener)
-	client := createClientTCPTransport(b, createTCPAddress())
+	client := createClientTCPTransport(b, createLocalhostTCPAddress())
 	server := receiveTransport(b, transportChan)
 	messages := make([]*Message, b.N)
 	for i := 0; i < len(messages); i++ {
@@ -556,11 +556,11 @@ func BenchmarkTCPTransport_Send_MessageTLS(b *testing.B) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	addr := createTCPAddress()
+	addr := createLocalhostTCPAddress()
 	var transportChan = make(chan Transport, 1)
 	listener := createTCPListenerTLS(b, addr, transportChan)
 	defer silentClose(listener)
-	client := createClientTCPTransportTLS(b, createTCPAddress())
+	client := createClientTCPTransportTLS(b, createLocalhostTCPAddress())
 	server := receiveTransport(b, transportChan)
 	if err := doTLSHandshake(ctx, server, client); err != nil {
 		b.Fatal(err)
