@@ -11,12 +11,6 @@ import (
 	"time"
 )
 
-func createServer(listeners ...BoundListener) *Server {
-	config := NewServerConfig()
-	mux := &EnvelopeMux{}
-	return NewServer(config, mux, listeners)
-}
-
 func createBoundInProcTransportListener(addr InProcessAddr) BoundListener {
 	return BoundListener{
 		Listener: NewInProcessTransportListener(addr),
@@ -38,20 +32,22 @@ func createBoundWSTransportListener(addr net.Addr) BoundListener {
 	}
 }
 
-func TestServer_ListenAndServe(t *testing.T) {
+func TestServer_ListenAndServe_WithMultipleListeners(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	eg, _ := errgroup.WithContext(context.Background())
 	addr1 := InProcessAddr("localhost")
 	listener1 := createBoundInProcTransportListener(addr1)
 	addr2 := createLocalhostTCPAddress()
 	listener2 := createBoundTCPTransportListener(addr2)
 	addr3 := createLocalhostWSAddr()
 	listener3 := createBoundWSTransportListener(addr3)
-	srv := createServer(listener1, listener2, listener3)
+	config := NewServerConfig()
+	mux := &EnvelopeMux{}
+	srv := NewServer(config, mux, listener1, listener2, listener3)
 	done := make(chan bool)
+	eg, _ := errgroup.WithContext(context.Background())
 
 	// Act
 	eg.Go(func() error {
@@ -83,6 +79,119 @@ func TestServer_ListenAndServe(t *testing.T) {
 	assert.Error(t, eg.Wait(), ErrServerClosed)
 }
 
+func TestServer_ListenAndServe_EstablishSession(t *testing.T) {
+	// Arrange
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+	addr1 := InProcessAddr("localhost")
+	listener1 := createBoundInProcTransportListener(addr1)
+	config := NewServerConfig()
+	mux := &EnvelopeMux{}
+	srv := NewServer(config, mux, listener1)
+	defer silentClose(srv)
+	done := make(chan bool)
+	eg, _ := errgroup.WithContext(context.Background())
+	eg.Go(func() error {
+		close(done)
+		return srv.ListenAndServe()
+	})
+
+	// Act
+	<-done
+	time.Sleep(16 * time.Millisecond)
+	client, err := DialInProcess(addr1, 1)
+	defer silentClose(client)
+	channel := NewClientChannel(client, 1)
+	defer silentClose(channel)
+	ses, err := channel.EstablishSession(
+		ctx,
+		func([]SessionCompression) SessionCompression {
+			return SessionCompressionNone
+		},
+		func([]SessionEncryption) SessionEncryption {
+			return SessionEncryptionNone
+		},
+		Identity{
+			Name:   "client1",
+			Domain: "localhost",
+		},
+		func([]AuthenticationScheme, Authentication) Authentication {
+			return &GuestAuthentication{}
+		},
+		"default")
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, SessionStateEstablished, ses.State)
+}
+
+func TestServer_ListenAndServe_ReceiveMessage(t *testing.T) {
+	// Arrange
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+	addr1 := InProcessAddr("localhost")
+	listener1 := createBoundInProcTransportListener(addr1)
+	config := NewServerConfig()
+	msgChan := make(chan *Message)
+	mux := &EnvelopeMux{}
+	mux.MessageHandlerFunc(
+		func(*Message) bool {
+			return true
+		},
+		func(ctx context.Context, msg *Message, s Sender) error {
+			msgChan <- msg
+			return nil
+		})
+
+	srv := NewServer(config, mux, listener1)
+	defer silentClose(srv)
+	done := make(chan bool)
+	eg, _ := errgroup.WithContext(context.Background())
+	eg.Go(func() error {
+		close(done)
+		return srv.ListenAndServe()
+	})
+	<-done
+	time.Sleep(16 * time.Millisecond)
+	client, _ := DialInProcess(addr1, 1)
+	defer silentClose(client)
+	channel := NewClientChannel(client, 1)
+	defer silentClose(channel)
+	_, _ = channel.EstablishSession(
+		ctx,
+		func([]SessionCompression) SessionCompression {
+			return SessionCompressionNone
+		},
+		func([]SessionEncryption) SessionEncryption {
+			return SessionEncryptionNone
+		},
+		Identity{
+			Name:   "client1",
+			Domain: "localhost",
+		},
+		func([]AuthenticationScheme, Authentication) Authentication {
+			return &GuestAuthentication{}
+		},
+		"default")
+	msg := createMessage()
+
+	// Act
+	err := channel.SendMessage(ctx, msg)
+
+	// Assert
+	assert.NoError(t, err)
+	select {
+	case <-ctx.Done():
+		assert.FailNow(t, "receive message timeout")
+	case receivedMsg := <-msgChan:
+		assert.Equal(t, msg, receivedMsg)
+	}
+}
+
 func TestServerBuilder_Build(t *testing.T) {
+	// Arrange
+	//builder := NewServerBuilder().
 
 }
