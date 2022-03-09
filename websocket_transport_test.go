@@ -71,7 +71,7 @@ func createClientWebsocketTransportTLS(ctx context.Context, t testing.TB, addr s
 	return client
 }
 
-func createWSAddr() net.Addr {
+func createLocalhostWSAddr() net.Addr {
 	return &net.TCPAddr{
 		Port: 8080,
 	}
@@ -82,7 +82,7 @@ func TestWebsocketTransportListener_Accept_WhenContextDeadline(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
 
@@ -100,7 +100,7 @@ func TestWebsocketTransportListener_Accept_WhenClosed(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
 
@@ -122,7 +122,7 @@ func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	url := fmt.Sprintf("ws://%s", addr)
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
@@ -142,7 +142,7 @@ func TestWebsocketTransport_Dial_WhenNotListening(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	url := fmt.Sprintf("ws://%s", addr)
 
 	// Act
@@ -159,7 +159,7 @@ func TestWebsocketTransport_Dial_AfterListenerClosed(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	url := fmt.Sprintf("ws://%s", addr)
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	if err := listener.Close(); err != nil {
@@ -180,7 +180,7 @@ func TestWebsocketTransport_Close_WhenOpen(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
 	url := fmt.Sprintf("ws://%s", addr)
@@ -198,7 +198,7 @@ func TestWebsocketTransport_Close_WhenAlreadyClosed(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
 	url := fmt.Sprintf("ws://%s", addr)
@@ -220,7 +220,7 @@ func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
 	url := fmt.Sprintf("ws://%s", addr)
@@ -239,7 +239,7 @@ func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
 	defer silentClose(listener)
 	url := fmt.Sprintf("wss://%s", addr)
@@ -258,7 +258,7 @@ func TestWebsocketTransport_Send_Session(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
 	url := fmt.Sprintf("ws://%s", addr)
@@ -277,7 +277,7 @@ func TestWebsocketTransport_Send_SessionTLS(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
 	defer silentClose(listener)
 	url := fmt.Sprintf("wss://%s", addr)
@@ -296,7 +296,7 @@ func TestWebsocketTransport_Send_Deadline(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
 	defer silentClose(listener)
 	url := fmt.Sprintf("wss://%s", addr)
@@ -318,7 +318,7 @@ func TestWebsocketTransport_Receive_Session(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	var transportChan = make(chan Transport, 1)
 	listener := createWebsocketListener(ctx, t, addr, transportChan)
 	defer silentClose(listener)
@@ -345,7 +345,7 @@ func TestWebsocketTransport_Receive_SessionTLS(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	var transportChan = make(chan Transport, 1)
 	listener := createWebsocketListenerTLS(ctx, t, addr, transportChan)
 	defer silentClose(listener)
@@ -372,7 +372,7 @@ func TestWebsocketTransport_Receive_Deadline(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	var transportChan = make(chan Transport, 1)
 	listener := createWebsocketListenerTLS(ctx, t, addr, transportChan)
 	defer silentClose(listener)
@@ -396,7 +396,7 @@ func BenchmarkWebsocketTransport_Send_Message(b *testing.B) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	var transportChan = make(chan Transport)
 	listener := createWebsocketListener(ctx, b, addr, transportChan)
 	defer silentClose(listener)
@@ -439,7 +439,7 @@ func BenchmarkWebsocketTransport_Send_MessageTLS(b *testing.B) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	addr := createWSAddr()
+	addr := createLocalhostWSAddr()
 	var transportChan = make(chan Transport)
 	listener := createWebsocketListenerTLS(ctx, b, addr, transportChan)
 	defer silentClose(listener)

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"go.uber.org/multierr"
 	"log"
 	"net"
 	"net/http"
@@ -196,6 +197,9 @@ type websocketTransportListener struct {
 }
 
 func NewWebsocketTransportListener(config *WebsocketConfig) TransportListener {
+	if config == nil {
+		config = &WebsocketConfig{}
+	}
 	return &websocketTransportListener{WebsocketConfig: *config}
 }
 
@@ -278,17 +282,11 @@ func (l *websocketTransportListener) Close() error {
 	}
 
 	close(l.done)
+	listErr := l.listener.Close()
 	srvErr := l.srv.Close()
 	l.srv = nil
-	listErr := l.listener.Close()
-	if srvErr != nil {
-		return srvErr
-	}
-	if listErr != nil {
-		return listErr
-	}
 
-	return nil
+	return multierr.Combine(listErr, srvErr)
 }
 
 func (l *websocketTransportListener) ensureStarted() error {
