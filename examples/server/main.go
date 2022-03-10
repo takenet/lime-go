@@ -14,18 +14,17 @@ import (
 func main() {
 	addr := net.TCPAddr{Port: 55321}
 
-	tcpConfig := &lime.TCPConfig{
-		TLSConfig: &tls.Config{
-			GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return createCertificate("localhost")
-			},
-		},
-	}
-
 	server := lime.NewServerBuilder().
 		MessagesHandlerFunc(
-			func(_ context.Context, msg *lime.Message, _ lime.Sender) error {
+			func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
 				fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)
+				return s.SendMessage(ctx, &lime.Message{
+					EnvelopeBase: lime.EnvelopeBase{
+						To: msg.From,
+					},
+					Type:    msg.Type,
+					Content: msg.Content,
+				})
 				return nil
 			}).
 		NotificationsHandlerFunc(
@@ -53,7 +52,15 @@ func main() {
 				fmt.Printf("Command received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
 				return nil
 			}).
-		ListenTCP(addr, tcpConfig).
+		ListenTCP(
+			addr,
+			&lime.TCPConfig{
+				TLSConfig: &tls.Config{
+					GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+						return createCertificate("localhost")
+					},
+				},
+			}).
 		Build()
 
 	go func() {
