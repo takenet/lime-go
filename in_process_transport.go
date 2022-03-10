@@ -188,7 +188,7 @@ func (l *inProcessTransportListener) newClient(addr InProcessAddr, bufferSize in
 var inProcListeners = make(map[InProcessAddr]*inProcessTransportListener)
 
 // DialInProcess creates a new in process transport connection to the specified path.
-func DialInProcess(addr InProcessAddr, bufferSize int) (*inProcessTransport, error) {
+func DialInProcess(addr InProcessAddr, bufferSize int) (Transport, error) {
 	l := inProcListeners[addr]
 	if l == nil {
 		return nil, fmt.Errorf("in process connection refused on %s address", addr)
