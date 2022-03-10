@@ -244,6 +244,11 @@ func (b *ServerBuilder) MessageHandlerFunc(predicate MessagePredicate, f Message
 	return b
 }
 
+func (b *ServerBuilder) MessagesHandlerFunc(f MessageHandlerFunc) *ServerBuilder {
+	b.mux.MessageHandlerFunc(func(msg *Message) bool { return true }, f)
+	return b
+}
+
 func (b *ServerBuilder) MessageHandler(handler MessageHandler) *ServerBuilder {
 	b.mux.MessageHandler(handler)
 	return b
@@ -254,6 +259,11 @@ func (b *ServerBuilder) NotificationHandlerFunc(predicate NotificationPredicate,
 	return b
 }
 
+func (b *ServerBuilder) NotificationsHandlerFunc(f NotificationHandlerFunc) *ServerBuilder {
+	b.mux.NotificationHandlerFunc(func(not *Notification) bool { return true }, f)
+	return b
+}
+
 func (b *ServerBuilder) NotificationHandler(handler NotificationHandler) *ServerBuilder {
 	b.mux.NotificationHandler(handler)
 	return b
@@ -261,6 +271,11 @@ func (b *ServerBuilder) NotificationHandler(handler NotificationHandler) *Server
 
 func (b *ServerBuilder) CommandHandlerFunc(predicate CommandPredicate, f CommandHandlerFunc) *ServerBuilder {
 	b.mux.CommandHandlerFunc(predicate, f)
+	return b
+}
+
+func (b *ServerBuilder) CommandsHandlerFunc(f CommandHandlerFunc) *ServerBuilder {
+	b.mux.CommandHandlerFunc(func(cmd *Command) bool { return true }, f)
 	return b
 }
 
