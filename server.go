@@ -26,6 +26,9 @@ type Server struct {
 }
 
 func NewServer(config *ServerConfig, mux *EnvelopeMux, listeners ...BoundListener) *Server {
+	if config == nil {
+		config = defaultServerConfig
+	}
 	if mux == nil || reflect.ValueOf(mux).IsNil() {
 		panic("nil mux")
 	}
@@ -174,6 +177,8 @@ type ServerConfig struct {
 	// Register is called for the client Node address registration.
 	Register func(context.Context, Node, *ServerChannel) (Node, error)
 }
+
+var defaultServerConfig = NewServerConfig()
 
 func NewServerConfig() *ServerConfig {
 	instance, err := os.Hostname()
@@ -355,6 +360,11 @@ func (b *ServerBuilder) EnableExternalAuthentication(a ExternalAuthenticator) *S
 	return b
 }
 
+func (b *ServerBuilder) ChannelBufferSize(bufferSize int) *ServerBuilder {
+	b.config.ChannelBufferSize = bufferSize
+	return b
+}
+
 func (b *ServerBuilder) Build() *Server {
 	b.config.Authenticate = buildAuthenticate(b.plainAuth, b.keyAuth, b.externalAuth)
 	return NewServer(b.config, b.mux, b.listeners...)
@@ -408,5 +418,5 @@ func NewBoundListener(listener TransportListener, addr net.Addr) BoundListener {
 }
 
 // ErrServerClosed is returned by the Server's ListenAndServe,
-// method after a call to Shutdown or Close.
+// method after a call to Close.
 var ErrServerClosed = errors.New("lime: Server closed")

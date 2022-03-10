@@ -100,7 +100,7 @@ func TestServer_ListenAndServe_EstablishSession(t *testing.T) {
 	// Act
 	<-done
 	time.Sleep(16 * time.Millisecond)
-	client, err := DialInProcess(addr1, 1)
+	client, _ := DialInProcess(addr1, 1)
 	defer silentClose(client)
 	channel := NewClientChannel(client, 1)
 	defer silentClose(channel)
