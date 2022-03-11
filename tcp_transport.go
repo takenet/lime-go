@@ -25,6 +25,7 @@ type tcpTransport struct {
 	limitedReader io.LimitedReader
 	encryption    SessionEncryption
 	server        bool
+	eof           bool
 }
 
 // DialTcp opens a TCP  transport connection with the specified URI.
@@ -131,6 +132,9 @@ func (t *tcpTransport) Send(ctx context.Context, e Envelope) error {
 	t.ctxConn.SetWriteContext(ctx)
 
 	if err := t.encoder.Encode(e); err != nil {
+		if errors.Is(err, io.EOF) {
+			t.eof = true
+		}
 		return fmt.Errorf("tcp transport: send: %w", err)
 	}
 
@@ -150,6 +154,9 @@ func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
 
 	var raw rawEnvelope
 	if err := t.decoder.Decode(&raw); err != nil {
+		if errors.Is(err, io.EOF) {
+			t.eof = true
+		}
 		return nil, fmt.Errorf("tcp transport: receive: %w", err)
 	}
 
@@ -168,7 +175,7 @@ func (t *tcpTransport) Close() error {
 }
 
 func (t *tcpTransport) Connected() bool {
-	return t.conn != nil
+	return t.conn != nil && !t.eof
 }
 
 func (t *tcpTransport) LocalAddr() net.Addr {
