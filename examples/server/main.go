@@ -34,7 +34,7 @@ func main() {
 			}).
 		CommandHandlerFunc(
 			func(cmd *lime.Command) bool {
-				if cmd.Status == "" || cmd.URI == nil {
+				if cmd.Status != "" || cmd.URI == nil {
 					return false
 				}
 

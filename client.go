@@ -38,6 +38,15 @@ func NewClient(config *ClientConfig, mux *EnvelopeMux) *Client {
 	return c
 }
 
+func (c *Client) Establish(ctx context.Context) error {
+	_, err := c.getOrBuildChannel(ctx)
+	return err
+}
+
+func (c *Client) OK() bool {
+	return c.channelOK()
+}
+
 func (c *Client) Close() error {
 	c.lock <- struct{}{}
 	defer func() {
