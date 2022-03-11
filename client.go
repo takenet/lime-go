@@ -20,10 +20,9 @@ type Client struct {
 	config  *ClientConfig
 	channel *ClientChannel
 	mux     *EnvelopeMux
-	lock    chan struct{}
+	lock    chan struct{}      // lock is used as a mutex for channel lifetime handling operations
 	cancel  context.CancelFunc // cancel stops the channel listener goroutine
 	done    chan bool          // done is used by the listener goroutine to signal its end
-
 }
 
 func NewClient(config *ClientConfig, mux *EnvelopeMux) *Client {
@@ -33,7 +32,11 @@ func NewClient(config *ClientConfig, mux *EnvelopeMux) *Client {
 	if mux == nil || reflect.ValueOf(mux).IsNil() {
 		panic("nil mux")
 	}
-	c := &Client{config: config, mux: mux, lock: make(chan struct{}, 1)}
+	c := &Client{
+		config: config,
+		mux:    mux,
+		lock:   make(chan struct{}, 1),
+	}
 	c.startListener()
 	return c
 }

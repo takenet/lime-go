@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/signal"
 	"time"
 )
 
@@ -16,7 +16,7 @@ func main() {
 
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:55321")
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("Client establishment failed: %v", err)
 	}
 
 	client := lime.NewClientBuilder().
@@ -45,7 +45,7 @@ func main() {
 	defer cancel()
 
 	if err := client.Establish(ctx); err != nil {
-		log.Fatal("Client establishment failed")
+		log.Fatalf("Client establishment failed: %v", err)
 	}
 
 	log.Println("Session established")
@@ -82,14 +82,36 @@ func main() {
 		log.Printf("Command response received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
 	}
 
-	ctx, cancel = context.WithCancel(context.Background())
+	scanner := bufio.NewScanner(os.Stdin)
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig)
-	fmt.Println("Press Ctrl+C key to exit")
-	<-sig
+	for {
+		fmt.Print("To: ")
+		scanner.Scan()
 
-	cancel()
+		to, err := lime.ParseNode(scanner.Text())
+		if err != nil {
+			fmt.Printf("Invalid node: %v\n", err)
+			continue
+		}
+
+		fmt.Print("Content: ")
+		scanner.Scan()
+		content := lime.PlainDocument(scanner.Text())
+
+		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+
+		msg := &lime.Message{
+			EnvelopeBase: lime.EnvelopeBase{
+				To: to,
+			},
+		}
+		msg.SetContent(content)
+
+		if err := client.SendMessage(ctx, msg); err != nil {
+			fmt.Printf("Send message error: %v\n", err)
+		}
+		cancel()
+	}
 
 	err = client.Close()
 	if err != nil {

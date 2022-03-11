@@ -41,7 +41,7 @@ func main() {
 	// Message handler that echoes the received message to the originator
 	msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
 		return s.SendMessage(ctx, &lime.Message{
-			EnvelopeBase: lime.EnvelopeBase{To: msg.From},
+			EnvelopeBase: lime.EnvelopeBase{ID: msg.ID, To: msg.From},
 			Type:    msg.Type,
 			Content: msg.Content,
 		})
@@ -55,20 +55,75 @@ func main() {
 
 	defer func() {
 		if err := server.Close(); err != nil {
-			log.Printf("server: close: %v\n", err)
+			log.Printf("close: %v\n", err)
 		}
 	}()
 
 	// Start listening (blocking call)
 	if err := server.ListenAndServe(); err != lime.ErrServerClosed {
-		log.Printf("server: listen: %v\n", err)
+		log.Printf("listen: %v\n", err)
 	}
 }
 
 ```
 
-### Client connection
+### Client 
 
+In the client side, you may use the `lime.Client` type, which can be built using the helper method `lime.NewClientBuilder`.
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"github.com/takenet/lime-go"
+	"log"
+	"net"
+	"time"
+)
+
+func main() {
+	done := make(chan bool)
+	
+	// Defines a simple handler function for printing  
+	// the received messages to the stdout
+	msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
+		fmt.Printf("Message received - Type: %v - Content: %v\n", msg.Type, msg.Content)
+		close(done)
+		return nil
+	}
+	
+	// Initialize the client
+	client := lime.NewClientBuilder().
+		UseTCP(&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 55321}, &lime.TCPConfig{}).
+		MessagesHandlerFunc(msgHandler).
+		Build()
+
+	// Prepare a simple text message to be sent
+	msg := &lime.Message{
+		Type: lime.MediaTypeTextPlain(),
+		Content: lime.PlainDocument("Hello world!"),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	// Send the message
+	if err := client.SendMessage(ctx, msg); err != nil {
+		log.Printf("send message: %v\n", err)
+	}
+	
+	// Wait for the echo message
+	<-done
+	
+	// Close the client
+	err := client.Close()
+	if err != nil {
+		log.Printf("close: %v\n", err)
+	}
+}
+```
 
 
 Implementation overview
