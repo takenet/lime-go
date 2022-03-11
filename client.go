@@ -144,9 +144,9 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 			return channel, nil
 		}
 
-		interval := time.Duration(math.Pow(count, 2) * 100)
+		interval := time.Duration(math.Pow(count, 2)*100) * time.Millisecond
 		log.Printf("build channel error on attempt %v, sleeping %v ms: %v", count, interval, err)
-		time.Sleep(interval * time.Millisecond)
+		time.Sleep(interval)
 		count++
 	}
 
