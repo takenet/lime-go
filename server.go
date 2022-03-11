@@ -303,7 +303,7 @@ func (b *ServerBuilder) ListenWebsocket(addr net.TCPAddr, config *WebsocketConfi
 
 func (b *ServerBuilder) ListenInProcess(addr InProcessAddr) *ServerBuilder {
 	listener := NewInProcessTransportListener(addr)
-	b.listeners = append(b.listeners, NewBoundListener(listener, &addr))
+	b.listeners = append(b.listeners, NewBoundListener(listener, addr))
 	return b
 }
 
@@ -408,8 +408,8 @@ func NewBoundListener(listener TransportListener, addr net.Addr) BoundListener {
 	if listener == nil || reflect.ValueOf(listener).IsNil() {
 		panic("nil Listener")
 	}
-	if addr == nil || reflect.ValueOf(addr).IsNil() {
-		panic("nil Addr")
+	if addr == nil || reflect.ValueOf(addr).IsZero() {
+		panic("zero addr value")
 	}
 	return BoundListener{
 		Listener: listener,

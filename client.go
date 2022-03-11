@@ -3,6 +3,7 @@ package lime
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"log"
@@ -12,7 +13,6 @@ import (
 	"os"
 	"reflect"
 	"runtime"
-	"sync"
 	"time"
 )
 
@@ -20,7 +20,10 @@ type Client struct {
 	config  *ClientConfig
 	channel *ClientChannel
 	mux     *EnvelopeMux
-	mu      sync.Mutex
+	lock    chan struct{}
+	cancel  context.CancelFunc // cancel stops the channel listener goroutine
+	done    chan bool          // done is used by the listener goroutine to signal its end
+
 }
 
 func NewClient(config *ClientConfig, mux *EnvelopeMux) *Client {
@@ -30,16 +33,22 @@ func NewClient(config *ClientConfig, mux *EnvelopeMux) *Client {
 	if mux == nil || reflect.ValueOf(mux).IsNil() {
 		panic("nil mux")
 	}
-	return &Client{config: config, mux: mux}
+	c := &Client{config: config, mux: mux, lock: make(chan struct{}, 1)}
+	c.startListener()
+	return c
 }
 
 func (c *Client) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.lock <- struct{}{}
+	defer func() {
+		<-c.lock
+	}()
 
 	if c.channel == nil {
 		return nil
 	}
+
+	c.stopListener()
 
 	if c.channel.Established() {
 		// Try to close the session gracefully
@@ -50,7 +59,7 @@ func (c *Client) Close() error {
 		return err
 	}
 
-	err := c.channel.transport.Close()
+	err := c.channel.Close()
 	c.channel = nil
 	return err
 }
@@ -96,8 +105,17 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 		return c.channel, nil
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case c.lock <- struct{}{}:
+		break
+	}
+
+	defer func() {
+		<-c.lock
+	}()
+
 	if c.channelOK() {
 		return c.channel, nil
 	}
@@ -112,6 +130,7 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 				// calling close just to release resources.
 				_ = c.channel.Close()
 			}
+
 			c.channel = channel
 			return channel, nil
 		}
@@ -122,7 +141,41 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 		count++
 	}
 
-	return nil, fmt.Errorf("getOrBuildChannel: %w", ctx.Err())
+	return nil, fmt.Errorf("client: getOrBuildChannel: %w", ctx.Err())
+}
+
+func (c *Client) startListener() {
+	ctx, cancel := context.WithCancel(context.Background())
+	c.cancel = cancel
+	c.done = make(chan bool)
+
+	go func() {
+		defer close(c.done)
+
+		for ctx.Err() == nil {
+			channel, err := c.getOrBuildChannel(ctx)
+			if err != nil {
+				log.Printf("client: listen: %v", err)
+				continue
+			}
+
+			if err := c.mux.ListenClient(ctx, channel); err != nil {
+				if errors.Is(err, context.Canceled) {
+					// stopListener has been called
+					continue
+				}
+				log.Printf("client: listen: %v", err)
+			}
+		}
+	}()
+}
+
+func (c *Client) stopListener() {
+	if c.cancel != nil {
+		c.cancel()
+		<-c.done
+		c.cancel = nil
+	}
 }
 
 func (c *Client) buildChannel(ctx context.Context) (*ClientChannel, error) {
@@ -183,16 +236,16 @@ func NewClientConfig() *ClientConfig {
 				Port: 55321,
 			}, nil)
 		},
-		CompSelector: func(compressions []SessionCompression) SessionCompression {
-			return compressions[0]
+		CompSelector: func(options []SessionCompression) SessionCompression {
+			return options[0]
 		},
-		EncryptSelector: func(encryptions []SessionEncryption) SessionEncryption {
-			if contains(encryptions, SessionEncryptionTLS) {
+		EncryptSelector: func(options []SessionEncryption) SessionEncryption {
+			if contains(options, SessionEncryptionTLS) {
 				return SessionEncryptionTLS
 			}
-			return encryptions[0]
+			return options[0]
 		},
-		Authenticator: func(schemes []AuthenticationScheme, authentication Authentication) Authentication {
+		Authenticator: func(schemes []AuthenticationScheme, _ Authentication) Authentication {
 			if contains(schemes, AuthenticationSchemeGuest) {
 				return &GuestAuthentication{}
 			}

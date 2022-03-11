@@ -62,7 +62,7 @@ func (m *EnvelopeMux) listen(ctx context.Context, c *channel) error {
 			}
 		}
 	}
-	return nil
+	return ctx.Err()
 }
 
 func (m *EnvelopeMux) handleMessage(ctx context.Context, msg *Message, s Sender) error {

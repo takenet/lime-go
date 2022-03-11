@@ -19,7 +19,7 @@ func NewClientChannel(t Transport, bufferSize int) *ClientChannel {
 func (c *ClientChannel) receiveSessionFromServer(ctx context.Context) (*Session, error) {
 	ses, err := c.receiveSession(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("receive session failed: %w", err)
+		return nil, fmt.Errorf("receive session: %w", err)
 	}
 
 	if ses.State == SessionStateEstablished {
@@ -130,12 +130,12 @@ func (c *ClientChannel) sendFinishingSession(ctx context.Context) error {
 }
 
 // CompressionSelector defines a function for selecting the compression for a session.
-type CompressionSelector func([]SessionCompression) SessionCompression
+type CompressionSelector func(options []SessionCompression) SessionCompression
 
 // EncryptionSelector defines a function for selecting the encryption for a session.
-type EncryptionSelector func([]SessionEncryption) SessionEncryption
+type EncryptionSelector func(options []SessionEncryption) SessionEncryption
 
-type Authenticator func([]AuthenticationScheme, Authentication) Authentication
+type Authenticator func(schemes []AuthenticationScheme, roundTrip Authentication) Authentication
 
 // EstablishSession performs the client session negotiation and authentication handshake.
 func (c *ClientChannel) EstablishSession(
@@ -156,17 +156,17 @@ func (c *ClientChannel) EstablishSession(
 
 	ses, err := c.startNewSession(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error establishing the session: %w", err)
+		return nil, fmt.Errorf("establish session: %w", err)
 	}
 
 	// Session negotiation
 	if ses.State == SessionStateNegotiating {
 		if compSelector == nil {
-			panic("the compression selector should not be nil")
+			panic("nil compression selector")
 		}
 
 		if encryptSelector == nil {
-			panic("the encryption selector should not be nil")
+			panic("nil encrypt selector")
 		}
 
 		// Select options
@@ -175,20 +175,20 @@ func (c *ClientChannel) EstablishSession(
 			compSelector(ses.CompressionOptions),
 			encryptSelector(ses.EncryptionOptions))
 		if err != nil {
-			return nil, fmt.Errorf("error establishing the session: %w", err)
+			return nil, fmt.Errorf("establish session: %w", err)
 		}
 
 		if ses.State == SessionStateNegotiating {
 			if ses.Compression != "" && ses.Compression != c.transport.Compression() {
 				err = c.transport.SetCompression(ctx, ses.Compression)
 				if err != nil {
-					return nil, fmt.Errorf("error setting the session compression: %w", err)
+					return nil, fmt.Errorf("establish session: set compression: %w", err)
 				}
 			}
 			if ses.Encryption != "" && ses.Encryption != c.transport.Encryption() {
 				err = c.transport.SetEncryption(ctx, ses.Encryption)
 				if err != nil {
-					return nil, fmt.Errorf("error setting the session encryption: %w", err)
+					return nil, fmt.Errorf("establish session: set encryption: %w", err)
 				}
 			}
 		}
@@ -196,7 +196,7 @@ func (c *ClientChannel) EstablishSession(
 		// Await for authentication options
 		ses, err = c.receiveSessionFromServer(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("error establishing the session: %w", err)
+			return nil, fmt.Errorf("establish session: %w", err)
 		}
 	}
 
@@ -211,7 +211,7 @@ func (c *ClientChannel) EstablishSession(
 			instance,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("error establishing the session: %w", err)
+			return nil, fmt.Errorf("establish session: %w", err)
 		}
 		roundTrip = ses.Authentication
 	}
@@ -222,12 +222,12 @@ func (c *ClientChannel) EstablishSession(
 // FinishSession performs the session finishing handshake.
 func (c *ClientChannel) FinishSession(ctx context.Context) (*Session, error) {
 	if err := c.sendFinishingSession(ctx); err != nil {
-		return nil, fmt.Errorf("error sending the finishing session: %w", err)
+		return nil, fmt.Errorf("finish session: %w", err)
 	}
 
 	ses, err := c.receiveSessionFromServer(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error receiving the finished the session: %w", err)
+		return nil, fmt.Errorf("finish session: %w", err)
 	}
 
 	return ses, nil
