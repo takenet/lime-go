@@ -12,6 +12,7 @@ type ClientChannel struct {
 
 func NewClientChannel(t Transport, bufferSize int) *ClientChannel {
 	c := newChannel(t, bufferSize)
+	c.client = true
 	return &ClientChannel{channel: c}
 }
 
@@ -132,10 +133,29 @@ func (c *ClientChannel) sendFinishingSession(ctx context.Context) error {
 // CompressionSelector defines a function for selecting the compression for a session.
 type CompressionSelector func(options []SessionCompression) SessionCompression
 
+var NoneCompressionSelector CompressionSelector = func(options []SessionCompression) SessionCompression {
+	return SessionCompressionNone
+}
+
 // EncryptionSelector defines a function for selecting the encryption for a session.
 type EncryptionSelector func(options []SessionEncryption) SessionEncryption
 
+var NoneEncryptionSelector EncryptionSelector = func(options []SessionEncryption) SessionEncryption {
+	return SessionEncryptionNone
+}
+var TLSEncryptionSelector EncryptionSelector = func(options []SessionEncryption) SessionEncryption {
+	return SessionEncryptionTLS
+}
+
 type Authenticator func(schemes []AuthenticationScheme, roundTrip Authentication) Authentication
+
+var GuestAuthenticator Authenticator = func(schemes []AuthenticationScheme, roundTrip Authentication) Authentication {
+	return &GuestAuthentication{}
+}
+
+var TransportAuthenticator Authenticator = func(schemes []AuthenticationScheme, roundTrip Authentication) Authentication {
+	return &TransportAuthentication{}
+}
 
 // EstablishSession performs the client session negotiation and authentication handshake.
 func (c *ClientChannel) EstablishSession(

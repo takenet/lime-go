@@ -154,7 +154,6 @@ func TestClientChannel_FinishSession(t *testing.T) {
 	defer silentClose(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	c.setState(SessionStateEstablished)
 	clientNode := Node{
 		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
 		Instance: "home",
@@ -164,6 +163,14 @@ func TestClientChannel_FinishSession(t *testing.T) {
 		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
 		Instance: "server1",
 	}
+	go func() {
+		_, _ = server.Receive(ctx)
+		_ = server.Send(ctx, &Session{
+			EnvelopeBase: EnvelopeBase{ID: sessionID, From: serverNode, To: clientNode},
+			State:        SessionStateEstablished})
+	}()
+	_, err := c.EstablishSession(ctx, NoneCompressionSelector, NoneEncryptionSelector, Identity{}, GuestAuthenticator, "")
+	assert.NoError(t, err)
 
 	// Act
 	go func() {

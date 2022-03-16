@@ -76,11 +76,12 @@ type channel struct {
 	startRcv   sync.Once
 	stopRcv    sync.Once
 	rcvDone    chan struct{}
+	client     bool
 
 	processingCmds   map[string]chan *Command
 	processingCmdsMu sync.RWMutex
 
-	cancel context.CancelFunc // The function for cancelling the send/receive goroutines
+	cancel context.CancelFunc // The function for cancelling the listener goroutine
 }
 
 func newChannel(t Transport, bufferSize int) *channel {
@@ -94,7 +95,7 @@ func newChannel(t Transport, bufferSize int) *channel {
 		inMsgChan:        make(chan *Message, bufferSize),
 		inNotChan:        make(chan *Notification, bufferSize),
 		inCmdChan:        make(chan *Command, bufferSize),
-		inSesChan:        make(chan *Session, bufferSize),
+		inSesChan:        make(chan *Session, 1),
 		rcvDone:          make(chan struct{}),
 		processingCmds:   make(map[string]chan *Command),
 		processingCmdsMu: sync.RWMutex{},
@@ -126,6 +127,17 @@ func (c *channel) stopReceiver() {
 }
 
 func (c *channel) setState(state SessionState) {
+	c.setStateWLock(state)
+
+	switch state {
+	case SessionStateEstablished:
+		c.startRcv.Do(c.startReceiver)
+	case SessionStateFinished, SessionStateFailed:
+		c.stopRcv.Do(c.stopReceiver)
+	}
+}
+
+func (c *channel) setStateWLock(state SessionState) {
 	c.stateMu.Lock()
 	defer c.stateMu.Unlock()
 
@@ -134,13 +146,6 @@ func (c *channel) setState(state SessionState) {
 	}
 
 	c.state = state
-
-	switch state {
-	case SessionStateEstablished:
-		c.startRcv.Do(c.startReceiver)
-	case SessionStateFinished, SessionStateFailed:
-		c.stopRcv.Do(c.stopReceiver)
-	}
 }
 
 func (c *channel) MsgChan() <-chan *Message {
@@ -153,10 +158,6 @@ func (c *channel) NotChan() <-chan *Notification {
 
 func (c *channel) CmdChan() <-chan *Command {
 	return c.inCmdChan
-}
-
-func (c *channel) SesChan() <-chan *Session {
-	return c.inSesChan
 }
 
 func receiveFromTransport(ctx context.Context, c *channel, done chan<- struct{}) {
@@ -205,6 +206,9 @@ func receiveFromTransport(ctx context.Context, c *channel, done chan<- struct{})
 			case c.inSesChan <- e:
 				// If a session is received while established,
 				// the receiver goroutine can stop.
+				if c.client {
+					c.setStateWLock(e.State)
+				}
 				return
 			}
 		default:
@@ -252,10 +256,6 @@ func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 		panic("nil context")
 	}
 
-	if err := c.ensureTransportOK("receive session"); err != nil {
-		return nil, err
-	}
-
 	state := c.State()
 
 	switch state {
@@ -271,6 +271,10 @@ func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 			}
 			return s, nil
 		}
+	}
+
+	if err := c.ensureTransportOK("receive session"); err != nil {
+		return nil, err
 	}
 
 	env, err := c.transport.Receive(ctx)
@@ -463,4 +467,10 @@ func (c *channel) trySubmitCommandResult(respCmd *Command) bool {
 
 	respChan <- respCmd
 	return true
+}
+
+// RcvDone signals when the channel receiver goroutine is done.
+// This usually indicates that the session with the remote node was finished.
+func (c *channel) RcvDone() <-chan struct{} {
+	return c.rcvDone
 }
