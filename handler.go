@@ -37,7 +37,7 @@ func (m *EnvelopeMux) listen(ctx context.Context, c *channel) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-c.SesChan():
+		case <-c.RcvDone():
 			return nil
 		case msg, ok := <-c.MsgChan():
 			if !ok {
