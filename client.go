@@ -13,6 +13,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -21,6 +22,7 @@ import (
 type Client struct {
 	config  *ClientConfig
 	channel *ClientChannel
+	mu      sync.RWMutex // mutex for setting the channel
 	mux     *EnvelopeMux
 	lock    chan struct{}      // lock is used as a mutex for channel lifetime handling operations
 	cancel  context.CancelFunc // cancel stops the channel listener goroutine
@@ -125,11 +127,15 @@ func (c *Client) ProcessCommand(ctx context.Context, cmd *Command) (*Command, er
 }
 
 func (c *Client) channelOK() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.channel != nil && c.channel.Established()
 }
 
 func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) {
 	if c.channelOK() {
+		c.mu.RLock()
+		defer c.mu.RUnlock()
 		return c.channel, nil
 	}
 
@@ -145,6 +151,8 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 	}()
 
 	if c.channelOK() {
+		c.mu.RLock()
+		defer c.mu.RUnlock()
 		return c.channel, nil
 	}
 
@@ -155,12 +163,16 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 			// don't care about the result,
 			// calling close just to release resources.
 			_ = c.channel.Close()
+			c.mu.Lock()
 			c.channel = nil
+			c.mu.Unlock()
 		}
 
 		channel, err := c.buildChannel(ctx)
 		if err == nil {
+			c.mu.Lock()
 			c.channel = channel
+			c.mu.Unlock()
 			return channel, nil
 		}
 

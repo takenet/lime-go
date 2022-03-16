@@ -289,15 +289,15 @@ func (b *ServerBuilder) CommandHandler(handler CommandHandler) *ServerBuilder {
 	return b
 }
 
-func (b *ServerBuilder) ListenTCP(addr net.TCPAddr, config *TCPConfig) *ServerBuilder {
+func (b *ServerBuilder) ListenTCP(addr *net.TCPAddr, config *TCPConfig) *ServerBuilder {
 	listener := NewTCPTransportListener(config)
-	b.listeners = append(b.listeners, NewBoundListener(listener, &addr))
+	b.listeners = append(b.listeners, NewBoundListener(listener, addr))
 	return b
 }
 
-func (b *ServerBuilder) ListenWebsocket(addr net.TCPAddr, config *WebsocketConfig) *ServerBuilder {
+func (b *ServerBuilder) ListenWebsocket(addr *net.TCPAddr, config *WebsocketConfig) *ServerBuilder {
 	listener := NewWebsocketTransportListener(config)
-	b.listeners = append(b.listeners, NewBoundListener(listener, &addr))
+	b.listeners = append(b.listeners, NewBoundListener(listener, addr))
 	return b
 }
 

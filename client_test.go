@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
 	"log"
+	"net"
 	"testing"
 	"time"
 )
@@ -15,10 +16,10 @@ func TestClient_NewClient_Message(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	addr1 := InProcessAddr("localhost")
+	addr1 := createLocalhostTCPAddress().(*net.TCPAddr)
 	msgChan := make(chan *Message, 1)
 	server := NewServerBuilder().
-		ListenInProcess(addr1).
+		ListenTCP(addr1, nil).
 		MessagesHandlerFunc(
 			func(ctx context.Context, msg *Message, s Sender) error {
 				msgChan <- msg
@@ -32,8 +33,9 @@ func TestClient_NewClient_Message(t *testing.T) {
 		}
 	}()
 	config := NewClientConfig()
+	config.EncryptSelector = NoneEncryptionSelector
 	config.NewTransport = func(ctx context.Context) (Transport, error) {
-		return DialInProcess(addr1, 1)
+		return DialTcp(ctx, addr1, nil)
 	}
 	mux := &EnvelopeMux{}
 	client := NewClient(config, mux)

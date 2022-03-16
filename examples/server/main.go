@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	addr := net.TCPAddr{Port: 55321}
+	addr := &net.TCPAddr{Port: 55321}
 
 	server := lime.NewServerBuilder().
 		MessagesHandlerFunc(

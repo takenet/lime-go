@@ -224,7 +224,7 @@ func (t *tcpTransport) setConn(conn net.Conn) {
 }
 
 func (t *tcpTransport) ensureOpen() error {
-	if t.conn == nil {
+	if !t.Connected() {
 		return errors.New("transport is not open")
 	}
 
