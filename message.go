@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-// Message Provides the transport of a Content between nodes in a network.
+// Message encapsulates a document for transport between nodes in a network.
 type Message struct {
 	EnvelopeBase
 

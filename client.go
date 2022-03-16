@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+// Client provide methods for sending envelopes and allow the definition of handles for receiving.
+// It also automatically handles the connection lifetime with a server, doing reconnections in case of failures.
 type Client struct {
 	config  *ClientConfig
 	channel *ClientChannel
@@ -25,6 +27,7 @@ type Client struct {
 	done    chan bool          // done is used by the listener goroutine to signal its end
 }
 
+// NewClient creates a new instance of the Client type.
 func NewClient(config *ClientConfig, mux *EnvelopeMux) *Client {
 	if config == nil {
 		config = defaultClientConfig
@@ -41,16 +44,21 @@ func NewClient(config *ClientConfig, mux *EnvelopeMux) *Client {
 	return c
 }
 
+// Establish forces the establishment of a session, in case of not being already established.
+// It also awaits for any establishment operation that is in progress, returning only when it succeeds.
 func (c *Client) Establish(ctx context.Context) error {
 	_, err := c.getOrBuildChannel(ctx)
 	return err
 }
 
-func (c *Client) OK() bool {
-	return c.channelOK()
-}
-
+// Close stops the listener and finishes any established session with the server.
 func (c *Client) Close() error {
+	c.stopListener()
+
+	if c.channel == nil {
+		return nil
+	}
+
 	c.lock <- struct{}{}
 	defer func() {
 		<-c.lock
@@ -59,8 +67,6 @@ func (c *Client) Close() error {
 	if c.channel == nil {
 		return nil
 	}
-
-	c.stopListener()
 
 	if c.channel.Established() {
 		// Try to close the session gracefully
@@ -76,6 +82,9 @@ func (c *Client) Close() error {
 	return err
 }
 
+// SendMessage asynchronously sends a Message to the server.
+// The server may route the Message to another node, accordingly to the specified destination address.
+// It may also send back one or more Notification envelopes, containing status about the Message.
 func (c *Client) SendMessage(ctx context.Context, msg *Message) error {
 	channel, err := c.getOrBuildChannel(ctx)
 	if err != nil {
@@ -84,6 +93,8 @@ func (c *Client) SendMessage(ctx context.Context, msg *Message) error {
 	return channel.SendMessage(ctx, msg)
 }
 
+// SendNotification asynchronously sends a Notification to the server.
+// The server may route the Notification to another node, accordingly to the specified destination address.
 func (c *Client) SendNotification(ctx context.Context, not *Notification) error {
 	channel, err := c.getOrBuildChannel(ctx)
 	if err != nil {
@@ -92,6 +103,10 @@ func (c *Client) SendNotification(ctx context.Context, not *Notification) error 
 	return channel.SendNotification(ctx, not)
 }
 
+// SendCommand asynchronously sends a Command to the server.
+// The server may route the Command to another node, accordingly to the specified destination address.
+// This method can be used for sending request and response commands, but in case of requests, it does not await for response.
+// For receiving the response, the ProcessCommand method should be used.
 func (c *Client) SendCommand(ctx context.Context, cmd *Command) error {
 	channel, err := c.getOrBuildChannel(ctx)
 	if err != nil {
@@ -100,6 +115,7 @@ func (c *Client) SendCommand(ctx context.Context, cmd *Command) error {
 	return channel.SendCommand(ctx, cmd)
 }
 
+// ProcessCommand send a request Command to the server and returns the corresponding response.
 func (c *Client) ProcessCommand(ctx context.Context, cmd *Command) (*Command, error) {
 	channel, err := c.getOrBuildChannel(ctx)
 	if err != nil {
@@ -135,14 +151,15 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 	count := 0.0
 
 	for ctx.Err() == nil {
+		if c.channel != nil {
+			// don't care about the result,
+			// calling close just to release resources.
+			_ = c.channel.Close()
+			c.channel = nil
+		}
+
 		channel, err := c.buildChannel(ctx)
 		if err == nil {
-			if c.channel != nil {
-				// don't care about the result,
-				// calling close just to release resources.
-				_ = c.channel.Close()
-			}
-
 			c.channel = channel
 			return channel, nil
 		}
@@ -173,7 +190,6 @@ func (c *Client) startListener() {
 
 			if err := c.mux.ListenClient(ctx, channel); err != nil {
 				if errors.Is(err, context.Canceled) {
-					// stopListener has been called
 					continue
 				}
 				log.Printf("client: listen: %v", err)
@@ -216,13 +232,19 @@ func (c *Client) buildChannel(ctx context.Context) (*ClientChannel, error) {
 	return channel, nil
 }
 
+// ClientConfig defines the configuration for a Client instance.
 type ClientConfig struct {
-	Node              Node
+	// Node represents the address that the client should use in the session negotiation.
+	// Note that the server may not use/accept the provided instance value, and it may be changed during the authentication.
+	Node Node
+	// The size of the internal envelope buffer used by the ClientChannel.
+	// Greater values may improve the performance, but will also increase the process memory usage.
 	ChannelBufferSize int
-	NewTransport      func(ctx context.Context) (Transport, error)
-	CompSelector      CompressionSelector
-	EncryptSelector   EncryptionSelector
-	Authenticator     Authenticator
+	// NewTransport represents the factory for Transport instances.
+	NewTransport    func(ctx context.Context) (Transport, error)
+	CompSelector    CompressionSelector
+	EncryptSelector EncryptionSelector
+	Authenticator   Authenticator
 }
 
 var defaultClientConfig = NewClientConfig()
