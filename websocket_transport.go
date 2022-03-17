@@ -184,6 +184,15 @@ type WebsocketConfig struct {
 	TraceWriter       TraceWriter // TraceWriter sets the trace writer for tracing connection envelopes
 	EnableCompression bool
 	ConnBuffer        int
+
+	// CheckOrigin returns true if the request Origin header is acceptable. If
+	// CheckOrigin is nil, then a safe default is used: return false if the
+	// Origin request header is present and the origin host is not equal to
+	// request Host header.
+	//
+	// A CheckOrigin function should carefully validate the request origin to
+	// prevent cross-site request forgery.
+	CheckOrigin func(r *http.Request) bool
 }
 
 type websocketTransportListener struct {
@@ -226,6 +235,7 @@ func (l *websocketTransportListener) Listen(ctx context.Context, addr net.Addr) 
 	l.upgrader = &websocket.Upgrader{
 		Subprotocols:      []string{"lime"},
 		EnableCompression: l.EnableCompression,
+		CheckOrigin:       l.CheckOrigin,
 	}
 	l.connChan = make(chan *websocket.Conn, l.ConnBuffer)
 	l.done = make(chan struct{})
