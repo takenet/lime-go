@@ -127,7 +127,7 @@ func (srv *Server) handleChannel(ctx context.Context, c *ServerChannel) {
 
 	established := srv.config.Established
 	if established != nil {
-		established(ctx, c.remoteNode, c.sessionID)
+		established(c.sessionID, c)
 	}
 
 	defer func() {
@@ -140,7 +140,7 @@ func (srv *Server) handleChannel(ctx context.Context, c *ServerChannel) {
 
 		finished := srv.config.Finished
 		if finished != nil {
-			finished(context.Background(), c.remoteNode)
+			finished(c.sessionID)
 		}
 	}()
 
@@ -187,9 +187,9 @@ type ServerConfig struct {
 	// Register is called for the client Node address registration.
 	Register func(context.Context, Node, *ServerChannel) (Node, error)
 	// Established is called when a session with a node is established.
-	Established func(ctx context.Context, n Node, sessionID string)
+	Established func(sessionID string, c *ServerChannel)
 	// Finished is called when an established session with a node is finished.
-	Finished func(context.Context, Node)
+	Finished func(sessionID string)
 }
 
 var defaultServerConfig = NewServerConfig()
@@ -376,6 +376,16 @@ func (b *ServerBuilder) EnableExternalAuthentication(a ExternalAuthenticator) *S
 
 func (b *ServerBuilder) ChannelBufferSize(bufferSize int) *ServerBuilder {
 	b.config.ChannelBufferSize = bufferSize
+	return b
+}
+
+func (b *ServerBuilder) Established(established func(sessionID string, c *ServerChannel)) *ServerBuilder {
+	b.config.Established = established
+	return b
+}
+
+func (b *ServerBuilder) Finished(finished func(sessionID string)) *ServerBuilder {
+	b.config.Finished = finished
 	return b
 }
 
