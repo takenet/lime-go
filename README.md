@@ -76,7 +76,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/takenet/lime-go"
 	"log"
 	"net"
@@ -89,7 +88,7 @@ func main() {
 	// Defines a simple handler function for printing  
 	// the received messages to the stdout
 	msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
-		fmt.Printf("Message received - Type: %v - Content: %v\n", msg.Type, msg.Content)
+		log.Printf("Message received - Type: %v - Content: %v\n", msg.Type, msg.Content)
 		close(done)
 		return nil
 	}
