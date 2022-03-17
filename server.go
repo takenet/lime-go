@@ -125,12 +125,22 @@ func (srv *Server) handleChannel(ctx context.Context, c *ServerChannel) {
 		return
 	}
 
+	established := srv.config.Established
+	if established != nil {
+		established(ctx, c.remoteNode, c.sessionID)
+	}
+
 	defer func() {
 		if c.Established() {
 			// Do not use the shared context since it could be canceled
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			_ = c.FinishSession(ctx)
+		}
+
+		finished := srv.config.Finished
+		if finished != nil {
+			finished(context.Background(), c.remoteNode)
 		}
 	}()
 
@@ -176,6 +186,10 @@ type ServerConfig struct {
 	Authenticate func(context.Context, Identity, Authentication) (*AuthenticationResult, error)
 	// Register is called for the client Node address registration.
 	Register func(context.Context, Node, *ServerChannel) (Node, error)
+	// Established is called when a session with a node is established.
+	Established func(ctx context.Context, n Node, sessionID string)
+	// Finished is called when an established session with a node is finished.
+	Finished func(context.Context, Node)
 }
 
 var defaultServerConfig = NewServerConfig()
