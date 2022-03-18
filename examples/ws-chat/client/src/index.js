@@ -8,23 +8,50 @@ const msgerChat = get(".msger-chat");
 const msgerButton = get(".msger-send-btn");
 
 // Icons made by Freepik from www.flaticon.com
-const PERSON_IMG = "https://image.flaticon.com/icons/svg/145/145867.svg";
+const PERSON_IMG = "../images/person.png";
+const BOT_IMG = "../images/bot.png";
 
-let nickname = "Anonymous";
+let nickname = `guest`;
+let client = await createClient();
 
-let client = await connect();
-client.transport.onError = async function () {
-    client = await connect();
-}
-client.onMessage = (message) => {
-    switch (message.type) {
-        case 'application/x-chat-nickname+json':
-            appendMessage("BOT", PERSON_IMG, "left", `The user <strong>${message.content.old}</strong> has changed its nickname to <strong>${message.content.new}</strong>.`);
-            break;
+// Notify other users
+await client.sendMessage({
+    id: uuidv4(),
+    from: nickname,
+    type: 'application/x-chat-joined+json',
+    content: {},
+});
 
-        default:
-            appendMessage(message.from, PERSON_IMG, "left", message.content);
-            break;
+async function createClient() {
+    setInputEnabled(false);
+    try {
+        let client = await connect();
+        nickname = client.localNode.split("/")[0].split("@")[0];
+        client.transport.onError = async function () {
+            client = await connect();
+        }
+        client.onMessage = (message) => {
+            switch (message.type) {
+                case 'application/x-chat-nickname+json':
+                    appendMessage("BOT", BOT_IMG, "left", `The user <strong>${message.content.old}</strong> has changed its nickname to <strong>${message.content.new}</strong>.`);
+                    break;
+
+                case 'application/x-chat-joined+json':
+                    appendMessage("BOT", BOT_IMG, "left", `The user <strong>${message.from}</strong> has joined the room.`);
+                    break;
+
+                default:
+                    name = message.from;
+                    if (message.to) {
+                        name += " (private)";
+                    }
+                    appendMessage(name, PERSON_IMG, "left", message.content);
+                    break;
+            }
+        }
+        return client;
+    } finally {
+        setInputEnabled(true);
     }
 }
 
@@ -39,16 +66,21 @@ msgerForm.addEventListener("submit", async event => {
         return;
     }
 
+    await sendMessage(msgText, 'text/plain');
+});
+
+async function sendMessage(content, type, to = null) {
     await client.sendMessage({
         id: uuidv4(),
         from: nickname,
-        type: 'text/plain',
-        content: msgText,
+        to: to,
+        type: type ?? "text/plain",
+        content: content,
     });
 
-    appendMessage(nickname, PERSON_IMG, "right", msgText);
+    appendMessage(nickname, PERSON_IMG, "right", content);
     msgerInput.value = "";
-});
+}
 
 async function parseCommand(input) {
     if (input.startsWith("/name ")) {
@@ -59,23 +91,38 @@ async function parseCommand(input) {
         }
     }
 
+    if (input.startsWith("/to")) {
+        let args = input.split(" ");
+        if (args.length >= 2) {
+            let to = args[1];
+            let content = args.slice(2).join(" ");
+            await sendMessage(content, "text/plain", to);
+            return true;
+        }
+    }
+
     return false;
 }
 
 async function setNickname(newNickname) {
+    let oldNickname = nickname;
+    nickname = newNickname;
+
+    await client.sendFinishingSession();
+    client = await createClient();
+
     // Notify other users
     await client.sendMessage({
         id: uuidv4(),
         from: nickname,
         type: 'application/x-chat-nickname+json',
         content: {
-            old: nickname,
-            new: newNickname,
+            old: oldNickname,
+            new: nickname,
         },
     });
 
-    nickname = newNickname;
-    appendMessage("BOT", PERSON_IMG, "left", `OK! Your name now is <strong>${nickname}</strong>.`);
+    appendMessage("BOT", BOT_IMG, "left", `OK! Your name now is <strong>${nickname}</strong>.`);
 }
 
 function appendMessage(name, img, side, text) {
@@ -112,7 +159,7 @@ function formatDate(date) {
 }
 
 async function connect() {
-    setInputState(false);
+
     // Creates a new transport and connect to the server
     while (true) {
         try {
@@ -123,12 +170,12 @@ async function connect() {
             await client.establishSession(
                 'none',
                 'none',
-                uuidv4() + '@localhost',
+                nickname,
                 new Lime.GuestAuthentication(),
                 'chat');
 
             console.log("connected");
-            setInputState(true);
+
             return client;
         } catch (e) {
             console.error('Session establishment error', e);
@@ -137,7 +184,7 @@ async function connect() {
     }
 }
 
-function setInputState(enabled) {
+function setInputEnabled(enabled) {
     if (enabled) {
         msgerButton.disabled = false;
         msgerInput.disabled = false;

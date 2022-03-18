@@ -183,9 +183,11 @@ type ServerConfig struct {
 
 	// Authenticate is called for authenticating a client session.
 	// It should return an AuthenticationResult instance with DomainRole different of DomainRoleUnknown for a successful authentication.
-	Authenticate func(context.Context, Identity, Authentication) (*AuthenticationResult, error)
+	Authenticate func(ctx context.Context, identity Identity, a Authentication) (*AuthenticationResult, error)
 	// Register is called for the client Node address registration.
-	Register func(context.Context, Node, *ServerChannel) (Node, error)
+	// It receives a candidate node from the client and should return the effective node address that will be assigned
+	// to the session.
+	Register func(ctx context.Context, candidate Node, c *ServerChannel) (Node, error)
 	// Established is called when a session with a node is established.
 	Established func(sessionID string, c *ServerChannel)
 	// Finished is called when an established session with a node is finished.
@@ -376,6 +378,11 @@ func (b *ServerBuilder) EnableExternalAuthentication(a ExternalAuthenticator) *S
 
 func (b *ServerBuilder) ChannelBufferSize(bufferSize int) *ServerBuilder {
 	b.config.ChannelBufferSize = bufferSize
+	return b
+}
+
+func (b *ServerBuilder) Register(register func(ctx context.Context, candidate Node, c *ServerChannel) (Node, error)) *ServerBuilder {
+	b.config.Register = register
 	return b
 }
 

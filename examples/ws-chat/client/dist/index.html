@@ -1,69 +1,56 @@
 <html>
+    <head>
+        <title>Lime Chat</title>
+    </head>
 <body>
-<link rel="stylesheet" href="chat.css">
+    <link rel="stylesheet" href="chat.css">
+    <section class="msger">
+        <header class="msger-header">
+            <div class="msger-header-title">
+                <i class="fas fa-comment-alt"></i> Lime Chat
+            </div>
+            <div class="msger-header-options">
+                <span><i class="fas fa-cog"></i></span>
+            </div>
+        </header>
 
-<section class="msger">
-    <header class="msger-header">
-        <div class="msger-header-title">
-            <i class="fas fa-comment-alt"></i> Lime Chat
-        </div>
-        <div class="msger-header-options">
-            <span><i class="fas fa-cog"></i></span>
-        </div>
-    </header>
+        <main class="msger-chat">
+            <div class="msg left-msg">
+                <div
+                        class="msg-img"
+                        style="background-image: url(../images/bot.png)"
+                ></div>
 
-    <main class="msger-chat">
-        <div class="msg left-msg">
-            <div
-                    class="msg-img"
-                    style="background-image: url(https://image.flaticon.com/icons/svg/327/327779.svg)"
-            ></div>
+                <div class="msg-bubble">
+                    <div class="msg-info">
+                        <div class="msg-info-name">BOT</div>
+                    </div>
 
-            <div class="msg-bubble">
-                <div class="msg-info">
-                    <div class="msg-info-name">BOT</div>
-                    <div class="msg-info-time">00:00</div>
-                </div>
-
-                <div class="msg-text">
-                    Hello, welcome to Lime Chat!<br><br>
-                    The available commands are:<br><br>
-                    <ul>
-                        <li>
-                            <strong>/name [new_nickname]</strong>: Sets a new nickname
-                        </li>
-                        <li>
-                            <strong>/to [nickname] [message]</strong>: Sends a message exclusively to a nickname
-                        </li>
-                    </ul>
+                    <div class="msg-text">
+                        Hello, welcome to Lime Chat!<br><br>
+                        The available commands are:<br><br>
+                        <ul>
+                            <li>
+                                <strong>/name [new_nickname]</strong>: Sets a new nickname
+                            </li>
+                            <li>
+                                <strong>/to [nickname] [message]</strong>: Sends a private message to a nickname
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="msg right-msg">
-<!--            <div-->
-<!--                    class="msg-img"-->
-<!--                    style="background-image: url(https://image.flaticon.com/icons/svg/145/145867.svg)"-->
-<!--            ></div>-->
+            <div class="msg right-msg">
 
-<!--            <div class="msg-bubble">-->
-<!--                <div class="msg-info">-->
-<!--                    <div class="msg-info-name">Sajad</div>-->
-<!--                    <div class="msg-info-time">12:46</div>-->
-<!--                </div>-->
+            </div>
+        </main>
 
-<!--                <div class="msg-text">-->
-<!--                    You can change your name in JS section!-->
-<!--                </div>-->
-<!--            </div>-->
-        </div>
-    </main>
-
-    <form class="msger-inputarea">
-        <input type="text" class="msger-input" placeholder="Enter your message...">
-        <button type="submit" class="msger-send-btn">Send</button>
-    </form>
-</section>
+        <form class="msger-inputarea">
+            <input type="text" class="msger-input" placeholder="Enter your message...">
+            <button type="submit" class="msger-send-btn">Send</button>
+        </form>
+    </section>
     <script src="main.js"></script>
-</body>
+    </body>
 </html>

@@ -5,15 +5,17 @@ import (
 	"github.com/takenet/lime-go"
 	"go.uber.org/multierr"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 )
 
 var channels = make(map[string]*lime.ServerChannel)
-var nodesToID = make(map[lime.Node]string)
+var nodesToID = make(map[string]string)
 var mu sync.RWMutex
 
 func main() {
@@ -24,19 +26,31 @@ func main() {
 	}
 
 	server := lime.NewServerBuilder().
-		Established(func(sessionID string, c *lime.ServerChannel) {
+		Register(func(ctx context.Context, candidate lime.Node, c *lime.ServerChannel) (lime.Node, error) {
 			mu.Lock()
 			defer mu.Unlock()
+			// Detect and resolve name collisions
+			name := candidate.Name
+			for {
+				if _, ok := nodesToID[candidate.Name]; ok {
+					candidate.Name = name + strconv.Itoa(rand.Intn(len(nodesToID)*10))
+				} else {
+					break
+				}
+			}
+
 			// Register a new established user session
+			sessionID := c.ID()
 			channels[sessionID] = c
-			nodesToID[c.RemoteNode()] = sessionID
+			nodesToID[candidate.Name] = sessionID
+			return candidate, nil
 		}).
 		Finished(func(sessionID string) {
 			mu.Lock()
 			defer mu.Unlock()
 			// Remove a finished session
 			if channel, ok := channels[sessionID]; ok {
-				delete(nodesToID, channel.RemoteNode())
+				delete(nodesToID, channel.RemoteNode().Name)
 				delete(channels, sessionID)
 			}
 		}).
@@ -44,13 +58,15 @@ func main() {
 		ListenWebsocket(&net.TCPAddr{Port: 8080}, wsConfig).
 		Build()
 
+	sig := make(chan os.Signal)
+
 	go func() {
 		if err := server.ListenAndServe(); err != lime.ErrServerClosed {
 			log.Printf("server: listen: %v\n", err)
+			close(sig)
 		}
 	}()
 
-	sig := make(chan os.Signal, 1)
 	signal.Notify(sig)
 	log.Println("Listening at ws:8080. Press Ctrl+C to stop.")
 	<-sig
@@ -66,8 +82,8 @@ func HandleMessage(ctx context.Context, msg *lime.Message, s lime.Sender) error 
 
 	var err error
 	// Check if it is a direct message to another user
-	if msg.To != (lime.Node{}) {
-		if sessionID, ok := nodesToID[msg.To]; ok {
+	if msg.To.Name != "" {
+		if sessionID, ok := nodesToID[msg.To.Name]; ok {
 			if c, ok := channels[sessionID]; ok {
 				err = c.SendMessage(ctx, msg)
 			}
