@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/takenet/lime-go"
 	"go.uber.org/multierr"
 	"log"
@@ -11,21 +12,18 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 )
 
 var channels = make(map[string]*lime.ServerChannel)
 var nodesToID = make(map[string]string)
 var mu sync.RWMutex
+var nodeFriends = make(map[string][]string)
 
 func main() {
-	wsConfig := &lime.WebsocketConfig{
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-
 	server := lime.NewServerBuilder().
+		// Handler for registering new user sessions
 		Register(func(ctx context.Context, candidate lime.Node, c *lime.ServerChannel) (lime.Node, error) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -45,6 +43,7 @@ func main() {
 			nodesToID[candidate.Name] = sessionID
 			return candidate, nil
 		}).
+		// Callback for finished sessions, useful for updating our online users map
 		Finished(func(sessionID string) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -54,8 +53,22 @@ func main() {
 				delete(channels, sessionID)
 			}
 		}).
-		MessagesHandlerFunc(HandleMessage).
-		ListenWebsocket(&net.TCPAddr{Port: 8080}, wsConfig).
+		// Handler for all messages received by the server
+		MessagesHandlerFunc(handleMessage).
+		// Handler for commands with the "/friends" resource
+		CommandHandlerFunc(
+			func(cmd *lime.Command) bool {
+				uri := cmd.URI.ToURL()
+				return cmd.ID != "" && cmd.Status == "" && strings.HasPrefix(uri.Path, "/friends")
+			},
+			handleFriendsCommand).
+		// Listen using the websocket transport in the 8080 port
+		ListenWebsocket(
+			&net.TCPAddr{Port: 8080},
+			&lime.WebsocketConfig{
+				CheckOrigin: func(r *http.Request) bool {
+					return true
+				}}).
 		Build()
 
 	sig := make(chan os.Signal)
@@ -76,7 +89,7 @@ func main() {
 	}
 }
 
-func HandleMessage(ctx context.Context, msg *lime.Message, s lime.Sender) error {
+func handleMessage(ctx context.Context, msg *lime.Message, s lime.Sender) error {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -98,4 +111,129 @@ func HandleMessage(ctx context.Context, msg *lime.Message, s lime.Sender) error 
 		}
 	}
 	return err
+}
+
+func handleFriendsCommand(ctx context.Context, cmd *lime.Command, s lime.Sender) error {
+	node, _ := lime.ContextSessionRemoteNode(ctx)
+
+	var respCmd *lime.Command
+	switch cmd.Method {
+	case lime.CommandMethodGet:
+		respCmd = getFriends(node, cmd)
+	case lime.CommandMethodSet:
+		respCmd = addFriend(cmd, node)
+	case lime.CommandMethodDelete:
+		respCmd = removeFriend(cmd, node)
+	default:
+		respCmd = cmd.FailureResponse(&lime.Reason{
+			Code:        1,
+			Description: "Unsupported method",
+		})
+	}
+
+	return s.SendCommand(ctx, respCmd)
+}
+
+func getFriends(node lime.Node, cmd *lime.Command) *lime.Command {
+	var respCmd *lime.Command
+
+	if friends, ok := nodeFriends[node.Name]; ok {
+		items := make([]lime.Document, len(friends))
+		for i, f := range friends {
+			_, online := nodesToID[f]
+			items[i] = &Friend{
+				Nickname: f,
+				Online:   online,
+			}
+		}
+
+		respCmd = cmd.SuccessResponseWithResource(
+			&lime.DocumentCollection{
+				Total:    len(friends),
+				ItemType: friendMediaType,
+				Items:    items,
+			})
+	} else {
+		respCmd = cmd.FailureResponse(&lime.Reason{
+			Code:        1,
+			Description: "No friends found",
+		})
+	}
+	return respCmd
+}
+
+func addFriend(cmd *lime.Command, node lime.Node) *lime.Command {
+	var respCmd *lime.Command
+
+	if f, ok := cmd.Resource.(*Friend); ok {
+		friends := nodeFriends[node.Name]
+		friends = append(friends, f.Nickname)
+		nodeFriends[node.Name] = friends
+		respCmd = cmd.SuccessResponse()
+
+	} else {
+		respCmd = cmd.FailureResponse(&lime.Reason{
+			Code:        1,
+			Description: fmt.Sprintf("Unexpected resource type, should be '%v'", friendMediaType.String()),
+		})
+	}
+	return respCmd
+}
+
+func removeFriend(cmd *lime.Command, node lime.Node) *lime.Command {
+	var respCmd *lime.Command
+
+	url := cmd.URI.ToURL()
+
+	segments := strings.Split(url.Path, "/")
+	if len(segments) >= 2 {
+		friends := nodeFriends[node.Name]
+		toRemove := -1
+
+		for i, f := range friends {
+			if string(f) == segments[1] {
+				toRemove = i
+				break
+			}
+		}
+
+		if toRemove >= 0 {
+			friends = append(friends[:toRemove], friends[toRemove+1:]...)
+			nodeFriends[node.Name] = friends
+			respCmd = cmd.SuccessResponse()
+		} else {
+			respCmd = cmd.FailureResponse(&lime.Reason{
+				Code:        1,
+				Description: fmt.Sprintf("Friend '%v' not found", segments[1]),
+			})
+		}
+	} else {
+		respCmd = cmd.FailureResponse(&lime.Reason{
+			Code:        1,
+			Description: "Invalid URI, should be '/friends/<nickname>'",
+		})
+	}
+
+	return respCmd
+}
+
+var friendMediaType = lime.MediaType{
+	Type:    "application",
+	Subtype: "x-chat-friend",
+	Suffix:  "json",
+}
+
+type Friend struct {
+	Nickname string `json:"nickname"`
+	Online   bool   `json:"online,omitempty"`
+}
+
+func (f *Friend) MediaType() lime.MediaType {
+	return friendMediaType
+}
+
+func init() {
+	lime.RegisterDocumentFactory(func() lime.Document {
+		return &Friend{}
+	})
 }
