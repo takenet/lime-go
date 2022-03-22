@@ -87,6 +87,7 @@ func TestServer_ListenAndServe_EstablishSession(t *testing.T) {
 	addr1 := InProcessAddr("localhost")
 	listener1 := createBoundInProcTransportListener(addr1)
 	config := NewServerConfig()
+	config.SchemeOpts = []AuthenticationScheme{AuthenticationSchemeGuest}
 	mux := &EnvelopeMux{}
 	srv := NewServer(config, mux, listener1)
 	defer silentClose(srv)
@@ -134,6 +135,7 @@ func TestServer_ListenAndServe_ReceiveMessage(t *testing.T) {
 	addr1 := InProcessAddr("localhost")
 	listener1 := createBoundInProcTransportListener(addr1)
 	config := NewServerConfig()
+	config.SchemeOpts = []AuthenticationScheme{AuthenticationSchemeGuest}
 	msgChan := make(chan *Message)
 	mux := &EnvelopeMux{}
 	mux.MessageHandlerFunc(

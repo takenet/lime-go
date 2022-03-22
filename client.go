@@ -246,7 +246,7 @@ func (c *Client) buildChannel(ctx context.Context) (*ClientChannel, error) {
 	return channel, nil
 }
 
-// ClientConfig defines the configuration for a Client instance.
+// ClientConfig defines the configurations for a Client instance.
 type ClientConfig struct {
 	// Node represents the address that the client should use in the session negotiation.
 	// Note that the server may not use/accept the provided instance value, and it may be changed during the authentication.
@@ -267,7 +267,7 @@ type ClientConfig struct {
 
 var defaultClientConfig = NewClientConfig()
 
-// NewClientConfig creates a new instance of ClientConfig with the default configuration.
+// NewClientConfig creates a new instance of ClientConfig with the default configuration values.
 func NewClientConfig() *ClientConfig {
 	instance, err := os.Hostname()
 	if err != nil || instance == "" {
@@ -439,7 +439,7 @@ func (b *ClientBuilder) GuestAuthentication() *ClientBuilder {
 // TransportAuthentication enables the use of the transport authentication scheme during the session establishment with
 // the server. Note that the transport that are being used to communicate with the server will be asked to present the
 // credentials, and the form of passing the credentials may vary depending on the transport type. For instance, in
-// TCP transport connections, the client certificate used during the mutual TLS negotiation are considered the
+// TCP transport connections, the client certificate used during the mutual TLS negotiation is considered the
 // credentials by the server.
 func (b *ClientBuilder) TransportAuthentication() *ClientBuilder {
 	b.config.Authenticator = func([]AuthenticationScheme, Authentication) Authentication {

@@ -25,7 +25,6 @@ func main() {
 					Type:    msg.Type,
 					Content: msg.Content,
 				})
-				return nil
 			}).
 		NotificationsHandlerFunc(
 			func(ctx context.Context, not *lime.Notification) error {
@@ -61,6 +60,7 @@ func main() {
 					},
 				},
 			}).
+		EnableGuestAuthentication().
 		Build()
 
 	go func() {

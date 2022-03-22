@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+// Server allows the receiving of Lime connections through multiple transport listeners, like TCP and Websockets.
+// It handles the session negotiation and authentication through the handlers defined in ServerConfig.
+// Finally, it allows the definition of handles for receiving envelopes from the clients.
 type Server struct {
 	config        *ServerConfig
 	mux           *EnvelopeMux
@@ -25,6 +28,7 @@ type Server struct {
 	shutdown      context.CancelFunc
 }
 
+// NewServer creates a new instance of the Server type.
 func NewServer(config *ServerConfig, mux *EnvelopeMux, listeners ...BoundListener) *Server {
 	if config == nil {
 		config = defaultServerConfig
@@ -43,6 +47,9 @@ func NewServer(config *ServerConfig, mux *EnvelopeMux, listeners ...BoundListene
 	}
 }
 
+// ListenAndServe starts listening for new connections in the registered transport listeners.
+// This is a blocking call which always returns a non nil error.
+// In case of a graceful closing, the returned error is ErrServerClosed.
 func (srv *Server) ListenAndServe() error {
 	if srv.shutdown != nil {
 		return errors.New("server already listening")
@@ -150,6 +157,7 @@ func (srv *Server) handleChannel(ctx context.Context, c *ServerChannel) {
 	}
 }
 
+// Close stops the server by closing the transport listeners and all active sessions.
 func (srv *Server) Close() error {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
@@ -173,6 +181,7 @@ func (srv *Server) Close() error {
 	return multierr.Combine(errs...)
 }
 
+// ServerConfig define the configurations for a Server instance.
 type ServerConfig struct {
 	Node              Node                   // Node represents the server's address.
 	CompOpts          []SessionCompression   // CompOpts defines the compression options to be used in the session negotiation.
@@ -196,6 +205,7 @@ type ServerConfig struct {
 
 var defaultServerConfig = NewServerConfig()
 
+// NewServerConfig creates a new instance of ServerConfig with the default configuration values.
 func NewServerConfig() *ServerConfig {
 	instance, err := os.Hostname()
 	if err != nil || instance == "" {
@@ -211,7 +221,7 @@ func NewServerConfig() *ServerConfig {
 		},
 		CompOpts:          []SessionCompression{SessionCompressionNone},
 		EncryptOpts:       []SessionEncryption{SessionEncryptionNone, SessionEncryptionTLS},
-		SchemeOpts:        []AuthenticationScheme{AuthenticationSchemeGuest},
+		SchemeOpts:        []AuthenticationScheme{AuthenticationSchemeTransport},
 		Backlog:           runtime.NumCPU() * 8,
 		ChannelBufferSize: runtime.NumCPU() * 32,
 		Authenticate: func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
@@ -228,6 +238,8 @@ func NewServerConfig() *ServerConfig {
 	}
 }
 
+// ServerBuilder is a helper for building instances of Server.
+// Avoid instantiating it directly, use the NewServerBuilder() function instead.
 type ServerBuilder struct {
 	config    *ServerConfig
 	mux       *EnvelopeMux
@@ -238,6 +250,8 @@ type ServerBuilder struct {
 	externalAuth ExternalAuthenticator
 }
 
+// NewServerBuilder creates a new ServerBuilder, which is a helper for building Server instances.
+// It provides a fluent interface for convenience.
 func NewServerBuilder() *ServerBuilder {
 	return &ServerBuilder{config: NewServerConfig(), mux: &EnvelopeMux{}}
 }
@@ -260,69 +274,99 @@ func (b *ServerBuilder) Instance(instance string) *ServerBuilder {
 	return b
 }
 
+// MessageHandlerFunc allows the registration of a function for handling received messages that matches
+// the specified predicate. Note that the registration order matters, since the receiving process stops when
+// the first predicate match occurs.
 func (b *ServerBuilder) MessageHandlerFunc(predicate MessagePredicate, f MessageHandlerFunc) *ServerBuilder {
 	b.mux.MessageHandlerFunc(predicate, f)
 	return b
 }
 
+// MessagesHandlerFunc allows the registration of a function for handling all received messages.
+// This handler should be the last one to be registered, since it will capture all messages received by the client.
 func (b *ServerBuilder) MessagesHandlerFunc(f MessageHandlerFunc) *ServerBuilder {
 	b.mux.MessageHandlerFunc(func(msg *Message) bool { return true }, f)
 	return b
 }
 
+// MessageHandler allows the registration of a MessageHandler.
+// Note that the registration order matters, since the receiving process stops when the first predicate match occurs.
 func (b *ServerBuilder) MessageHandler(handler MessageHandler) *ServerBuilder {
 	b.mux.MessageHandler(handler)
 	return b
 }
 
+// NotificationHandlerFunc allows the registration of a function for handling received notifications that matches
+// the specified predicate. Note that the registration order matters, since the receiving process stops when
+// the first predicate match occurs.
 func (b *ServerBuilder) NotificationHandlerFunc(predicate NotificationPredicate, f NotificationHandlerFunc) *ServerBuilder {
 	b.mux.NotificationHandlerFunc(predicate, f)
 	return b
 }
 
+// NotificationsHandlerFunc allows the registration of a function for handling all received notifications.
+// This handler should be the last one to be registered, since it will capture all notifications received by the client.
 func (b *ServerBuilder) NotificationsHandlerFunc(f NotificationHandlerFunc) *ServerBuilder {
 	b.mux.NotificationHandlerFunc(func(not *Notification) bool { return true }, f)
 	return b
 }
 
+// NotificationHandler allows the registration of a NotificationHandler.
+// Note that the registration order matters, since the receiving process stops when the first predicate match occurs.
 func (b *ServerBuilder) NotificationHandler(handler NotificationHandler) *ServerBuilder {
 	b.mux.NotificationHandler(handler)
 	return b
 }
 
+// CommandHandlerFunc allows the registration of a function for handling received commands that matches
+// the specified predicate. Note that the registration order matters, since the receiving process stops when
+// the first predicate match occurs.
 func (b *ServerBuilder) CommandHandlerFunc(predicate CommandPredicate, f CommandHandlerFunc) *ServerBuilder {
 	b.mux.CommandHandlerFunc(predicate, f)
 	return b
 }
 
+// CommandsHandlerFunc allows the registration of a function for handling all received commands.
+// This handler should be the last one to be registered, since it will capture all commands received by the client.
 func (b *ServerBuilder) CommandsHandlerFunc(f CommandHandlerFunc) *ServerBuilder {
 	b.mux.CommandHandlerFunc(func(cmd *Command) bool { return true }, f)
 	return b
 }
 
+// CommandHandler allows the registration of a NotificationHandler.
+// Note that the registration order matters, since the receiving process stops when the first predicate match occurs.
 func (b *ServerBuilder) CommandHandler(handler CommandHandler) *ServerBuilder {
 	b.mux.CommandHandler(handler)
 	return b
 }
 
+// ListenTCP adds a new TCP transport listener with the specified configuration.
+// This method can be called multiple times.
 func (b *ServerBuilder) ListenTCP(addr *net.TCPAddr, config *TCPConfig) *ServerBuilder {
 	listener := NewTCPTransportListener(config)
 	b.listeners = append(b.listeners, NewBoundListener(listener, addr))
 	return b
 }
 
+// ListenWebsocket adds a new Websocket transport listener with the specified configuration.
+// This method can be called multiple times.
 func (b *ServerBuilder) ListenWebsocket(addr *net.TCPAddr, config *WebsocketConfig) *ServerBuilder {
 	listener := NewWebsocketTransportListener(config)
 	b.listeners = append(b.listeners, NewBoundListener(listener, addr))
 	return b
 }
 
+// ListenInProcess adds a new in-process transport listener with the specified configuration.
+// This method can be called multiple times.
 func (b *ServerBuilder) ListenInProcess(addr InProcessAddr) *ServerBuilder {
 	listener := NewInProcessTransportListener(addr)
 	b.listeners = append(b.listeners, NewBoundListener(listener, addr))
 	return b
 }
 
+// EnableGuestAuthentication enables the use of guest authentication scheme during the authentication of the
+// client sessions.
+// The guest authentication scheme do not require any credentials from the clients.
 func (b *ServerBuilder) EnableGuestAuthentication() *ServerBuilder {
 	if !contains(b.config.SchemeOpts, AuthenticationSchemeGuest) {
 		b.config.SchemeOpts = append(b.config.SchemeOpts, AuthenticationSchemeGuest)
@@ -330,6 +374,12 @@ func (b *ServerBuilder) EnableGuestAuthentication() *ServerBuilder {
 	return b
 }
 
+// EnableTransportAuthentication enables the use of transport authentication scheme during the authentication of the
+// client sessions.
+// The transport authentication will delegate the authentication to the session transport and  the form of passing the
+// credentials may vary depending on the transport type.
+// For instance, in TCP transport connections, the client certificate used during the mutual TLS negotiation is
+// considered the credentials by the server.
 func (b *ServerBuilder) EnableTransportAuthentication() *ServerBuilder {
 	if !contains(b.config.SchemeOpts, AuthenticationSchemeTransport) {
 		b.config.SchemeOpts = append(b.config.SchemeOpts, AuthenticationSchemeTransport)
@@ -337,8 +387,11 @@ func (b *ServerBuilder) EnableTransportAuthentication() *ServerBuilder {
 	return b
 }
 
+// PlainAuthenticator defines a function for authenticating an identity session using a password.
 type PlainAuthenticator func(ctx context.Context, identity Identity, password string) (*AuthenticationResult, error)
 
+// EnablePlainAuthentication enables the use of plain authentication scheme during the authentication of the
+// client sessions. The provided PlainAuthentication function is called for authenticating any session with this scheme.
 func (b *ServerBuilder) EnablePlainAuthentication(a PlainAuthenticator) *ServerBuilder {
 	if a == nil {
 		panic("nil authenticator")
@@ -350,8 +403,11 @@ func (b *ServerBuilder) EnablePlainAuthentication(a PlainAuthenticator) *ServerB
 	return b
 }
 
+// KeyAuthenticator defines a function for authenticating an identity session using a key.
 type KeyAuthenticator func(ctx context.Context, identity Identity, key string) (*AuthenticationResult, error)
 
+// EnableKeyAuthentication enables the use of key authentication scheme during the authentication of the
+// client sessions. The provided KeyAuthenticator function is called for authenticating any session with this scheme.
 func (b *ServerBuilder) EnableKeyAuthentication(a KeyAuthenticator) *ServerBuilder {
 	if a == nil {
 		panic("nil authenticator")
@@ -363,8 +419,11 @@ func (b *ServerBuilder) EnableKeyAuthentication(a KeyAuthenticator) *ServerBuild
 	return b
 }
 
+// ExternalAuthenticator defines a function for authenticating an identity session using tokens emitted by an issuer.
 type ExternalAuthenticator func(ctx context.Context, identity Identity, token string, issuer string) (*AuthenticationResult, error)
 
+// EnableExternalAuthentication enables the use of key authentication scheme during the authentication of the
+// client sessions. The provided ExternalAuthenticator function is called for authenticating any session with this scheme.
 func (b *ServerBuilder) EnableExternalAuthentication(a ExternalAuthenticator) *ServerBuilder {
 	if a == nil {
 		panic("nil authenticator")
@@ -376,32 +435,43 @@ func (b *ServerBuilder) EnableExternalAuthentication(a ExternalAuthenticator) *S
 	return b
 }
 
+// ChannelBufferSize determines the internal envelope buffer size for the channels.
 func (b *ServerBuilder) ChannelBufferSize(bufferSize int) *ServerBuilder {
 	b.config.ChannelBufferSize = bufferSize
 	return b
 }
 
+// Register is called for the client Node address registration.
+// It receives a candidate node from the client and should return the effective node address that will be assigned
+// to the session.
 func (b *ServerBuilder) Register(register func(ctx context.Context, candidate Node, c *ServerChannel) (Node, error)) *ServerBuilder {
 	b.config.Register = register
 	return b
 }
 
+// Established is called when a session with a node is established.
 func (b *ServerBuilder) Established(established func(sessionID string, c *ServerChannel)) *ServerBuilder {
 	b.config.Established = established
 	return b
 }
 
+// Finished is called when an established session with a node is finished.
 func (b *ServerBuilder) Finished(finished func(sessionID string)) *ServerBuilder {
 	b.config.Finished = finished
 	return b
 }
 
+// Build creates a new instance of Server.
 func (b *ServerBuilder) Build() *Server {
 	b.config.Authenticate = buildAuthenticate(b.plainAuth, b.keyAuth, b.externalAuth)
 	return NewServer(b.config, b.mux, b.listeners...)
 }
 
-func buildAuthenticate(plainAuth PlainAuthenticator, keyAuth KeyAuthenticator, externalAuth ExternalAuthenticator) func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
+func buildAuthenticate(plainAuth PlainAuthenticator, keyAuth KeyAuthenticator, externalAuth ExternalAuthenticator) func(
+	ctx context.Context,
+	identity Identity,
+	authentication Authentication,
+) (*AuthenticationResult, error) {
 	return func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
 		switch a := authentication.(type) {
 		case *GuestAuthentication:

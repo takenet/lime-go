@@ -69,6 +69,7 @@ func main() {
 				CheckOrigin: func(r *http.Request) bool {
 					return true
 				}}).
+		EnableGuestAuthentication().
 		Build()
 
 	sig := make(chan os.Signal)
@@ -89,7 +90,7 @@ func main() {
 	}
 }
 
-func handleMessage(ctx context.Context, msg *lime.Message, s lime.Sender) error {
+func handleMessage(ctx context.Context, msg *lime.Message, _ lime.Sender) error {
 	mu.RLock()
 	defer mu.RUnlock()
 

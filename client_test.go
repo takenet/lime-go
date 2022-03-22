@@ -20,6 +20,7 @@ func TestClient_NewClient_Message(t *testing.T) {
 	msgChan := make(chan *Message, 1)
 	server := NewServerBuilder().
 		ListenTCP(addr1, nil).
+		EnableGuestAuthentication().
 		MessagesHandlerFunc(
 			func(ctx context.Context, msg *Message, s Sender) error {
 				msgChan <- msg
