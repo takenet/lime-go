@@ -104,6 +104,9 @@ func (m *EnvelopeMux) handleCommand(ctx context.Context, cmd *Command, s Sender)
 	return nil
 }
 
+// MessageHandlerFunc allows the definition of a function for handling received messages that matches
+// the specified predicate. Note that the registration order matters, since the receiving process stops when
+// the first predicate match occurs.
 func (m *EnvelopeMux) MessageHandlerFunc(predicate MessagePredicate, f MessageHandlerFunc) {
 	m.MessageHandler(&messageHandler{
 		predicate:   predicate,

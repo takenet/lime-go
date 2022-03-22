@@ -17,8 +17,10 @@ import (
 	"time"
 )
 
-// Client provide methods for sending envelopes and allow the definition of handles for receiving.
-// It also automatically handles the connection lifetime with a server, doing reconnections in case of failures.
+// Client allow the creation of a Lime connection with a server.
+// The connection lifetime is handled automatically, with automatic reconnections in case of unrequested disconnections.
+// There are methods for sending messages, notifications and command.
+// It also allows the definition of handles for receiving these envelopes from the remote party.
 type Client struct {
 	config  *ClientConfig
 	channel *ClientChannel
@@ -253,14 +255,19 @@ type ClientConfig struct {
 	// Greater values may improve the performance, but will also increase the process memory usage.
 	ChannelBufferSize int
 	// NewTransport represents the factory for Transport instances.
-	NewTransport    func(ctx context.Context) (Transport, error)
-	CompSelector    CompressionSelector
+	NewTransport func(ctx context.Context) (Transport, error)
+	// CompSelector is called during the session negotiation, for selecting the SessionCompression to be used.
+	CompSelector CompressionSelector
+	// EncryptSelector is called during the session negotiation, for selecting the SessionEncryption to be used.
 	EncryptSelector EncryptionSelector
-	Authenticator   Authenticator
+	// Authenticator is called during the session authentication and allows the client to provide its credentials
+	// during the process.
+	Authenticator Authenticator
 }
 
 var defaultClientConfig = NewClientConfig()
 
+// NewClientConfig creates a new instance of ClientConfig with the default configuration.
 func NewClientConfig() *ClientConfig {
 	instance, err := os.Hostname()
 	if err != nil || instance == "" {
@@ -300,11 +307,15 @@ func NewClientConfig() *ClientConfig {
 	}
 }
 
+// ClientBuilder is a helper for building instances of Client.
+// Avoid instantiating it directly, use the NewClientBuilder() function instead.
 type ClientBuilder struct {
 	config *ClientConfig
 	mux    *EnvelopeMux
 }
 
+// NewClientBuilder creates a new ClientBuilder, which is a helper for building Client instances.
+// It provides a fluent interface for convenience.
 func NewClientBuilder() *ClientBuilder {
 	return &ClientBuilder{config: NewClientConfig(), mux: &EnvelopeMux{}}
 }
@@ -327,51 +338,73 @@ func (b *ClientBuilder) Instance(instance string) *ClientBuilder {
 	return b
 }
 
+// MessageHandlerFunc allows the registration of a function for handling received messages that matches
+// the specified predicate. Note that the registration order matters, since the receiving process stops when
+// the first predicate match occurs.
 func (b *ClientBuilder) MessageHandlerFunc(predicate MessagePredicate, f MessageHandlerFunc) *ClientBuilder {
 	b.mux.MessageHandlerFunc(predicate, f)
 	return b
 }
 
+// MessagesHandlerFunc allows the registration of a function for handling all received messages.
+// This handler should be the last one to be registered, since it will capture all messages received by the client.
 func (b *ClientBuilder) MessagesHandlerFunc(f MessageHandlerFunc) *ClientBuilder {
 	b.mux.MessageHandlerFunc(func(msg *Message) bool { return true }, f)
 	return b
 }
 
+// MessageHandler allows the registration of a MessageHandler.
+// Note that the registration order matters, since the receiving process stops when the first predicate match occurs.
 func (b *ClientBuilder) MessageHandler(handler MessageHandler) *ClientBuilder {
 	b.mux.MessageHandler(handler)
 	return b
 }
 
+// NotificationHandlerFunc allows the registration of a function for handling received notifications that matches
+// the specified predicate. Note that the registration order matters, since the receiving process stops when
+// the first predicate match occurs.
 func (b *ClientBuilder) NotificationHandlerFunc(predicate NotificationPredicate, f NotificationHandlerFunc) *ClientBuilder {
 	b.mux.NotificationHandlerFunc(predicate, f)
 	return b
 }
 
+// NotificationsHandlerFunc allows the registration of a function for handling all received notifications.
+// This handler should be the last one to be registered, since it will capture all notifications received by the client.
 func (b *ClientBuilder) NotificationsHandlerFunc(f NotificationHandlerFunc) *ClientBuilder {
 	b.mux.NotificationHandlerFunc(func(not *Notification) bool { return true }, f)
 	return b
 }
 
+// NotificationHandler allows the registration of a NotificationHandler.
+// Note that the registration order matters, since the receiving process stops when the first predicate match occurs.
 func (b *ClientBuilder) NotificationHandler(handler NotificationHandler) *ClientBuilder {
 	b.mux.NotificationHandler(handler)
 	return b
 }
 
+// CommandHandlerFunc allows the registration of a function for handling received commands that matches
+// the specified predicate. Note that the registration order matters, since the receiving process stops when
+// the first predicate match occurs.
 func (b *ClientBuilder) CommandHandlerFunc(predicate CommandPredicate, f CommandHandlerFunc) *ClientBuilder {
 	b.mux.CommandHandlerFunc(predicate, f)
 	return b
 }
 
+// CommandsHandlerFunc allows the registration of a function for handling all received commands.
+// This handler should be the last one to be registered, since it will capture all commands received by the client.
 func (b *ClientBuilder) CommandsHandlerFunc(f CommandHandlerFunc) *ClientBuilder {
 	b.mux.CommandHandlerFunc(func(cmd *Command) bool { return true }, f)
 	return b
 }
 
+// CommandHandler allows the registration of a NotificationHandler.
+// Note that the registration order matters, since the receiving process stops when the first predicate match occurs.
 func (b *ClientBuilder) CommandHandler(handler CommandHandler) *ClientBuilder {
 	b.mux.CommandHandler(handler)
 	return b
 }
 
+// UseTCP adds a TCP listener to the server, allowing receiving connections from this transport.
 func (b *ClientBuilder) UseTCP(addr net.Addr, config *TCPConfig) *ClientBuilder {
 	b.config.NewTransport = func(ctx context.Context) (Transport, error) {
 		return DialTcp(ctx, addr, config)
@@ -379,6 +412,7 @@ func (b *ClientBuilder) UseTCP(addr net.Addr, config *TCPConfig) *ClientBuilder 
 	return b
 }
 
+// UseWebsocket adds a Websockets listener to the server, allowing receiving connections from this transport.
 func (b *ClientBuilder) UseWebsocket(urlStr string, requestHeader http.Header, tls *tls.Config) *ClientBuilder {
 	b.config.NewTransport = func(ctx context.Context) (Transport, error) {
 		return DialWebsocket(ctx, urlStr, requestHeader, tls)
@@ -386,6 +420,7 @@ func (b *ClientBuilder) UseWebsocket(urlStr string, requestHeader http.Header, t
 	return b
 }
 
+// UseInProcess adds an in-process listener to the server, allowing receiving virtual connections from this transport.
 func (b *ClientBuilder) UseInProcess(addr InProcessAddr, bufferSize int) *ClientBuilder {
 	b.config.NewTransport = func(context.Context) (Transport, error) {
 		return DialInProcess(addr, bufferSize)
@@ -393,6 +428,7 @@ func (b *ClientBuilder) UseInProcess(addr InProcessAddr, bufferSize int) *Client
 	return b
 }
 
+// GuestAuthentication enables the use of the guest authentication scheme during the session establishment with the server.
 func (b *ClientBuilder) GuestAuthentication() *ClientBuilder {
 	b.config.Authenticator = func([]AuthenticationScheme, Authentication) Authentication {
 		return &GuestAuthentication{}
@@ -400,6 +436,11 @@ func (b *ClientBuilder) GuestAuthentication() *ClientBuilder {
 	return b
 }
 
+// TransportAuthentication enables the use of the transport authentication scheme during the session establishment with
+// the server. Note that the transport that are being used to communicate with the server will be asked to present the
+// credentials, and the form of passing the credentials may vary depending on the transport type. For instance, in
+// TCP transport connections, the client certificate used during the mutual TLS negotiation are considered the
+// credentials by the server.
 func (b *ClientBuilder) TransportAuthentication() *ClientBuilder {
 	b.config.Authenticator = func([]AuthenticationScheme, Authentication) Authentication {
 		return &TransportAuthentication{}
@@ -407,6 +448,7 @@ func (b *ClientBuilder) TransportAuthentication() *ClientBuilder {
 	return b
 }
 
+// PlainAuthentication enables the use of the password authentication during the session establishment with the server.
 func (b *ClientBuilder) PlainAuthentication(password string) *ClientBuilder {
 	b.config.Authenticator = func([]AuthenticationScheme, Authentication) Authentication {
 		a := &PlainAuthentication{}
@@ -416,6 +458,7 @@ func (b *ClientBuilder) PlainAuthentication(password string) *ClientBuilder {
 	return b
 }
 
+// KeyAuthentication enables the use of the key authentication during the session establishment with the server.
 func (b *ClientBuilder) KeyAuthentication(key string) *ClientBuilder {
 	b.config.Authenticator = func([]AuthenticationScheme, Authentication) Authentication {
 		a := &KeyAuthentication{}
@@ -425,6 +468,7 @@ func (b *ClientBuilder) KeyAuthentication(key string) *ClientBuilder {
 	return b
 }
 
+// ExternalAuthentication enables the use of the external authentication during the session establishment with the server.
 func (b *ClientBuilder) ExternalAuthentication(token, issuer string) *ClientBuilder {
 	b.config.Authenticator = func([]AuthenticationScheme, Authentication) Authentication {
 		return &ExternalAuthentication{Token: token, Issuer: issuer}
@@ -432,6 +476,7 @@ func (b *ClientBuilder) ExternalAuthentication(token, issuer string) *ClientBuil
 	return b
 }
 
+// Compression sets the compression to be used in the session negotiation.
 func (b *ClientBuilder) Compression(c SessionCompression) *ClientBuilder {
 	b.config.CompSelector = func([]SessionCompression) SessionCompression {
 		return c
@@ -439,6 +484,7 @@ func (b *ClientBuilder) Compression(c SessionCompression) *ClientBuilder {
 	return b
 }
 
+// Encryption sets the encryption to be used in the session negotiation.
 func (b *ClientBuilder) Encryption(e SessionEncryption) *ClientBuilder {
 	b.config.EncryptSelector = func([]SessionEncryption) SessionEncryption {
 		return e
@@ -446,11 +492,14 @@ func (b *ClientBuilder) Encryption(e SessionEncryption) *ClientBuilder {
 	return b
 }
 
+// ChannelBufferSize is the size of the internal envelope buffer used by the ClientChannel.
+// Greater values may improve the performance, but will also increase the process memory usage.
 func (b *ClientBuilder) ChannelBufferSize(bufferSize int) *ClientBuilder {
 	b.config.ChannelBufferSize = bufferSize
 	return b
 }
 
+// Build creates a new instance of Client.
 func (b *ClientBuilder) Build() *Client {
 	return NewClient(b.config, b.mux)
 }

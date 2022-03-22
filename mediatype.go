@@ -85,6 +85,8 @@ func MediaTypeApplicationJson() MediaType {
 	return mediaTypeApplicationJson
 }
 
+// RegisterDocumentFactory allow the registration of new Document types, which allow these types to be discovered
+// for the envelope deserialization process.
 func RegisterDocumentFactory(f func() Document) {
 	d := f()
 	documentFactories[d.MediaType()] = f

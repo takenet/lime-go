@@ -217,15 +217,15 @@ func removeFriend(cmd *lime.Command, node lime.Node) *lime.Command {
 	return respCmd
 }
 
+type Friend struct {
+	Nickname string `json:"nickname"`
+	Online   bool   `json:"online,omitempty"`
+}
+
 var friendMediaType = lime.MediaType{
 	Type:    "application",
 	Subtype: "x-chat-friend",
 	Suffix:  "json",
-}
-
-type Friend struct {
-	Nickname string `json:"nickname"`
-	Online   bool   `json:"online,omitempty"`
 }
 
 func (f *Friend) MediaType() lime.MediaType {
