@@ -31,6 +31,37 @@ type EnvelopeBase struct {
 	Metadata map[string]string
 }
 
+func (env *EnvelopeBase) SetID(id string) *EnvelopeBase {
+	env.ID = id
+	return env
+}
+
+func (env *EnvelopeBase) SetFrom(from Node) *EnvelopeBase {
+	env.From = from
+	return env
+}
+
+func (env *EnvelopeBase) SetTo(to Node) *EnvelopeBase {
+	env.To = to
+	return env
+}
+
+func (env *EnvelopeBase) SetToString(s string) *EnvelopeBase {
+	to, err := ParseNode(s)
+	if err != nil {
+		env.To = to
+	}
+	return env
+}
+
+func (env *EnvelopeBase) SetMetadataKeyValue(key string, value string) *EnvelopeBase {
+	if env.Metadata == nil {
+		env.Metadata = make(map[string]string)
+	}
+	env.Metadata[key] = value
+	return env
+}
+
 // Sender returns the envelope sender Node.
 func (env *EnvelopeBase) Sender() Node {
 	if env.PP == (Node{}) {

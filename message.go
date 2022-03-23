@@ -8,28 +8,27 @@ import (
 // Message encapsulates a document for transport between nodes in a network.
 type Message struct {
 	EnvelopeBase
-
-	// Type MIME declaration of the Content type of the message.
+	// MIME Type declaration for the Content of the message.
 	Type MediaType `json:"type"`
-
-	// Content Message body content
+	// Content represents the Message body content
 	Content Document `json:"content"`
 }
 
-func (m *Message) SetContent(d Document) {
-	m.Content = d
-	m.Type = d.MediaType()
+func (msg *Message) SetContent(d Document) *Message {
+	msg.Content = d
+	msg.Type = d.MediaType()
+	return msg
 }
 
-func (m *Message) MarshalJSON() ([]byte, error) {
-	raw, err := m.toRawEnvelope()
+func (msg *Message) MarshalJSON() ([]byte, error) {
+	raw, err := msg.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
 	return json.Marshal(raw)
 }
 
-func (m *Message) UnmarshalJSON(b []byte) error {
+func (msg *Message) UnmarshalJSON(b []byte) error {
 	raw := rawEnvelope{}
 	err := json.Unmarshal(b, &raw)
 	if err != nil {
@@ -42,33 +41,33 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	*m = message
+	*msg = message
 	return nil
 }
 
-func (m *Message) toRawEnvelope() (*rawEnvelope, error) {
-	raw, err := m.EnvelopeBase.toRawEnvelope()
+func (msg *Message) toRawEnvelope() (*rawEnvelope, error) {
+	raw, err := msg.EnvelopeBase.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
 
-	if m.Content == nil {
+	if msg.Content == nil {
 		return nil, errors.New("message content is required")
 	}
-	b, err := json.Marshal(m.Content)
+	b, err := json.Marshal(msg.Content)
 	if err != nil {
 		return nil, err
 	}
 	content := json.RawMessage(b)
 
-	raw.Type = &m.Type
+	raw.Type = &msg.Type
 	raw.Content = &content
 
 	return raw, nil
 }
 
-func (m *Message) populate(raw *rawEnvelope) error {
-	err := m.EnvelopeBase.populate(raw)
+func (msg *Message) populate(raw *rawEnvelope) error {
+	err := msg.EnvelopeBase.populate(raw)
 	if err != nil {
 		return err
 	}
@@ -87,18 +86,18 @@ func (m *Message) populate(raw *rawEnvelope) error {
 		return err
 	}
 
-	m.Type = *raw.Type
-	m.Content = document
+	msg.Type = *raw.Type
+	msg.Content = document
 	return nil
 }
 
 // Notification creates a notification for the current message.
-func (m *Message) Notification(event NotificationEvent) *Notification {
+func (msg *Message) Notification(event NotificationEvent) *Notification {
 	return &Notification{
 		EnvelopeBase: EnvelopeBase{
-			ID:   m.ID,
-			From: m.To,
-			To:   m.Sender(),
+			ID:   msg.ID,
+			From: msg.To,
+			To:   msg.Sender(),
 		},
 		Event: event,
 	}
@@ -106,8 +105,8 @@ func (m *Message) Notification(event NotificationEvent) *Notification {
 
 // FailedNotification creates a notification for the current message with
 // the 'failed' event.
-func (m *Message) FailedNotification(reason *Reason) *Notification {
-	not := m.Notification(NotificationEventFailed)
+func (msg *Message) FailedNotification(reason *Reason) *Notification {
+	not := msg.Notification(NotificationEventFailed)
 	not.Reason = reason
 	return not
 }
