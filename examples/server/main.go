@@ -17,7 +17,7 @@ func main() {
 	server := lime.NewServerBuilder().
 		MessagesHandlerFunc(
 			func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
-				fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)
+				fmt.Printf("Message received - ID: %v - From: %v - Type: %v\n", msg.ID, msg.From, msg.Type)
 				return s.SendMessage(ctx, &lime.Message{
 					EnvelopeBase: lime.EnvelopeBase{
 						To: msg.From,
@@ -31,24 +31,23 @@ func main() {
 				fmt.Printf("Notification received - ID: %v - From: %v - Event: %v - Reason: %v\n", not.ID, not.From, not.Event, not.Reason)
 				return nil
 			}).
-		CommandHandlerFunc(
-			func(cmd *lime.Command) bool {
-				if cmd.Status != "" || cmd.URI == nil {
+		RequestCommandHandlerFunc(
+			func(cmd *lime.RequestCommand) bool {
+				if cmd.URI == nil {
 					return false
 				}
 
 				url := cmd.URI.ToURL()
-				return cmd.Status == "" &&
-					url.String() == "/presence"
+				return url.String() == "/presence"
 			},
-			func(ctx context.Context, cmd *lime.Command, s lime.Sender) error {
-				return s.SendCommand(
+			func(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
+				return s.SendResponseCommand(
 					ctx,
 					cmd.SuccessResponse())
 			}).
-		CommandsHandlerFunc(
-			func(ctx context.Context, cmd *lime.Command, s lime.Sender) error {
-				fmt.Printf("Command received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
+		RequestCommandsHandlerFunc(
+			func(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
+				fmt.Printf("RequestCommand received - ID: %v\n", cmd.ID)
 				return nil
 			}).
 		ListenTCP(
@@ -59,6 +58,7 @@ func main() {
 						return createCertificate("localhost")
 					},
 				},
+				TraceWriter: lime.NewStdoutTraceWriter(),
 			}).
 		EnableGuestAuthentication().
 		Build()

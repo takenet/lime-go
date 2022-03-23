@@ -7,52 +7,20 @@ import (
 	"net/url"
 )
 
-// Command allows the manipulation of node resources, like server session parameters or
+// Command is the base type for the RequestCommand and ResponseCommand types.
+// It allows the manipulation of node resources, like server session parameters or
 // information related to the network nodes.
 type Command struct {
 	EnvelopeBase
 	Method   CommandMethod // Method defines the action to be taken to the resource.
-	URI      *URI          // URI is the universal identifier of the resource.
 	Type     *MediaType    // Type defines MIME declaration of the resource type of the command.
 	Resource Document      // Resource defines the document that is subject of the command.
-	Status   CommandStatus // Status indicates the status of the action taken To the resource, in case of a response command.
-	Reason   *Reason       // Reason indicates the cause for a failure response command.
 }
 
 func (c *Command) SetResource(d Document) {
 	c.Resource = d
 	t := d.MediaType()
 	c.Type = &t
-}
-
-func (c *Command) SetStatusFailure(r Reason) {
-	c.Status = CommandStatusFailure
-	c.Reason = &r
-}
-
-func (c *Command) MarshalJSON() ([]byte, error) {
-	raw, err := c.toRawEnvelope()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(raw)
-}
-
-func (c *Command) UnmarshalJSON(b []byte) error {
-	raw := rawEnvelope{}
-	err := json.Unmarshal(b, &raw)
-	if err != nil {
-		return err
-	}
-
-	command := Command{}
-	err = command.populate(&raw)
-	if err != nil {
-		return err
-	}
-
-	*c = command
-	return nil
 }
 
 func (c *Command) toRawEnvelope() (*rawEnvelope, error) {
@@ -73,12 +41,6 @@ func (c *Command) toRawEnvelope() (*rawEnvelope, error) {
 	if c.Method != "" {
 		raw.Method = &c.Method
 	}
-
-	if c.Status != "" {
-		raw.Status = &c.Status
-	}
-	raw.URI = c.URI
-	raw.Reason = c.Reason
 
 	return raw, nil
 }
@@ -110,53 +72,163 @@ func (c *Command) populate(raw *rawEnvelope) error {
 
 	c.Method = *raw.Method
 
-	if raw.Status != nil {
-		c.Status = *raw.Status
-	}
-
-	c.URI = raw.URI
-	c.Reason = raw.Reason
-
 	return nil
 }
 
-// IsRequest indicates if the current command is a request and should have a response.
-func (c *Command) IsRequest() bool {
-	return c.ID != "" && c.Status == ""
+// RequestCommand represents a request for a resource that can be sent to a remote party.
+type RequestCommand struct {
+	Command
+	URI *URI // URI is the universal identifier of the resource.
 }
 
 // SuccessResponse creates a success response Command for the current request.
-func (c *Command) SuccessResponse() *Command {
-	return &Command{
-		EnvelopeBase: EnvelopeBase{
-			ID:   c.ID,
-			From: c.To,
-			To:   c.Sender(),
+func (c *RequestCommand) SuccessResponse() *ResponseCommand {
+	return &ResponseCommand{
+		Command: Command{
+			EnvelopeBase: EnvelopeBase{
+				ID:   c.ID,
+				From: c.To,
+				To:   c.Sender(),
+			},
+			Method: c.Method,
 		},
-		Method: c.Method,
 		Status: CommandStatusSuccess,
 	}
 }
 
 // SuccessResponseWithResource creates a success response Command for the current request.
-func (c *Command) SuccessResponseWithResource(resource Document) *Command {
+func (c *RequestCommand) SuccessResponseWithResource(resource Document) *ResponseCommand {
 	respCmd := c.SuccessResponse()
 	respCmd.Resource = resource
 	return respCmd
 }
 
 // FailureResponse creates a failure response Command for the current request.
-func (c *Command) FailureResponse(reason *Reason) *Command {
-	return &Command{
-		EnvelopeBase: EnvelopeBase{
-			ID:   c.ID,
-			From: c.To,
-			To:   c.Sender(),
+func (c *RequestCommand) FailureResponse(reason *Reason) *ResponseCommand {
+	return &ResponseCommand{
+		Command: Command{
+			EnvelopeBase: EnvelopeBase{
+				ID:   c.ID,
+				From: c.To,
+				To:   c.Sender(),
+			},
+			Method: c.Method,
 		},
-		Method: c.Method,
 		Status: CommandStatusFailure,
 		Reason: reason,
 	}
+}
+
+func (c *RequestCommand) MarshalJSON() ([]byte, error) {
+	raw, err := c.toRawEnvelope()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(raw)
+}
+
+func (c *RequestCommand) UnmarshalJSON(b []byte) error {
+	raw := rawEnvelope{}
+	err := json.Unmarshal(b, &raw)
+	if err != nil {
+		return err
+	}
+
+	command := RequestCommand{}
+	err = command.populate(&raw)
+	if err != nil {
+		return err
+	}
+
+	*c = command
+	return nil
+}
+
+func (c *RequestCommand) toRawEnvelope() (*rawEnvelope, error) {
+	raw, err := c.Command.toRawEnvelope()
+	if err != nil {
+		return nil, err
+	}
+	raw.URI = c.URI
+
+	return raw, nil
+}
+
+func (c *RequestCommand) populate(raw *rawEnvelope) error {
+	err := c.Command.populate(raw)
+	if err != nil {
+		return err
+	}
+
+	c.URI = raw.URI
+
+	return nil
+}
+
+// ResponseCommand represents a response for a RequestCommand that was issued previously.
+type ResponseCommand struct {
+	Command
+	Status CommandStatus // Status indicates the status of the action taken To the resource, in case of a response command.
+	Reason *Reason       // Reason indicates the cause for a failure response command.
+}
+
+func (c *ResponseCommand) SetStatusFailure(r Reason) {
+	c.Status = CommandStatusFailure
+	c.Reason = &r
+}
+
+func (c *ResponseCommand) MarshalJSON() ([]byte, error) {
+	raw, err := c.toRawEnvelope()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(raw)
+}
+
+func (c *ResponseCommand) UnmarshalJSON(b []byte) error {
+	raw := rawEnvelope{}
+	err := json.Unmarshal(b, &raw)
+	if err != nil {
+		return err
+	}
+
+	command := ResponseCommand{}
+	err = command.populate(&raw)
+	if err != nil {
+		return err
+	}
+
+	*c = command
+	return nil
+}
+
+func (c *ResponseCommand) toRawEnvelope() (*rawEnvelope, error) {
+	raw, err := c.Command.toRawEnvelope()
+	if err != nil {
+		return nil, err
+	}
+
+	if c.Status != "" {
+		raw.Status = &c.Status
+	}
+	raw.Reason = c.Reason
+
+	return raw, nil
+}
+
+func (c *ResponseCommand) populate(raw *rawEnvelope) error {
+	err := c.Command.populate(raw)
+	if err != nil {
+		return err
+	}
+
+	if raw.Status != nil {
+		c.Status = *raw.Status
+	}
+
+	c.Reason = raw.Reason
+
+	return nil
 }
 
 // CommandMethod Defines methods for the manipulation of resources.

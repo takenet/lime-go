@@ -56,10 +56,10 @@ func main() {
 		// Handler for all messages received by the server
 		MessagesHandlerFunc(handleMessage).
 		// Handler for commands with the "/friends" resource
-		CommandHandlerFunc(
-			func(cmd *lime.Command) bool {
+		RequestCommandHandlerFunc(
+			func(cmd *lime.RequestCommand) bool {
 				uri := cmd.URI.ToURL()
-				return cmd.ID != "" && cmd.Status == "" && strings.HasPrefix(uri.Path, "/friends")
+				return cmd.ID != "" && strings.HasPrefix(uri.Path, "/friends")
 			},
 			handleFriendsCommand).
 		// Listen using the websocket transport in the 8080 port
@@ -114,10 +114,10 @@ func handleMessage(ctx context.Context, msg *lime.Message, _ lime.Sender) error 
 	return err
 }
 
-func handleFriendsCommand(ctx context.Context, cmd *lime.Command, s lime.Sender) error {
+func handleFriendsCommand(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
 	node, _ := lime.ContextSessionRemoteNode(ctx)
 
-	var respCmd *lime.Command
+	var respCmd *lime.ResponseCommand
 	switch cmd.Method {
 	case lime.CommandMethodGet:
 		respCmd = getFriends(node, cmd)
@@ -132,11 +132,11 @@ func handleFriendsCommand(ctx context.Context, cmd *lime.Command, s lime.Sender)
 		})
 	}
 
-	return s.SendCommand(ctx, respCmd)
+	return s.SendResponseCommand(ctx, respCmd)
 }
 
-func getFriends(node lime.Node, cmd *lime.Command) *lime.Command {
-	var respCmd *lime.Command
+func getFriends(node lime.Node, cmd *lime.RequestCommand) *lime.ResponseCommand {
+	var respCmd *lime.ResponseCommand
 
 	if friends, ok := nodeFriends[node.Name]; ok {
 		items := make([]lime.Document, len(friends))
@@ -163,8 +163,8 @@ func getFriends(node lime.Node, cmd *lime.Command) *lime.Command {
 	return respCmd
 }
 
-func addFriend(cmd *lime.Command, node lime.Node) *lime.Command {
-	var respCmd *lime.Command
+func addFriend(cmd *lime.RequestCommand, node lime.Node) *lime.ResponseCommand {
+	var respCmd *lime.ResponseCommand
 
 	if f, ok := cmd.Resource.(*Friend); ok {
 		friends := nodeFriends[node.Name]
@@ -181,8 +181,8 @@ func addFriend(cmd *lime.Command, node lime.Node) *lime.Command {
 	return respCmd
 }
 
-func removeFriend(cmd *lime.Command, node lime.Node) *lime.Command {
-	var respCmd *lime.Command
+func removeFriend(cmd *lime.RequestCommand, node lime.Node) *lime.ResponseCommand {
+	var respCmd *lime.ResponseCommand
 
 	url := cmd.URI.ToURL()
 

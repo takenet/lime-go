@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestCommand_MarshalJSON_GetPingRequest(t *testing.T) {
+func TestRequestCommand_MarshalJSON_GetPingRequest(t *testing.T) {
 	// Arrange
 	c := createGetPingCommand()
 
@@ -20,9 +20,9 @@ func TestCommand_MarshalJSON_GetPingRequest(t *testing.T) {
 	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"postmaster@limeprotocol.org","method":"get","uri":"/ping"}`, string(b))
 }
 
-func TestCommand_MarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
+func TestRequestCommand_MarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
 	// Arrange
-	c := Command{}
+	c := RequestCommand{}
 	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
 	c.To = Node{}
 	c.To.Name = "postmaster"
@@ -53,9 +53,9 @@ func TestCommand_MarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
 	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"postmaster@limeprotocol.org","method":"merge","uri":"/document/john.doe%40limeprotocol.org","type":"application/vnd.lime.container+json","resource":{"type":"application/vnd.lime.account+json","value":{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}}}}`, string(b))
 }
 
-func TestCommand_MarshalJSON_GetAccountResponse(t *testing.T) {
+func TestResponseCommand_MarshalJSON_GetAccountResponse(t *testing.T) {
 	// Arrange
-	c := Command{}
+	c := ResponseCommand{}
 	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
 	c.From = Node{}
 	c.From.Name = "postmaster"
@@ -82,9 +82,9 @@ func TestCommand_MarshalJSON_GetAccountResponse(t *testing.T) {
 	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"get","status":"success","type":"application/vnd.lime.account+json","resource":{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}}}`, string(b))
 }
 
-func TestCommand_MarshalJSON_GetAccountCollectionResponse(t *testing.T) {
+func TestResponseCommand_MarshalJSON_GetAccountCollectionResponse(t *testing.T) {
 	// Arrange
-	c := Command{}
+	c := ResponseCommand{}
 	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
 	c.From = Node{}
 	c.From.Name = "postmaster"
@@ -118,9 +118,9 @@ func TestCommand_MarshalJSON_GetAccountCollectionResponse(t *testing.T) {
 	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"get","status":"success","type":"application/vnd.lime.collection+json","resource":{"total":3,"itemType":"application/vnd.lime.account+json","items":[{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}},{"name":"Alice","address":"Wonderland"},{"name":"Bob","city":"New York"}]}}`, string(b))
 }
 
-func TestCommand_MarshalJSON_SetFailureResponse(t *testing.T) {
+func TestResponseCommand_MarshalJSON_SetFailureResponse(t *testing.T) {
 	// Arrange
-	c := Command{}
+	c := ResponseCommand{}
 	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
 	c.From = Node{}
 	c.From.Name = "postmaster"
@@ -147,10 +147,10 @@ func TestCommand_MarshalJSON_SetFailureResponse(t *testing.T) {
 	assert.JSONEq(t, `{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"set","status":"failure","reason":{"code":101,"description":"The resource was not found"}}`, string(b))
 }
 
-func TestCommand_UnmarshalJSON_GetPingRequest(t *testing.T) {
+func TestRequestCommand_UnmarshalJSON_GetPingRequest(t *testing.T) {
 	// Arrange
 	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"golang@limeprotocol.org/default","type":"text/plain","method":"get","uri":"/ping"}`)
-	var c Command
+	var c RequestCommand
 
 	// Act
 	err := json.Unmarshal(j, &c)
@@ -165,14 +165,13 @@ func TestCommand_UnmarshalJSON_GetPingRequest(t *testing.T) {
 	assert.Equal(t, CommandMethodGet, c.Method)
 	u, _ := ParseLimeURI("/ping")
 	assert.Equal(t, u, *c.URI)
-	assert.Zero(t, c.Status)
 	assert.Nil(t, c.Resource)
 }
 
-func TestCommand_UnmarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
+func TestRequestCommand_UnmarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
 	// Arrange
 	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","to":"postmaster@limeprotocol.org","method":"merge","uri":"/documentContainer/john.doe%40limeprotocol.org","type":"application/vnd.lime.container+json","resource":{"type":"application/vnd.lime.account+json","value":{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}}}}`)
-	var c Command
+	var c RequestCommand
 
 	// Act
 	err := json.Unmarshal(j, &c)
@@ -188,7 +187,6 @@ func TestCommand_UnmarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
 	assert.NotNil(t, c.URI)
 	u, _ := ParseLimeURI("/documentContainer/john.doe%40limeprotocol.org")
 	assert.Equal(t, u, *c.URI)
-	assert.Zero(t, c.Status)
 	assert.NotNil(t, c.Type)
 	assert.Equal(t, MediaType{"application", "vnd.lime.container", "json"}, *c.Type)
 	assert.NotNil(t, c.Resource)
@@ -207,10 +205,10 @@ func TestCommand_UnmarshalJSON_MergeDocumentContainerRequest(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"plan": "premium"}, document["extras"])
 }
 
-func TestCommand_UnmarshalJSON_GetAccountResponse(t *testing.T) {
+func TestResponseCommand_UnmarshalJSON_GetAccountResponse(t *testing.T) {
 	// Arrange
 	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"get","status":"success","type":"application/vnd.lime.account+json","resource":{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}}}`)
-	var c Command
+	var c ResponseCommand
 
 	// Act
 	err := json.Unmarshal(j, &c)
@@ -238,10 +236,10 @@ func TestCommand_UnmarshalJSON_GetAccountResponse(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"plan": "premium"}, document["extras"])
 }
 
-func TestCommand_UnmarshalJSON_GetAccountCollectionResponse(t *testing.T) {
+func TestResponseCommand_UnmarshalJSON_GetAccountCollectionResponse(t *testing.T) {
 	// Arrange
 	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"get","status":"success","type":"application/vnd.lime.collection+json","resource":{"total":3,"itemType":"application/vnd.lime.account+json","items":[{"name":"John Doe","address":"Main street","city":"Belo Horizonte","extras":{"plan":"premium"}},{"name":"Alice","address":"Wonderland"},{"name":"Bob","city":"New York"}]}}`)
-	var c Command
+	var c ResponseCommand
 
 	// Act
 	err := json.Unmarshal(j, &c)
@@ -291,10 +289,10 @@ func TestCommand_UnmarshalJSON_GetAccountCollectionResponse(t *testing.T) {
 	assert.Equal(t, "New York", account3["city"])
 }
 
-func TestCommand_UnmarshalJSON_SetFailureResponse(t *testing.T) {
+func TestResponseCommand_UnmarshalJSON_SetFailureResponse(t *testing.T) {
 	// Arrange
 	j := []byte(`{"id":"4609d0a3-00eb-4e16-9d44-27d115c6eb31","from":"postmaster@limeprotocol.org/#server1","to":"golang@limeprotocol.org/default","method":"set","status":"failure","reason":{"code":101,"description":"The resource was not found"}}`)
-	var c Command
+	var c ResponseCommand
 
 	// Act
 	err := json.Unmarshal(j, &c)
@@ -314,8 +312,8 @@ func TestCommand_UnmarshalJSON_SetFailureResponse(t *testing.T) {
 	assert.Nil(t, c.Resource)
 }
 
-func createGetPingCommand() *Command {
-	c := Command{}
+func createGetPingCommand() *RequestCommand {
+	c := RequestCommand{}
 	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
 	c.To = Node{}
 	c.To.Name = "postmaster"
@@ -327,8 +325,8 @@ func createGetPingCommand() *Command {
 	return &c
 }
 
-func createResponseCommand() *Command {
-	c := Command{}
+func createResponseCommand() *ResponseCommand {
+	c := ResponseCommand{}
 	c.ID = "4609d0a3-00eb-4e16-9d44-27d115c6eb31"
 	c.From = Node{}
 	c.From.Name = "postmaster"

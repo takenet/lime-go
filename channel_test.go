@@ -487,7 +487,7 @@ func receiveNotificationWithState(t *testing.T, state SessionState) {
 	assert.Nil(t, actual)
 }
 
-func TestChannel_SendCommand_WhenEstablished(t *testing.T) {
+func TestChannel_SendRequestCommand_WhenEstablished(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -499,7 +499,7 @@ func TestChannel_SendCommand_WhenEstablished(t *testing.T) {
 	defer cancel()
 
 	// Act
-	err := c.SendCommand(ctx, cmd)
+	err := c.SendRequestCommand(ctx, cmd)
 
 	// Assert
 	assert.NoError(t, err)
@@ -508,7 +508,7 @@ func TestChannel_SendCommand_WhenEstablished(t *testing.T) {
 	assert.Equal(t, cmd, actual)
 }
 
-func TestChannel_SendCommand_Batch(t *testing.T) {
+func TestChannel_SendRequestCommand_Batch(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	count := 100
@@ -518,11 +518,11 @@ func TestChannel_SendCommand_Batch(t *testing.T) {
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	commands := make([]*Command, count)
+	commands := make([]*RequestCommand, count)
 	for i := 0; i < count; i++ {
 		commands[i] = createGetPingCommand()
 	}
-	var actuals []*Command
+	var actuals []*RequestCommand
 	errchan := make(chan error)
 	done := make(chan bool)
 
@@ -534,7 +534,7 @@ func TestChannel_SendCommand_Batch(t *testing.T) {
 				errchan <- err
 				return
 			}
-			cmd, ok := e.(*Command)
+			cmd, ok := e.(*RequestCommand)
 			if !ok {
 				errchan <- errors.New("unexpected envelope type")
 				return
@@ -544,10 +544,12 @@ func TestChannel_SendCommand_Batch(t *testing.T) {
 		done <- true
 	}()
 	for _, cmd := range commands {
-		err := c.SendCommand(ctx, cmd)
+		err := c.SendRequestCommand(ctx, cmd)
 		assert.NoError(t, err)
 	}
 	select {
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
 	case err := <-errchan:
 		t.Fatal(err)
 	case <-done:
@@ -558,7 +560,7 @@ func TestChannel_SendCommand_Batch(t *testing.T) {
 	assert.Equal(t, commands, actuals)
 }
 
-func BenchmarkChannel_SendCommand(b *testing.B) {
+func BenchmarkChannel_SendRequestCommand(b *testing.B) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
@@ -566,7 +568,7 @@ func BenchmarkChannel_SendCommand(b *testing.B) {
 	c.setState(SessionStateEstablished)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	commands := make([]*Command, b.N)
+	commands := make([]*RequestCommand, b.N)
 	for i := 0; i < len(commands); i++ {
 		commands[i] = createGetPingCommand()
 	}
@@ -586,7 +588,7 @@ func BenchmarkChannel_SendCommand(b *testing.B) {
 		done <- true
 	}()
 	for _, cmd := range commands {
-		_ = c.SendCommand(ctx, cmd)
+		_ = c.SendRequestCommand(ctx, cmd)
 	}
 	select {
 	case <-ctx.Done():
@@ -598,21 +600,21 @@ func BenchmarkChannel_SendCommand(b *testing.B) {
 	}
 }
 
-func TestChannel_SendCommand_NilCommand(t *testing.T) {
+func TestChannel_SendRequestCommand_NilCommand(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
 	defer silentClose(c)
 	c.setState(SessionStateEstablished)
-	var cmd *Command = nil
+	var cmd *RequestCommand = nil
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	// Act / Assert
 	assert.Panics(t, func() {
-		_ = c.SendCommand(ctx, cmd)
-	}, "send command: envelope cannot be nil")
+		_ = c.SendRequestCommand(ctx, cmd)
+	}, "send request command: envelope cannot be nil")
 }
 
 func TestChannel_SendCommand_WhenNew(t *testing.T) {
@@ -626,11 +628,11 @@ func TestChannel_SendCommand_WhenNew(t *testing.T) {
 	defer cancel()
 
 	// Act
-	err := c.SendCommand(ctx, cmd)
+	err := c.SendRequestCommand(ctx, cmd)
 
 	// Assert
 	assert.Error(t, err)
-	assert.Equal(t, "send command: cannot do in the new state", err.Error())
+	assert.Equal(t, "send request command: cannot do in the new state", err.Error())
 }
 
 func TestChannel_ReceiveCommand_WhenEstablished(t *testing.T) {
@@ -646,7 +648,7 @@ func TestChannel_ReceiveCommand_WhenEstablished(t *testing.T) {
 	_ = server.Send(ctx, cmd)
 
 	// Act
-	actual, err := c.ReceiveCommand(ctx)
+	actual, err := c.ReceiveRequestCommand(ctx)
 
 	// Assert
 	assert.NoError(t, err)
@@ -664,11 +666,11 @@ func TestChannel_ReceiveCommand_WhenContextCanceled(t *testing.T) {
 	defer cancel()
 
 	// Act
-	actual, err := c.ReceiveCommand(ctx)
+	actual, err := c.ReceiveRequestCommand(ctx)
 
 	// Assert
 	assert.Error(t, err)
-	assert.Equal(t, "receive command: context deadline exceeded", err.Error())
+	assert.Equal(t, "receive request command: context deadline exceeded", err.Error())
 	assert.Nil(t, actual)
 }
 
@@ -696,11 +698,11 @@ func receiveCommandWithState(t *testing.T, state SessionState) {
 		time.Sleep(50 * time.Millisecond)
 		c.setState(state)
 	}()
-	actual, err := c.ReceiveCommand(ctx)
+	actual, err := c.ReceiveRequestCommand(ctx)
 
 	// Assert
 	assert.Error(t, err)
-	assert.Equal(t, "receive command: channel closed", err.Error())
+	assert.Equal(t, "receive request command: channel closed", err.Error())
 	assert.Nil(t, actual)
 }
 
@@ -785,7 +787,7 @@ func TestChannel_ProcessCommand_ResponseWithAnotherId(t *testing.T) {
 	assert.Nil(t, actual)
 	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	actualRespCmd, err := c.ReceiveCommand(ctx)
+	actualRespCmd, err := c.ReceiveResponseCommand(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, respCmd, actualRespCmd)
 }

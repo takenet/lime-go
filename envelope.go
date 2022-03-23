@@ -118,9 +118,15 @@ type rawEnvelope struct {
 	// Command properties
 
 	Method   *CommandMethod   `json:"method,omitempty"`
-	URI      *URI             `json:"uri,omitempty"`
 	Resource *json.RawMessage `json:"resource,omitempty"`
-	Status   *CommandStatus   `json:"status,omitempty"`
+
+	// RequestCommand properties
+
+	URI *URI `json:"uri,omitempty"`
+
+	// ResponseCommand properties
+
+	Status *CommandStatus `json:"status,omitempty"`
 
 	// Session properties
 
@@ -137,7 +143,12 @@ type rawEnvelope struct {
 func (re *rawEnvelope) EnvelopeType() (string, error) {
 	// Determine the envelope type
 	if re.Method != nil {
-		return "Command", nil
+		if re.URI != nil {
+			return "RequestCommand", nil
+		}
+		if re.Status != nil {
+			return "ResponseCommand", nil
+		}
 	}
 	if re.Event != nil {
 		return "Notification", nil
@@ -161,8 +172,10 @@ func (re *rawEnvelope) ToEnvelope() (Envelope, error) {
 	}
 
 	switch t {
-	case "Command":
-		env = &Command{}
+	case "RequestCommand":
+		env = &RequestCommand{}
+	case "ResponseCommand":
+		env = &ResponseCommand{}
 	case "Notification":
 		env = &Notification{}
 	case "Message":

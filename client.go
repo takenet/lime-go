@@ -107,20 +107,20 @@ func (c *Client) SendNotification(ctx context.Context, not *Notification) error 
 	return channel.SendNotification(ctx, not)
 }
 
-// SendCommand asynchronously sends a Command to the server.
-// The server may route the Command to another node, accordingly to the specified destination address.
+// SendRequestCommand asynchronously sends a RequestCommand to the server.
+// The server may route the RequestCommand to another node, accordingly to the specified destination address.
 // This method can be used for sending request and response commands, but in case of requests, it does not await for response.
 // For receiving the response, the ProcessCommand method should be used.
-func (c *Client) SendCommand(ctx context.Context, cmd *Command) error {
+func (c *Client) SendRequestCommand(ctx context.Context, cmd *RequestCommand) error {
 	channel, err := c.getOrBuildChannel(ctx)
 	if err != nil {
 		return err
 	}
-	return channel.SendCommand(ctx, cmd)
+	return channel.SendRequestCommand(ctx, cmd)
 }
 
-// ProcessCommand send a request Command to the server and returns the corresponding response.
-func (c *Client) ProcessCommand(ctx context.Context, cmd *Command) (*Command, error) {
+// ProcessCommand send a RequestCommand to the server and returns the corresponding ResponseCommand.
+func (c *Client) ProcessCommand(ctx context.Context, cmd *RequestCommand) (*ResponseCommand, error) {
 	channel, err := c.getOrBuildChannel(ctx)
 	if err != nil {
 		return nil, err
@@ -382,25 +382,47 @@ func (b *ClientBuilder) NotificationHandler(handler NotificationHandler) *Client
 	return b
 }
 
-// CommandHandlerFunc allows the registration of a function for handling received commands that matches
+// RequestCommandHandlerFunc allows the registration of a function for handling received commands that matches
 // the specified predicate. Note that the registration order matters, since the receiving process stops when
 // the first predicate match occurs.
-func (b *ClientBuilder) CommandHandlerFunc(predicate CommandPredicate, f CommandHandlerFunc) *ClientBuilder {
-	b.mux.CommandHandlerFunc(predicate, f)
+func (b *ClientBuilder) RequestCommandHandlerFunc(predicate RequestCommandPredicate, f RequestCommandHandlerFunc) *ClientBuilder {
+	b.mux.RequestCommandHandlerFunc(predicate, f)
 	return b
 }
 
-// CommandsHandlerFunc allows the registration of a function for handling all received commands.
+// RequestCommandsHandlerFunc allows the registration of a function for handling all received commands.
 // This handler should be the last one to be registered, since it will capture all commands received by the client.
-func (b *ClientBuilder) CommandsHandlerFunc(f CommandHandlerFunc) *ClientBuilder {
-	b.mux.CommandHandlerFunc(func(cmd *Command) bool { return true }, f)
+func (b *ClientBuilder) RequestCommandsHandlerFunc(f RequestCommandHandlerFunc) *ClientBuilder {
+	b.mux.RequestCommandHandlerFunc(func(cmd *RequestCommand) bool { return true }, f)
 	return b
 }
 
-// CommandHandler allows the registration of a NotificationHandler.
+// RequestCommandHandler allows the registration of a NotificationHandler.
 // Note that the registration order matters, since the receiving process stops when the first predicate match occurs.
-func (b *ClientBuilder) CommandHandler(handler CommandHandler) *ClientBuilder {
-	b.mux.CommandHandler(handler)
+func (b *ClientBuilder) RequestCommandHandler(handler RequestCommandHandler) *ClientBuilder {
+	b.mux.RequestCommandHandler(handler)
+	return b
+}
+
+// ResponseCommandHandlerFunc allows the registration of a function for handling received commands that matches
+// the specified predicate. Note that the registration order matters, since the receiving process stops when
+// the first predicate match occurs.
+func (b *ClientBuilder) ResponseCommandHandlerFunc(predicate ResponseCommandPredicate, f ResponseCommandHandlerFunc) *ClientBuilder {
+	b.mux.ResponseCommandHandlerFunc(predicate, f)
+	return b
+}
+
+// ResponseCommandsHandlerFunc allows the registration of a function for handling all received commands.
+// This handler should be the last one to be registered, since it will capture all commands received by the client.
+func (b *ClientBuilder) ResponseCommandsHandlerFunc(f ResponseCommandHandlerFunc) *ClientBuilder {
+	b.mux.ResponseCommandHandlerFunc(func(cmd *ResponseCommand) bool { return true }, f)
+	return b
+}
+
+// ResponseCommandHandler allows the registration of a NotificationHandler.
+// Note that the registration order matters, since the receiving process stops when the first predicate match occurs.
+func (b *ClientBuilder) ResponseCommandHandler(handler ResponseCommandHandler) *ClientBuilder {
+	b.mux.ResponseCommandHandler(handler)
 	return b
 }
 

@@ -27,30 +27,41 @@ type NotificationReceiver interface {
 	NotChan() <-chan *Notification
 }
 
-type CommandSender interface {
-	SendCommand(ctx context.Context, cmd *Command) error
+type RequestCommandSender interface {
+	SendRequestCommand(ctx context.Context, cmd *RequestCommand) error
 }
 
-type CommandReceiver interface {
-	ReceiveCommand(ctx context.Context) (*Command, error)
-	CmdChan() <-chan *Command
+type ResponseCommandSender interface {
+	SendResponseCommand(ctx context.Context, cmd *ResponseCommand) error
+}
+
+type RequestCommandReceiver interface {
+	ReceiveRequestCommand(ctx context.Context) (*RequestCommand, error)
+	ReqCmdChan() <-chan *RequestCommand
+}
+
+type ResponseCommandReceiver interface {
+	ReceiveResponseCommand(ctx context.Context) (*ResponseCommand, error)
+	RespCmdChan() <-chan *ResponseCommand
 }
 
 type CommandProcessor interface {
-	ProcessCommand(ctx context.Context, cmd *Command) (*Command, error)
+	ProcessCommand(ctx context.Context, cmd *RequestCommand) (*ResponseCommand, error)
 }
 
 type Receiver interface {
 	MessageReceiver
 	NotificationReceiver
-	CommandReceiver
+	RequestCommandReceiver
+	ResponseCommandReceiver
 }
 
 // Sender defines a service for sending envelopes to a remote party.
 type Sender interface {
 	MessageSender
 	NotificationSender
-	CommandSender
+	RequestCommandSender
+	ResponseCommandSender
 }
 
 // ChannelModule defines a proxy interface for executing actions to the envelope channels.
@@ -61,24 +72,25 @@ type ChannelModule interface {
 }
 
 type channel struct {
-	transport  Transport
-	sessionID  string
-	remoteNode Node
-	localNode  Node
-	state      SessionState
-	stateMu    sync.RWMutex
-	inMsgChan  chan *Message
-	inNotChan  chan *Notification
-	inCmdChan  chan *Command
-	inSesChan  chan *Session
-	sendMu     sync.Mutex
-	rcvMu      sync.Mutex
-	startRcv   sync.Once
-	stopRcv    sync.Once
-	rcvDone    chan struct{}
-	client     bool
+	transport     Transport
+	sessionID     string
+	remoteNode    Node
+	localNode     Node
+	state         SessionState
+	stateMu       sync.RWMutex
+	inMsgChan     chan *Message
+	inNotChan     chan *Notification
+	inReqCmdChan  chan *RequestCommand
+	inRespCmdChan chan *ResponseCommand
+	inSesChan     chan *Session
+	sendMu        sync.Mutex
+	rcvMu         sync.Mutex
+	startRcv      sync.Once
+	stopRcv       sync.Once
+	rcvDone       chan struct{}
+	client        bool
 
-	processingCmds   map[string]chan *Command
+	processingCmds   map[string]chan *ResponseCommand
 	processingCmdsMu sync.RWMutex
 
 	cancel context.CancelFunc // The function for cancelling the listener goroutine
@@ -94,10 +106,11 @@ func newChannel(t Transport, bufferSize int) *channel {
 		state:            SessionStateNew,
 		inMsgChan:        make(chan *Message, bufferSize),
 		inNotChan:        make(chan *Notification, bufferSize),
-		inCmdChan:        make(chan *Command, bufferSize),
+		inReqCmdChan:     make(chan *RequestCommand, bufferSize),
+		inRespCmdChan:    make(chan *ResponseCommand, bufferSize),
 		inSesChan:        make(chan *Session, 1),
 		rcvDone:          make(chan struct{}),
-		processingCmds:   make(map[string]chan *Command),
+		processingCmds:   make(map[string]chan *ResponseCommand),
 		processingCmdsMu: sync.RWMutex{},
 	}
 	return &c
@@ -156,8 +169,11 @@ func (c *channel) NotChan() <-chan *Notification {
 	return c.inNotChan
 }
 
-func (c *channel) CmdChan() <-chan *Command {
-	return c.inCmdChan
+func (c *channel) ReqCmdChan() <-chan *RequestCommand {
+	return c.inReqCmdChan
+}
+func (c *channel) RespCmdChan() <-chan *ResponseCommand {
+	return c.inRespCmdChan
 }
 
 func receiveFromTransport(ctx context.Context, c *channel, done chan<- struct{}) {
@@ -165,7 +181,8 @@ func receiveFromTransport(ctx context.Context, c *channel, done chan<- struct{})
 		close(done)
 		close(c.inMsgChan)
 		close(c.inNotChan)
-		close(c.inCmdChan)
+		close(c.inReqCmdChan)
+		close(c.inRespCmdChan)
 		close(c.inSesChan)
 	}()
 
@@ -191,12 +208,18 @@ func receiveFromTransport(ctx context.Context, c *channel, done chan<- struct{})
 				return
 			case c.inNotChan <- e:
 			}
-		case *Command:
+		case *RequestCommand:
+			select {
+			case <-ctx.Done():
+				return
+			case c.inReqCmdChan <- e:
+			}
+		case *ResponseCommand:
 			if !c.trySubmitCommandResult(e) {
 				select {
 				case <-ctx.Done():
 					return
-				case c.inCmdChan <- e:
+				case c.inRespCmdChan <- e:
 				}
 			}
 		case *Session:
@@ -329,27 +352,47 @@ func (c *channel) ReceiveNotification(ctx context.Context) (*Notification, error
 	}
 }
 
-func (c *channel) SendCommand(ctx context.Context, cmd *Command) error {
-	return c.sendToTransport(ctx, cmd, "send command")
+func (c *channel) SendRequestCommand(ctx context.Context, cmd *RequestCommand) error {
+	return c.sendToTransport(ctx, cmd, "send request command")
 }
 
-func (c *channel) ReceiveCommand(ctx context.Context) (*Command, error) {
-	if err := c.ensureEstablished("receive command"); err != nil {
+func (c *channel) ReceiveRequestCommand(ctx context.Context) (*RequestCommand, error) {
+	if err := c.ensureEstablished("receive request command"); err != nil {
 		return nil, err
 	}
 
 	select {
 	case <-ctx.Done():
-		return nil, fmt.Errorf("receive command: %w", ctx.Err())
-	case cmd, ok := <-c.inCmdChan:
+		return nil, fmt.Errorf("receive request command: %w", ctx.Err())
+	case cmd, ok := <-c.inReqCmdChan:
 		if !ok {
-			return nil, errors.New("receive command: channel closed")
+			return nil, errors.New("receive request command: channel closed")
 		}
 		return cmd, nil
 	}
 }
 
-func (c *channel) ProcessCommand(ctx context.Context, reqCmd *Command) (*Command, error) {
+func (c *channel) SendResponseCommand(ctx context.Context, cmd *ResponseCommand) error {
+	return c.sendToTransport(ctx, cmd, "send response command")
+}
+
+func (c *channel) ReceiveResponseCommand(ctx context.Context) (*ResponseCommand, error) {
+	if err := c.ensureEstablished("receive response command"); err != nil {
+		return nil, err
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("receive response command: %w", ctx.Err())
+	case cmd, ok := <-c.inRespCmdChan:
+		if !ok {
+			return nil, errors.New("receive response command: channel closed")
+		}
+		return cmd, nil
+	}
+}
+
+func (c *channel) ProcessCommand(ctx context.Context, reqCmd *RequestCommand) (*ResponseCommand, error) {
 	return c.processCommand(ctx, c, reqCmd)
 }
 
@@ -407,12 +450,9 @@ func (c *channel) ensureTransportOK(action string) error {
 	return nil
 }
 
-func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqCmd *Command) (*Command, error) {
+func (c *channel) processCommand(ctx context.Context, sender RequestCommandSender, reqCmd *RequestCommand) (*ResponseCommand, error) {
 	if reqCmd == nil {
 		panic("process command: command cannot be nil")
-	}
-	if reqCmd.Status != "" {
-		panic("process command: invalid command status")
 	}
 	if reqCmd.ID == "" {
 		panic("process command: invalid command id")
@@ -425,7 +465,7 @@ func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqC
 		return nil, errors.New("process command: the command id is already in use")
 	}
 
-	respChan := make(chan *Command, 1)
+	respChan := make(chan *ResponseCommand, 1)
 	c.processingCmds[reqCmd.ID] = respChan
 	c.processingCmdsMu.Unlock()
 
@@ -435,7 +475,7 @@ func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqC
 		c.processingCmdsMu.Unlock()
 	}()
 
-	err := sender.SendCommand(ctx, reqCmd)
+	err := sender.SendRequestCommand(ctx, reqCmd)
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +488,7 @@ func (c *channel) processCommand(ctx context.Context, sender CommandSender, reqC
 	}
 }
 
-func (c *channel) trySubmitCommandResult(respCmd *Command) bool {
+func (c *channel) trySubmitCommandResult(respCmd *ResponseCommand) bool {
 	if respCmd == nil {
 		return false
 	}

@@ -29,9 +29,9 @@ func main() {
 				fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)
 				return nil
 			}).
-		CommandsHandlerFunc(
-			func(ctx context.Context, cmd *lime.Command, s lime.Sender) error {
-				fmt.Printf("Command received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
+		RequestCommandsHandlerFunc(
+			func(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
+				fmt.Printf("Request command received - ID: %v\n", cmd.ID)
 				return nil
 			}).
 		NotificationsHandlerFunc(
@@ -57,22 +57,24 @@ func main() {
 		"routingRule": "identity",
 	}
 
-	cmd, err := client.ProcessCommand(ctx, &lime.Command{
-		EnvelopeBase: lime.EnvelopeBase{
-			ID: lime.NewEnvelopeId(),
-			To: lime.Node{
-				Identity: lime.Identity{Name: "postmaster", Domain: "msging.net"},
-				Instance: "",
+	cmd, err := client.ProcessCommand(ctx, &lime.RequestCommand{
+		Command: lime.Command{
+			EnvelopeBase: lime.EnvelopeBase{
+				ID: lime.NewEnvelopeId(),
+				To: lime.Node{
+					Identity: lime.Identity{Name: "postmaster", Domain: "msging.net"},
+					Instance: "",
+				},
 			},
+			Method: lime.CommandMethodSet,
+			Type: &lime.MediaType{
+				Type:    "application",
+				Subtype: "vnd.lime.presence",
+				Suffix:  "json",
+			},
+			Resource: &presence,
 		},
-		Method: lime.CommandMethodSet,
-		URI:    &presenceUri,
-		Type: &lime.MediaType{
-			Type:    "application",
-			Subtype: "vnd.lime.presence",
-			Suffix:  "json",
-		},
-		Resource: &presence,
+		URI: &presenceUri,
 	})
 	if err != nil {
 		log.Fatalln(err)
@@ -88,7 +90,12 @@ func main() {
 		fmt.Print("To: ")
 		scanner.Scan()
 
-		to, err := lime.ParseNode(scanner.Text())
+		toValue := scanner.Text()
+		if toValue == "" || toValue == "exit" || toValue == "quit" {
+			break
+		}
+
+		to, err := lime.ParseNode(toValue)
 		if err != nil {
 			fmt.Printf("Invalid node: %v\n", err)
 			continue

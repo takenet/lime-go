@@ -7,9 +7,10 @@ import (
 )
 
 type EnvelopeMux struct {
-	msgHandlers []MessageHandler
-	notHandlers []NotificationHandler
-	cmdHandlers []CommandHandler
+	msgHandlers     []MessageHandler
+	notHandlers     []NotificationHandler
+	reqCmdHandlers  []RequestCommandHandler
+	respCmdHandlers []ResponseCommandHandler
 }
 
 func (m *EnvelopeMux) ListenServer(ctx context.Context, c *ServerChannel) error {
@@ -53,11 +54,18 @@ func (m *EnvelopeMux) listen(ctx context.Context, c *channel) error {
 			if err := m.handleNotification(ctx, not); err != nil {
 				return err
 			}
-		case cmd, ok := <-c.CmdChan():
+		case reqCmd, ok := <-c.ReqCmdChan():
 			if !ok {
-				return errors.New("cmd chan: channel closed")
+				return errors.New("req cmd chan: channel closed")
 			}
-			if err := m.handleCommand(ctx, cmd, c); err != nil {
+			if err := m.handleRequestCommand(ctx, reqCmd, c); err != nil {
+				return err
+			}
+		case respCmd, ok := <-c.RespCmdChan():
+			if !ok {
+				return errors.New("resp cmd chan: channel closed")
+			}
+			if err := m.handleResponseCommand(ctx, respCmd, c); err != nil {
 				return err
 			}
 		}
@@ -91,8 +99,21 @@ func (m *EnvelopeMux) handleNotification(ctx context.Context, not *Notification)
 	return nil
 }
 
-func (m *EnvelopeMux) handleCommand(ctx context.Context, cmd *Command, s Sender) error {
-	for _, h := range m.cmdHandlers {
+func (m *EnvelopeMux) handleRequestCommand(ctx context.Context, cmd *RequestCommand, s Sender) error {
+	for _, h := range m.reqCmdHandlers {
+		if !h.Match(cmd) {
+			continue
+		}
+		if err := h.Handle(ctx, cmd, s); err != nil {
+			return fmt.Errorf("handle command: %w", err)
+		}
+		break
+	}
+	return nil
+}
+
+func (m *EnvelopeMux) handleResponseCommand(ctx context.Context, cmd *ResponseCommand, s Sender) error {
+	for _, h := range m.respCmdHandlers {
 		if !h.Match(cmd) {
 			continue
 		}
@@ -129,15 +150,26 @@ func (m *EnvelopeMux) NotificationHandler(handler NotificationHandler) {
 	m.notHandlers = append(m.notHandlers, handler)
 }
 
-func (m *EnvelopeMux) CommandHandlerFunc(predicate CommandPredicate, f CommandHandlerFunc) {
-	m.CommandHandler(&commandHandler{
+func (m *EnvelopeMux) RequestCommandHandlerFunc(predicate RequestCommandPredicate, f RequestCommandHandlerFunc) {
+	m.RequestCommandHandler(&requestCommandHandler{
 		predicate:   predicate,
 		handlerFunc: f,
 	})
 }
 
-func (m *EnvelopeMux) CommandHandler(handler CommandHandler) {
-	m.cmdHandlers = append(m.cmdHandlers, handler)
+func (m *EnvelopeMux) RequestCommandHandler(handler RequestCommandHandler) {
+	m.reqCmdHandlers = append(m.reqCmdHandlers, handler)
+}
+
+func (m *EnvelopeMux) ResponseCommandHandlerFunc(predicate ResponseCommandPredicate, f ResponseCommandHandlerFunc) {
+	m.ResponseCommandHandler(&responseCommandHandler{
+		predicate:   predicate,
+		handlerFunc: f,
+	})
+}
+
+func (m *EnvelopeMux) ResponseCommandHandler(handler ResponseCommandHandler) {
+	m.respCmdHandlers = append(m.respCmdHandlers, handler)
 }
 
 // MessageHandler defines a handler for processing Message instances received from a channel.
@@ -204,34 +236,66 @@ func (h *notificationHandler) Handle(ctx context.Context, not *Notification) err
 	return h.handlerFunc(ctx, not)
 }
 
-// CommandHandler defines a handler for processing Command instances received from a channel.
-type CommandHandler interface {
-	// Match indicates if the specified Command should be handled by the instance.
-	Match(cmd *Command) bool
+// RequestCommandHandler defines a handler for processing Command instances received from a channel.
+type RequestCommandHandler interface {
+	// Match indicates if the specified RequestCommand should be handled by the instance.
+	Match(cmd *RequestCommand) bool
 
-	// Handle execute an action for the specified Command.
+	// Handle execute an action for the specified RequestCommand.
 	// If this method returns an error, it signals to the channel listener to stop.
-	Handle(ctx context.Context, cmd *Command, s Sender) error
+	Handle(ctx context.Context, cmd *RequestCommand, s Sender) error
 }
 
-// CommandPredicate defines an expression for checking if the specified Command satisfies a condition.
-type CommandPredicate func(cmd *Command) bool
+// RequestCommandPredicate defines an expression for checking if the specified RequestCommand satisfies a condition.
+type RequestCommandPredicate func(cmd *RequestCommand) bool
 
-// CommandHandlerFunc defines an action to be executed to a Command.
-type CommandHandlerFunc func(ctx context.Context, cmd *Command, s Sender) error
+// RequestCommandHandlerFunc defines an action to be executed to a RequestCommand.
+type RequestCommandHandlerFunc func(ctx context.Context, cmd *RequestCommand, s Sender) error
 
-type commandHandler struct {
-	predicate   CommandPredicate
-	handlerFunc CommandHandlerFunc
+type requestCommandHandler struct {
+	predicate   RequestCommandPredicate
+	handlerFunc RequestCommandHandlerFunc
 }
 
-func (h *commandHandler) Match(cmd *Command) bool {
+func (h *requestCommandHandler) Match(cmd *RequestCommand) bool {
 	if h.predicate == nil {
 		return true
 	}
 	return h.predicate(cmd)
 }
 
-func (h *commandHandler) Handle(ctx context.Context, cmd *Command, s Sender) error {
+func (h *requestCommandHandler) Handle(ctx context.Context, cmd *RequestCommand, s Sender) error {
+	return h.handlerFunc(ctx, cmd, s)
+}
+
+// ResponseCommandHandler defines a handler for processing Command instances received from a channel.
+type ResponseCommandHandler interface {
+	// Match indicates if the specified ResponseCommand should be handled by the instance.
+	Match(cmd *ResponseCommand) bool
+
+	// Handle execute an action for the specified ResponseCommand.
+	// If this method returns an error, it signals to the channel listener to stop.
+	Handle(ctx context.Context, cmd *ResponseCommand, s Sender) error
+}
+
+// ResponseCommandPredicate defines an expression for checking if the specified ResponseCommand satisfies a condition.
+type ResponseCommandPredicate func(cmd *ResponseCommand) bool
+
+// ResponseCommandHandlerFunc defines an action to be executed to a ResponseCommand.
+type ResponseCommandHandlerFunc func(ctx context.Context, cmd *ResponseCommand, s Sender) error
+
+type responseCommandHandler struct {
+	predicate   ResponseCommandPredicate
+	handlerFunc ResponseCommandHandlerFunc
+}
+
+func (h *responseCommandHandler) Match(cmd *ResponseCommand) bool {
+	if h.predicate == nil {
+		return true
+	}
+	return h.predicate(cmd)
+}
+
+func (h *responseCommandHandler) Handle(ctx context.Context, cmd *ResponseCommand, s Sender) error {
 	return h.handlerFunc(ctx, cmd, s)
 }

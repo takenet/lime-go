@@ -318,25 +318,47 @@ func (b *ServerBuilder) NotificationHandler(handler NotificationHandler) *Server
 	return b
 }
 
-// CommandHandlerFunc allows the registration of a function for handling received commands that matches
+// RequestCommandHandlerFunc allows the registration of a function for handling received commands that matches
 // the specified predicate. Note that the registration order matters, since the receiving process stops when
 // the first predicate match occurs.
-func (b *ServerBuilder) CommandHandlerFunc(predicate CommandPredicate, f CommandHandlerFunc) *ServerBuilder {
-	b.mux.CommandHandlerFunc(predicate, f)
+func (b *ServerBuilder) RequestCommandHandlerFunc(predicate RequestCommandPredicate, f RequestCommandHandlerFunc) *ServerBuilder {
+	b.mux.RequestCommandHandlerFunc(predicate, f)
 	return b
 }
 
-// CommandsHandlerFunc allows the registration of a function for handling all received commands.
+// RequestCommandsHandlerFunc allows the registration of a function for handling all received commands.
 // This handler should be the last one to be registered, since it will capture all commands received by the client.
-func (b *ServerBuilder) CommandsHandlerFunc(f CommandHandlerFunc) *ServerBuilder {
-	b.mux.CommandHandlerFunc(func(cmd *Command) bool { return true }, f)
+func (b *ServerBuilder) RequestCommandsHandlerFunc(f RequestCommandHandlerFunc) *ServerBuilder {
+	b.mux.RequestCommandHandlerFunc(func(cmd *RequestCommand) bool { return true }, f)
 	return b
 }
 
-// CommandHandler allows the registration of a NotificationHandler.
+// RequestCommandHandler allows the registration of a NotificationHandler.
 // Note that the registration order matters, since the receiving process stops when the first predicate match occurs.
-func (b *ServerBuilder) CommandHandler(handler CommandHandler) *ServerBuilder {
-	b.mux.CommandHandler(handler)
+func (b *ServerBuilder) RequestCommandHandler(handler RequestCommandHandler) *ServerBuilder {
+	b.mux.RequestCommandHandler(handler)
+	return b
+}
+
+// ResponseCommandHandlerFunc allows the registration of a function for handling received commands that matches
+// the specified predicate. Note that the registration order matters, since the receiving process stops when
+// the first predicate match occurs.
+func (b *ServerBuilder) ResponseCommandHandlerFunc(predicate ResponseCommandPredicate, f ResponseCommandHandlerFunc) *ServerBuilder {
+	b.mux.ResponseCommandHandlerFunc(predicate, f)
+	return b
+}
+
+// ResponseCommandsHandlerFunc allows the registration of a function for handling all received commands.
+// This handler should be the last one to be registered, since it will capture all commands received by the client.
+func (b *ServerBuilder) ResponseCommandsHandlerFunc(f ResponseCommandHandlerFunc) *ServerBuilder {
+	b.mux.ResponseCommandHandlerFunc(func(cmd *ResponseCommand) bool { return true }, f)
+	return b
+}
+
+// ResponseCommandHandler allows the registration of a NotificationHandler.
+// Note that the registration order matters, since the receiving process stops when the first predicate match occurs.
+func (b *ServerBuilder) ResponseCommandHandler(handler ResponseCommandHandler) *ServerBuilder {
+	b.mux.ResponseCommandHandler(handler)
 	return b
 }
 
