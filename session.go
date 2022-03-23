@@ -9,7 +9,7 @@ import (
 
 // Session Allows the configuration and establishment of the communication channel between nodes.
 type Session struct {
-	EnvelopeBase
+	Envelope
 	// State Informs or changes the state of a session.
 	// Only the server can change the session state, but the client can request
 	// the state transition.
@@ -71,7 +71,7 @@ func (s *Session) UnmarshalJSON(b []byte) error {
 }
 
 func (s *Session) toRawEnvelope() (*rawEnvelope, error) {
-	raw, err := s.EnvelopeBase.toRawEnvelope()
+	raw, err := s.Envelope.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (s *Session) toRawEnvelope() (*rawEnvelope, error) {
 }
 
 func (s *Session) populate(raw *rawEnvelope) error {
-	err := s.EnvelopeBase.populate(raw)
+	err := s.Envelope.populate(raw)
 	if err != nil {
 		return err
 	}

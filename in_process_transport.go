@@ -11,7 +11,7 @@ import (
 type inProcessTransport struct {
 	remote  *inProcessTransport // The remote party
 	addr    InProcessAddr
-	envChan chan Envelope
+	envChan chan envelope
 	done    chan bool
 	closed  bool
 	mu      sync.RWMutex
@@ -34,7 +34,7 @@ func (t *inProcessTransport) Close() error {
 	return nil
 }
 
-func (t *inProcessTransport) Send(_ context.Context, e Envelope) error {
+func (t *inProcessTransport) Send(_ context.Context, e envelope) error {
 	if !t.Connected() {
 		return errors.New("transport is closed")
 	}
@@ -42,7 +42,7 @@ func (t *inProcessTransport) Send(_ context.Context, e Envelope) error {
 	return nil
 }
 
-func (t *inProcessTransport) Receive(ctx context.Context) (Envelope, error) {
+func (t *inProcessTransport) Receive(ctx context.Context) (envelope, error) {
 	if !t.Connected() {
 		return nil, errors.New("transport is closed")
 	}
@@ -59,7 +59,7 @@ func (t *inProcessTransport) Receive(ctx context.Context) (Envelope, error) {
 func newInProcessTransport(addr InProcessAddr, bufferSize int) *inProcessTransport {
 	return &inProcessTransport{
 		addr:    addr,
-		envChan: make(chan Envelope, bufferSize),
+		envChan: make(chan envelope, bufferSize),
 		done:    make(chan bool, 1),
 	}
 }

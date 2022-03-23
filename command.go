@@ -11,7 +11,7 @@ import (
 // It allows the manipulation of node resources, like server session parameters or
 // information related to the network nodes.
 type Command struct {
-	EnvelopeBase
+	Envelope
 	Method   CommandMethod // Method defines the action to be taken to the resource.
 	Type     *MediaType    // Type defines MIME declaration of the resource type of the command.
 	Resource Document      // Resource defines the document that is subject of the command.
@@ -25,7 +25,7 @@ func (cmd *Command) SetResource(d Document) *Command {
 }
 
 func (cmd *Command) toRawEnvelope() (*rawEnvelope, error) {
-	raw, err := cmd.EnvelopeBase.toRawEnvelope()
+	raw, err := cmd.Envelope.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func (cmd *Command) toRawEnvelope() (*rawEnvelope, error) {
 }
 
 func (cmd *Command) populate(raw *rawEnvelope) error {
-	err := cmd.EnvelopeBase.populate(raw)
+	err := cmd.Envelope.populate(raw)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ type RequestCommand struct {
 func (cmd *RequestCommand) SuccessResponse() *ResponseCommand {
 	return &ResponseCommand{
 		Command: Command{
-			EnvelopeBase: EnvelopeBase{
+			Envelope: Envelope{
 				ID:   cmd.ID,
 				From: cmd.To,
 				To:   cmd.Sender(),
@@ -108,7 +108,7 @@ func (cmd *RequestCommand) SuccessResponseWithResource(resource Document) *Respo
 func (cmd *RequestCommand) FailureResponse(reason *Reason) *ResponseCommand {
 	return &ResponseCommand{
 		Command: Command{
-			EnvelopeBase: EnvelopeBase{
+			Envelope: Envelope{
 				ID:   cmd.ID,
 				From: cmd.To,
 				To:   cmd.Sender(),

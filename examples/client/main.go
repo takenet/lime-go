@@ -57,10 +57,15 @@ func main() {
 		"routingRule": "identity",
 	}
 
+	msg := &lime.Message{}
+	msg.SetContent(lime.PlainDocument("Hello from Lime!")).
+		SetID("1").
+		SetToString("someone@domain.com")
+
 	cmd, err := client.ProcessCommand(ctx, &lime.RequestCommand{
 		Command: lime.Command{
-			EnvelopeBase: lime.EnvelopeBase{
-				ID: lime.NewEnvelopeId(),
+			Envelope: lime.Envelope{
+				ID: lime.NewEnvelopeID(),
 				To: lime.Node{
 					Identity: lime.Identity{Name: "postmaster", Domain: "msging.net"},
 					Instance: "",
@@ -108,7 +113,7 @@ func main() {
 		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 
 		msg := &lime.Message{
-			EnvelopeBase: lime.EnvelopeBase{
+			Envelope: lime.Envelope{
 				To: to,
 			},
 		}

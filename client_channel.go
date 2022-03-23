@@ -65,7 +65,7 @@ func (c *ClientChannel) negotiateSession(ctx context.Context, comp SessionCompre
 	}
 
 	negSes := Session{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID: c.sessionID,
 		},
 		State:       SessionStateNegotiating,
@@ -92,7 +92,7 @@ func (c *ClientChannel) authenticateSession(ctx context.Context, identity Identi
 	}
 
 	authSes := Session{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID: c.sessionID,
 			From: Node{
 				identity,
@@ -121,7 +121,7 @@ func (c *ClientChannel) sendFinishingSession(ctx context.Context) error {
 	}
 
 	ses := Session{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID: c.sessionID,
 		},
 		State: SessionStateFinishing,

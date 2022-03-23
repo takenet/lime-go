@@ -11,8 +11,8 @@ import (
 // Transport defines the basic features for a Lime communication mean
 type Transport interface {
 	io.Closer
-	Send(ctx context.Context, e Envelope) error                     // Send sends an envelope to the remote node.
-	Receive(ctx context.Context) (Envelope, error)                  // Receive receives an envelope from the remote node.
+	Send(ctx context.Context, e envelope) error                     // Send sends an envelope to the remote node.
+	Receive(ctx context.Context) (envelope, error)                  // Receive receives an envelope from the remote node.
 	SupportedCompression() []SessionCompression                     // SupportedCompression enumerates the supported compression options for the transport.
 	Compression() SessionCompression                                // Compression returns the current transport compression option.
 	SetCompression(ctx context.Context, c SessionCompression) error // SetCompression defines the compression mode for the transport.

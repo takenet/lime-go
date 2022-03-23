@@ -19,7 +19,7 @@ func main() {
 			func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
 				fmt.Printf("Message received - ID: %v - From: %v - Type: %v\n", msg.ID, msg.From, msg.Type)
 				return s.SendMessage(ctx, &lime.Message{
-					EnvelopeBase: lime.EnvelopeBase{
+					Envelope: lime.Envelope{
 						To: msg.From,
 					},
 					Type:    msg.Type,

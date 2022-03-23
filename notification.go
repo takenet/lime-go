@@ -9,7 +9,7 @@ import (
 // Notification Information about events associated to a Message in a Session.
 // Can be originated by a server or by the Message destination Node.
 type Notification struct {
-	EnvelopeBase
+	Envelope
 
 	// Event Related event To the notification
 	Event NotificationEvent
@@ -44,7 +44,7 @@ func (n *Notification) UnmarshalJSON(b []byte) error {
 }
 
 func (n *Notification) toRawEnvelope() (*rawEnvelope, error) {
-	raw, err := n.EnvelopeBase.toRawEnvelope()
+	raw, err := n.Envelope.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (n *Notification) toRawEnvelope() (*rawEnvelope, error) {
 }
 
 func (n *Notification) populate(raw *rawEnvelope) error {
-	err := n.EnvelopeBase.populate(raw)
+	err := n.Envelope.populate(raw)
 	if err != nil {
 		return err
 	}

@@ -48,7 +48,7 @@ type websocketTransport struct {
 	e    SessionEncryption
 }
 
-func (t *websocketTransport) Send(ctx context.Context, e Envelope) error {
+func (t *websocketTransport) Send(ctx context.Context, e envelope) error {
 	if ctx == nil {
 		panic("nil context")
 	}
@@ -81,7 +81,7 @@ func (t *websocketTransport) Send(ctx context.Context, e Envelope) error {
 	}
 }
 
-func (t *websocketTransport) Receive(ctx context.Context) (Envelope, error) {
+func (t *websocketTransport) Receive(ctx context.Context) (envelope, error) {
 	if ctx == nil {
 		panic("nil context")
 	}

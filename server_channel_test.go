@@ -43,7 +43,7 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 		}
 
 		_ = client.Send(ctx, &Session{
-			EnvelopeBase:   EnvelopeBase{ID: s.ID, From: clientNode},
+			Envelope:       Envelope{ID: s.ID, From: clientNode},
 			State:          SessionStateAuthenticating,
 			Scheme:         AuthenticationSchemeGuest,
 			Authentication: &GuestAuthentication{},

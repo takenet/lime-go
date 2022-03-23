@@ -35,7 +35,7 @@ func TestClientChannel_EstablishSession_WhenStateEstablished(t *testing.T) {
 		_ = server.Send(
 			ctx,
 			&Session{
-				EnvelopeBase: EnvelopeBase{
+				Envelope: Envelope{
 					ID:   sessionID,
 					From: serverNode,
 					To:   clientNode,
@@ -101,7 +101,7 @@ func TestClientChannel_EstablishSession_WhenStateFailed(t *testing.T) {
 		_ = server.Send(
 			ctx,
 			&Session{
-				EnvelopeBase: EnvelopeBase{
+				Envelope: Envelope{
 					ID:   sessionID,
 					From: serverNode,
 				},
@@ -166,8 +166,8 @@ func TestClientChannel_FinishSession(t *testing.T) {
 	go func() {
 		_, _ = server.Receive(ctx)
 		_ = server.Send(ctx, &Session{
-			EnvelopeBase: EnvelopeBase{ID: sessionID, From: serverNode, To: clientNode},
-			State:        SessionStateEstablished})
+			Envelope: Envelope{ID: sessionID, From: serverNode, To: clientNode},
+			State:    SessionStateEstablished})
 	}()
 	_, err := c.EstablishSession(ctx, NoneCompressionSelector, NoneEncryptionSelector, Identity{}, GuestAuthenticator, "")
 	assert.NoError(t, err)
@@ -181,7 +181,7 @@ func TestClientChannel_FinishSession(t *testing.T) {
 		_ = server.Send(
 			ctx,
 			&Session{
-				EnvelopeBase: EnvelopeBase{
+				Envelope: Envelope{
 					ID:   sessionID,
 					From: serverNode,
 					To:   clientNode,

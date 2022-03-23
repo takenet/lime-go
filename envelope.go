@@ -7,14 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Envelope is a base interface for envelopes types.
-type Envelope interface {
-	populate(raw *rawEnvelope) error
-	toRawEnvelope() (*rawEnvelope, error)
-}
-
-// EnvelopeBase is a base struct to all communication envelopes.
-type EnvelopeBase struct {
+// Envelope is the base struct to all protocol envelopes.
+type Envelope struct {
 	// ID is the envelope identifier
 	ID string
 	// From is the identifier of the sender node of the envelope.
@@ -31,22 +25,22 @@ type EnvelopeBase struct {
 	Metadata map[string]string
 }
 
-func (env *EnvelopeBase) SetID(id string) *EnvelopeBase {
+func (env *Envelope) SetID(id string) *Envelope {
 	env.ID = id
 	return env
 }
 
-func (env *EnvelopeBase) SetFrom(from Node) *EnvelopeBase {
+func (env *Envelope) SetFrom(from Node) *Envelope {
 	env.From = from
 	return env
 }
 
-func (env *EnvelopeBase) SetTo(to Node) *EnvelopeBase {
+func (env *Envelope) SetTo(to Node) *Envelope {
 	env.To = to
 	return env
 }
 
-func (env *EnvelopeBase) SetToString(s string) *EnvelopeBase {
+func (env *Envelope) SetToString(s string) *Envelope {
 	to, err := ParseNode(s)
 	if err != nil {
 		env.To = to
@@ -54,7 +48,7 @@ func (env *EnvelopeBase) SetToString(s string) *EnvelopeBase {
 	return env
 }
 
-func (env *EnvelopeBase) SetMetadataKeyValue(key string, value string) *EnvelopeBase {
+func (env *Envelope) SetMetadataKeyValue(key string, value string) *Envelope {
 	if env.Metadata == nil {
 		env.Metadata = make(map[string]string)
 	}
@@ -63,7 +57,7 @@ func (env *EnvelopeBase) SetMetadataKeyValue(key string, value string) *Envelope
 }
 
 // Sender returns the envelope sender Node.
-func (env *EnvelopeBase) Sender() Node {
+func (env *Envelope) Sender() Node {
 	if env.PP == (Node{}) {
 		return env.PP
 	} else {
@@ -71,7 +65,7 @@ func (env *EnvelopeBase) Sender() Node {
 	}
 }
 
-func (env *EnvelopeBase) toRawEnvelope() (*rawEnvelope, error) {
+func (env *Envelope) toRawEnvelope() (*rawEnvelope, error) {
 	raw := rawEnvelope{}
 	raw.ID = env.ID
 	if env.From != (Node{}) {
@@ -88,7 +82,7 @@ func (env *EnvelopeBase) toRawEnvelope() (*rawEnvelope, error) {
 	return &raw, nil
 }
 
-func (env *EnvelopeBase) populate(raw *rawEnvelope) error {
+func (env *Envelope) populate(raw *rawEnvelope) error {
 	if raw == nil || env == nil {
 		return nil
 	}
@@ -121,6 +115,12 @@ func (r Reason) String() string {
 // NewEnvelopeID generates a new unique envelope ID.
 func NewEnvelopeID() string {
 	return uuid.New().String()
+}
+
+// envelope is the base interface for envelopes types.
+type envelope interface {
+	populate(raw *rawEnvelope) error
+	toRawEnvelope() (*rawEnvelope, error)
 }
 
 // rawEnvelope is an intermediate type for marshalling.
@@ -194,8 +194,8 @@ func (re *rawEnvelope) envelopeType() (string, error) {
 	return "", errors.New("could not determine the envelope type")
 }
 
-func (re *rawEnvelope) toEnvelope() (Envelope, error) {
-	var env Envelope
+func (re *rawEnvelope) toEnvelope() (envelope, error) {
+	var env envelope
 
 	t, err := re.envelopeType()
 	if err != nil {

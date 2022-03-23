@@ -51,7 +51,7 @@ func (c *ServerChannel) sendNegotiatingOptionsSession(ctx context.Context, compO
 	c.setState(SessionStateNegotiating)
 
 	ses := Session{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID:   c.sessionID,
 			From: c.localNode,
 		},
@@ -73,7 +73,7 @@ func (c *ServerChannel) sendNegotiatingConfirmationSession(ctx context.Context, 
 	}
 
 	ses := Session{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID:   c.sessionID,
 			From: c.localNode,
 		},
@@ -99,7 +99,7 @@ func (c *ServerChannel) sendAuthenticatingSession(ctx context.Context, schemeOpt
 	c.setState(SessionStateAuthenticating)
 
 	ses := Session{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID:   c.sessionID,
 			From: c.localNode,
 		},
@@ -123,7 +123,7 @@ func (c *ServerChannel) sendAuthenticatingRoundTripSession(ctx context.Context, 
 	}
 
 	ses := Session{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID:   c.sessionID,
 			From: c.localNode,
 		},
@@ -151,7 +151,7 @@ func (c *ServerChannel) sendEstablishedSession(ctx context.Context, node Node) e
 	c.remoteNode = node
 
 	ses := Session{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID:   c.sessionID,
 			From: c.localNode,
 			To:   c.remoteNode,
@@ -401,7 +401,7 @@ func (c *ServerChannel) FinishSession(ctx context.Context) error {
 	}
 
 	ses := Session{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID:   c.sessionID,
 			From: c.localNode,
 			To:   c.remoteNode,
@@ -427,7 +427,7 @@ func (c *ServerChannel) FailSession(ctx context.Context, reason *Reason) error {
 	}
 
 	ses := Session{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID:   c.sessionID,
 			From: c.localNode,
 			To:   c.remoteNode,

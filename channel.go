@@ -67,8 +67,8 @@ type Sender interface {
 // ChannelModule defines a proxy interface for executing actions to the envelope channels.
 type ChannelModule interface {
 	StateChanged(ctx context.Context, state SessionState) // StateChanged is called when the session state is changed.
-	Receiving(ctx context.Context, env Envelope) Envelope // Receiving is called when an envelope is being received by the channel.
-	Sending(ctx context.Context, env Envelope) Envelope   // Sending is called when an envelope is being sent by the channel.
+	Receiving(ctx context.Context, env envelope) envelope // Receiving is called when an envelope is being received by the channel.
+	Sending(ctx context.Context, env envelope) envelope   // Sending is called when an envelope is being sent by the channel.
 }
 
 type channel struct {
@@ -405,7 +405,7 @@ func (c *channel) Close() error {
 	return nil
 }
 
-func (c *channel) sendToTransport(ctx context.Context, e Envelope, action string) error {
+func (c *channel) sendToTransport(ctx context.Context, e envelope, action string) error {
 	if e == nil || reflect.ValueOf(e).IsNil() {
 		panic(fmt.Errorf("%v: envelope cannot be nil", action))
 	}

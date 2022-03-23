@@ -116,7 +116,7 @@ func (t *tcpTransport) SetEncryption(ctx context.Context, e SessionEncryption) e
 	return nil
 }
 
-func (t *tcpTransport) Send(ctx context.Context, e Envelope) error {
+func (t *tcpTransport) Send(ctx context.Context, e envelope) error {
 	if ctx == nil {
 		panic("nil context")
 	}
@@ -141,7 +141,7 @@ func (t *tcpTransport) Send(ctx context.Context, e Envelope) error {
 	return nil
 }
 
-func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
+func (t *tcpTransport) Receive(ctx context.Context) (envelope, error) {
 	if ctx == nil {
 		panic("nil context")
 	}

@@ -7,7 +7,7 @@ import (
 
 // Message encapsulates a document for transport between nodes in a network.
 type Message struct {
-	EnvelopeBase
+	Envelope
 	// MIME Type declaration for the Content of the message.
 	Type MediaType `json:"type"`
 	// Content represents the Message body content
@@ -46,7 +46,7 @@ func (msg *Message) UnmarshalJSON(b []byte) error {
 }
 
 func (msg *Message) toRawEnvelope() (*rawEnvelope, error) {
-	raw, err := msg.EnvelopeBase.toRawEnvelope()
+	raw, err := msg.Envelope.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (msg *Message) toRawEnvelope() (*rawEnvelope, error) {
 }
 
 func (msg *Message) populate(raw *rawEnvelope) error {
-	err := msg.EnvelopeBase.populate(raw)
+	err := msg.Envelope.populate(raw)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (msg *Message) populate(raw *rawEnvelope) error {
 // Notification creates a notification for the current message.
 func (msg *Message) Notification(event NotificationEvent) *Notification {
 	return &Notification{
-		EnvelopeBase: EnvelopeBase{
+		Envelope: Envelope{
 			ID:   msg.ID,
 			From: msg.To,
 			To:   msg.Sender(),
