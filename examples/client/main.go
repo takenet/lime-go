@@ -57,11 +57,6 @@ func main() {
 		"routingRule": "identity",
 	}
 
-	msg := &lime.Message{}
-	msg.SetContent(lime.PlainDocument("Hello from Lime!")).
-		SetID("1").
-		SetToString("someone@domain.com")
-
 	cmd, err := client.ProcessCommand(ctx, &lime.RequestCommand{
 		Command: lime.Command{
 			Envelope: lime.Envelope{

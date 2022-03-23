@@ -7,12 +7,16 @@ LIME - A lightweight messaging library
 LIME allows you to build scalable, real-time messaging applications using a JSON-based [open protocol](http://limeprotocol.org). 
 It's **fully asynchronous** and support persistent transports like TCP or Websockets.
 
-You can send and receive any type of document into the wire as long it can be represented as JSON or text (plain or encoded with base64) and it has a **MIME type** to allow the other party handle it in the right way.
+You can send and receive any type of document into the wire as long it can be represented as JSON or text (plain or 
+encoded with base64) and it has a **MIME type** to allow the other party handle it in the right way.
 
-The connected nodes can send receipts to the other parties to notify events about messages (for instance, a message was received or the content invalid or not supported).
+The connected nodes can send receipts to the other parties to notify events about messages (for instance, a message was 
+received or the content invalid or not supported).
 
-Besides that, there's a **REST capable** command interface with verbs (*get, set and delete*) and resource identifiers (URIs) to allow rich messaging scenarios. 
-You can use that to provide services like on-band account registration or instance-messaging resources, like presence or roster management.
+Besides that, there's a **REST capable** command interface with verbs (*get, set and delete*) and resource identifiers 
+(URIs) to allow rich messaging scenarios. 
+You can use that to provide services like on-band account registration or instance-messaging resources, like presence or 
+roster management.
 
 Finally, it has built-in support for authentication, transport encryption and compression.
 
@@ -21,7 +25,8 @@ Getting started
 
 ### Server
 
-For creating a server and start receiving connections, you should use the `lime.Server` type, which can be build using the `lime.NewServerBuilder()` function.
+For creating a server and start receiving connections, you should use the `lime.Server` type, which can be build using 
+the `lime.NewServerBuilder()` function.
 
 At least one **transport listener** (TCP, WebSocket or in process) should be configured. 
 You also should **register handlers** for processing the received envelopes.
@@ -37,6 +42,9 @@ import (
 	"github.com/takenet/lime-go"
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -44,8 +52,8 @@ func main() {
 	msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
 		return s.SendMessage(ctx, &lime.Message{
 			EnvelopeBase: lime.EnvelopeBase{ID: msg.ID, To: msg.From},
-			Type:    msg.Type,
-			Content: msg.Content,
+			Type:         msg.Type,
+			Content:      msg.Content,
 		})
 	}
 
@@ -54,8 +62,12 @@ func main() {
 		MessagesHandlerFunc(msgHandler).
 		ListenTCP(net.TCPAddr{Port: 55321}, &lime.TCPConfig{}).
 		Build()
-
-	defer func() {
+	
+	// Listen for the OS termination signals
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
 		if err := server.Close(); err != nil {
 			log.Printf("close: %v\n", err)
 		}
@@ -71,7 +83,8 @@ func main() {
 
 ### Client 
 
-In the client side, you may use the `lime.Client` type, which can be built using the helper method `lime.NewClientBuilder`.
+In the client side, you may use the `lime.Client` type, which can be built using the helper method 
+`lime.NewClientBuilder`.
 
 ```go
 package main
@@ -126,17 +139,129 @@ func main() {
 }
 ```
 
-Implementation overview
+Protocol overview
 -----------------------
 
-The basic protocol data package is called **envelope**. As mentioned before, there are four types:
+The base protocol data package is called **envelope** and there are four types: **Message, notification, command and 
+session**.
 
-* **Message** - Transports content between nodes
-* **Notification** - Notify about message events
-* **Command** - Provides an interface for resource management
-* **Session** - Used in the establishment of the communication channel
+All envelope types share some properties, like the `id` - the envelope's unique identifier - and the `from` and `to` 
+routing information.
+They also have the optional `metadata` property, which can be used to send any extra information about the envelope, 
+much like a header in the HTTP protocol.
 
-All envelope types share some properties, like the `id` - the envelope's unique identifier - and the `from` and `to` routing information. But the types also have distinct properties, which are helpful in the deserialization when a JSON object is received by the transport.
+In Go, the envelope properties are defined in the `lime.EnvelopeBase` struct, and every envelope type has it embedded.
+There is also the `lime.Envelope` interface, which is useful to encapsulate any envelope type, and it is used internally 
+by the transports.
+
+### Message 
+
+The message envelope encapsulates a **document** for transport between nodes in a network.
+It is implemented by the `lime.Message` type.
+
+A text message can be represented like this:
+
+```json
+{
+  "id": "1",
+  "to": "someone@domain.com",
+  "type": "text/plain",
+  "content": "Hello from Lime!"
+}
+```
+
+In Go, the same message can be instantiated as below:
+
+```go
+msg := &lime.Message{}
+msg.SetContent(lime.PlainDocument("Hello from Lime!")).
+    SetID("1").
+    SetToString("someone@domain.com")
+```
+
+In this example, the message has a `text/plain` document type with the `Hello from Lime!` value in the content. 
+
+It also defines a `id` with value `1`. The `id` is provided by the message sender, and it is useful for receiving
+notifications about a particular message. So, if you are interested to know if a message sent by you was delivered or
+not, you should put a value in the `id` property.
+
+The `to` property defines the destination node of the message. This address is used by the server to route the message 
+to the appropriated session. The node format is `name@domain/instance`, similar to the 
+[XMPP's Jabber ID](https://xmpp.org/rfcs/rfc3920.html#rfc.section.3).
+
+In this example, the content is a simple text but a message can be used to transport any type of document that can be 
+represented as JSON.
+
+For instance, to send a generic JSON document you can use the `application/json` type:
+
+```json
+{
+  "id": "1",
+  "to": "someone@domain.com",
+  "type": "application/json",
+  "content": {
+    "text": "Hello from Lime!",
+    "timestamp": "2022-03-23T00:00:00.000Z"
+  }
+}
+```
+
+In Go, it would be:
+```go
+msg := &lime.Message{}
+msg.SetContent(&lime.JsonDocument{
+    "text": "Hello from Lime!",
+    "timestamp": "2022-03-23T00:00:00.000Z",
+    }).
+    SetID("1").
+    SetToString("someone@domain.com")
+```
+
+You can also can (and probably should) use custom MIME types for representing well-known types from your application
+domain:
+
+```json
+{
+  "id": "1",
+  "to": "someone@domain.com",
+  "type": "application/x-myapplication-person+json",
+  "content": {
+    "name": "John Doe",
+    "address": "123 Main St",
+    "online": true
+  }
+}
+```
+
+The custom MIME types are useful for mapping with custom types from your project. For that, these types need to 
+implement the `Document` interface.
+
+
+```go
+type Person struct {
+    Name     string `json:"name,omitempty"`
+    Address  string `json:"address,omitempty"`
+    Online   bool   `json:"online,omitempty"`
+}
+
+func (f *Person) MediaType() lime.MediaType {
+    return lime.MediaType{
+        Type:    "application",
+        Subtype: "x-myapplication-person",
+        Suffix:  "json",
+    }
+}
+```
+
+For sending a message to someone, you should use the `SendMessage` method that is implemented both by the `lime.Server`
+and `lime.Client` types.
+
+```go
+msg := &Person{Name: "John Doe", Address: "123 Main St", Online: true}
+err := client.SendMessage(context.Background(), msg)
+```
+
+---
 
 The `Transport` interface represents a persistent connection for sending and receiving envelopes.
 Currently, the library provides the `tcpTransport`, `webSocketTransport` and `inProcessTransport` implementations.
