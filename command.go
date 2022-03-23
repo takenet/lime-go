@@ -17,36 +17,37 @@ type Command struct {
 	Resource Document      // Resource defines the document that is subject of the command.
 }
 
-func (c *Command) SetResource(d Document) {
-	c.Resource = d
+func (cmd *Command) SetResource(d Document) *Command {
+	cmd.Resource = d
 	t := d.MediaType()
-	c.Type = &t
+	cmd.Type = &t
+	return cmd
 }
 
-func (c *Command) toRawEnvelope() (*rawEnvelope, error) {
-	raw, err := c.EnvelopeBase.toRawEnvelope()
+func (cmd *Command) toRawEnvelope() (*rawEnvelope, error) {
+	raw, err := cmd.EnvelopeBase.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
 
-	if c.Resource != nil {
-		b, err := json.Marshal(c.Resource)
+	if cmd.Resource != nil {
+		b, err := json.Marshal(cmd.Resource)
 		if err != nil {
 			return nil, err
 		}
 		r := json.RawMessage(b)
 		raw.Resource = &r
-		raw.Type = c.Type
+		raw.Type = cmd.Type
 	}
-	if c.Method != "" {
-		raw.Method = &c.Method
+	if cmd.Method != "" {
+		raw.Method = &cmd.Method
 	}
 
 	return raw, nil
 }
 
-func (c *Command) populate(raw *rawEnvelope) error {
-	err := c.EnvelopeBase.populate(raw)
+func (cmd *Command) populate(raw *rawEnvelope) error {
+	err := cmd.EnvelopeBase.populate(raw)
 	if err != nil {
 		return err
 	}
@@ -62,15 +63,15 @@ func (c *Command) populate(raw *rawEnvelope) error {
 			return err
 		}
 
-		c.Resource = document
-		c.Type = raw.Type
+		cmd.Resource = document
+		cmd.Type = raw.Type
 	}
 
 	if raw.Method == nil {
 		return errors.New("command method is required")
 	}
 
-	c.Method = *raw.Method
+	cmd.Method = *raw.Method
 
 	return nil
 }
@@ -82,52 +83,52 @@ type RequestCommand struct {
 }
 
 // SuccessResponse creates a success response Command for the current request.
-func (c *RequestCommand) SuccessResponse() *ResponseCommand {
+func (cmd *RequestCommand) SuccessResponse() *ResponseCommand {
 	return &ResponseCommand{
 		Command: Command{
 			EnvelopeBase: EnvelopeBase{
-				ID:   c.ID,
-				From: c.To,
-				To:   c.Sender(),
+				ID:   cmd.ID,
+				From: cmd.To,
+				To:   cmd.Sender(),
 			},
-			Method: c.Method,
+			Method: cmd.Method,
 		},
 		Status: CommandStatusSuccess,
 	}
 }
 
 // SuccessResponseWithResource creates a success response Command for the current request.
-func (c *RequestCommand) SuccessResponseWithResource(resource Document) *ResponseCommand {
-	respCmd := c.SuccessResponse()
+func (cmd *RequestCommand) SuccessResponseWithResource(resource Document) *ResponseCommand {
+	respCmd := cmd.SuccessResponse()
 	respCmd.Resource = resource
 	return respCmd
 }
 
 // FailureResponse creates a failure response Command for the current request.
-func (c *RequestCommand) FailureResponse(reason *Reason) *ResponseCommand {
+func (cmd *RequestCommand) FailureResponse(reason *Reason) *ResponseCommand {
 	return &ResponseCommand{
 		Command: Command{
 			EnvelopeBase: EnvelopeBase{
-				ID:   c.ID,
-				From: c.To,
-				To:   c.Sender(),
+				ID:   cmd.ID,
+				From: cmd.To,
+				To:   cmd.Sender(),
 			},
-			Method: c.Method,
+			Method: cmd.Method,
 		},
 		Status: CommandStatusFailure,
 		Reason: reason,
 	}
 }
 
-func (c *RequestCommand) MarshalJSON() ([]byte, error) {
-	raw, err := c.toRawEnvelope()
+func (cmd *RequestCommand) MarshalJSON() ([]byte, error) {
+	raw, err := cmd.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
 	return json.Marshal(raw)
 }
 
-func (c *RequestCommand) UnmarshalJSON(b []byte) error {
+func (cmd *RequestCommand) UnmarshalJSON(b []byte) error {
 	raw := rawEnvelope{}
 	err := json.Unmarshal(b, &raw)
 	if err != nil {
@@ -140,27 +141,27 @@ func (c *RequestCommand) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	*c = command
+	*cmd = command
 	return nil
 }
 
-func (c *RequestCommand) toRawEnvelope() (*rawEnvelope, error) {
-	raw, err := c.Command.toRawEnvelope()
+func (cmd *RequestCommand) toRawEnvelope() (*rawEnvelope, error) {
+	raw, err := cmd.Command.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
-	raw.URI = c.URI
+	raw.URI = cmd.URI
 
 	return raw, nil
 }
 
-func (c *RequestCommand) populate(raw *rawEnvelope) error {
-	err := c.Command.populate(raw)
+func (cmd *RequestCommand) populate(raw *rawEnvelope) error {
+	err := cmd.Command.populate(raw)
 	if err != nil {
 		return err
 	}
 
-	c.URI = raw.URI
+	cmd.URI = raw.URI
 
 	return nil
 }
@@ -172,20 +173,20 @@ type ResponseCommand struct {
 	Reason *Reason       // Reason indicates the cause for a failure response command.
 }
 
-func (c *ResponseCommand) SetStatusFailure(r Reason) {
-	c.Status = CommandStatusFailure
-	c.Reason = &r
+func (cmd *ResponseCommand) SetStatusFailure(r Reason) {
+	cmd.Status = CommandStatusFailure
+	cmd.Reason = &r
 }
 
-func (c *ResponseCommand) MarshalJSON() ([]byte, error) {
-	raw, err := c.toRawEnvelope()
+func (cmd *ResponseCommand) MarshalJSON() ([]byte, error) {
+	raw, err := cmd.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
 	return json.Marshal(raw)
 }
 
-func (c *ResponseCommand) UnmarshalJSON(b []byte) error {
+func (cmd *ResponseCommand) UnmarshalJSON(b []byte) error {
 	raw := rawEnvelope{}
 	err := json.Unmarshal(b, &raw)
 	if err != nil {
@@ -198,35 +199,35 @@ func (c *ResponseCommand) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	*c = command
+	*cmd = command
 	return nil
 }
 
-func (c *ResponseCommand) toRawEnvelope() (*rawEnvelope, error) {
-	raw, err := c.Command.toRawEnvelope()
+func (cmd *ResponseCommand) toRawEnvelope() (*rawEnvelope, error) {
+	raw, err := cmd.Command.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
 
-	if c.Status != "" {
-		raw.Status = &c.Status
+	if cmd.Status != "" {
+		raw.Status = &cmd.Status
 	}
-	raw.Reason = c.Reason
+	raw.Reason = cmd.Reason
 
 	return raw, nil
 }
 
-func (c *ResponseCommand) populate(raw *rawEnvelope) error {
-	err := c.Command.populate(raw)
+func (cmd *ResponseCommand) populate(raw *rawEnvelope) error {
+	err := cmd.Command.populate(raw)
 	if err != nil {
 		return err
 	}
 
 	if raw.Status != nil {
-		c.Status = *raw.Status
+		cmd.Status = *raw.Status
 	}
 
-	c.Reason = raw.Reason
+	cmd.Reason = raw.Reason
 
 	return nil
 }

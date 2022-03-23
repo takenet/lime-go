@@ -15,19 +15,19 @@ type Envelope interface {
 
 // EnvelopeBase is a base struct to all communication envelopes.
 type EnvelopeBase struct {
-	// The envelope identifier
+	// ID is the envelope identifier
 	ID string
-	// The identifier of the sender node of the envelope.
+	// From is the identifier of the sender node of the envelope.
 	// If a node receives an envelope without this value, it means that the envelope was originated by the remote party.
 	From Node
-	// The delegation node. It's an acronym for 'per procurationem'.
+	// PP is the delegation node. It's an acronym for 'per procurationem'.
 	// Identifier of a delegate node (a node that received a permission To send on behalf of another).
 	// Allows a node to send an envelope on behalf of another identity.
 	PP Node
-	// The identifier of the destination node of the envelope.
+	// To is the identifier of the destination node of the envelope.
 	// If a node receives an envelope without this value, it means that the envelope is addressed To itself.
 	To Node
-	// Additional information to be delivered with the envelope.
+	// Metadata holds additional information to be delivered with the envelope.
 	Metadata map[string]string
 }
 
@@ -118,12 +118,12 @@ func (r Reason) String() string {
 	return fmt.Sprintf("Code: %v - Description: %v", r.Code, r.Description)
 }
 
-// NewEnvelopeId generates a new unique envelope ID.
-func NewEnvelopeId() string {
+// NewEnvelopeID generates a new unique envelope ID.
+func NewEnvelopeID() string {
 	return uuid.New().String()
 }
 
-// rawEnvelope it is an intermediate type for marshalling.
+// rawEnvelope is an intermediate type for marshalling.
 type rawEnvelope struct {
 	// Common envelope properties
 
@@ -171,7 +171,7 @@ type rawEnvelope struct {
 	Authentication     *json.RawMessage       `json:"authentication,omitempty"`
 }
 
-func (re *rawEnvelope) EnvelopeType() (string, error) {
+func (re *rawEnvelope) envelopeType() (string, error) {
 	// Determine the envelope type
 	if re.Method != nil {
 		if re.URI != nil {
@@ -194,10 +194,10 @@ func (re *rawEnvelope) EnvelopeType() (string, error) {
 	return "", errors.New("could not determine the envelope type")
 }
 
-func (re *rawEnvelope) ToEnvelope() (Envelope, error) {
+func (re *rawEnvelope) toEnvelope() (Envelope, error) {
 	var env Envelope
 
-	t, err := re.EnvelopeType()
+	t, err := re.envelopeType()
 	if err != nil {
 		return nil, err
 	}

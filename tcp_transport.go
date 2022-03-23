@@ -161,7 +161,7 @@ func (t *tcpTransport) Receive(ctx context.Context) (Envelope, error) {
 	}
 
 	t.limitedReader.N = t.ReadLimit
-	return raw.ToEnvelope()
+	return raw.toEnvelope()
 }
 
 func (t *tcpTransport) Close() error {

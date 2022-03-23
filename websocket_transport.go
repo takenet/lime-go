@@ -115,7 +115,7 @@ func (t *websocketTransport) Receive(ctx context.Context) (Envelope, error) {
 	case err := <-errChan:
 		return nil, fmt.Errorf("ws transport: receive: %w", err)
 	case raw := <-rawChan:
-		return raw.ToEnvelope()
+		return raw.toEnvelope()
 	}
 }
 
