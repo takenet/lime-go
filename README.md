@@ -226,11 +226,10 @@ domain:
 {
   "id": "1",
   "to": "someone@domain.com",
-  "type": "application/x-myapplication-person+json",
+  "type": "application/x-app-image+json",
   "content": {
-    "name": "John Doe",
-    "address": "123 Main St",
-    "online": true
+    "caption": "Look at this kitten!",
+    "url": "https://mycdn.com/cat.jpg"
   }
 }
 ```
@@ -293,16 +292,16 @@ client := lime.NewClientBuilder().
 A notification provides information about a message to its sender.
 They are sent only for messages that have the `id` value defined.
 
-For instance, a node can notify the that a message was received like this:
+For instance, a node can notify to the sender the that a message was received like this:
 
 ```json
 {
   "id": "1",
-  "from": "someone@domain.com",
-  "to": "originator@domain.com",
+  "to": "sender@domain.com",
   "event": "received"
 }
 ```
+The notification `to` value should have the value of the `from` property of the message. 
 
 In Go, you can use the `Notification(event)` method from the `*lime.Message` type for building a notification for a message:
 
@@ -337,8 +336,7 @@ a message:
 ```json
 {
   "id": "1",
-  "from": "server@domain.com",
-  "to": "originator@domain.com",
+  "to": "sender@domain.com",
   "event": "failed",
   "reason": {
     "code": 1,
