@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func createPlainDocument() PlainDocument {
+func createTextDocument() TextDocument {
 	return "Hello world!"
 }
 
@@ -47,7 +47,7 @@ func (t *testJsonDocument) MediaType() MediaType {
 
 func TestDocumentContainer_MarshalJSON_Plain(t *testing.T) {
 	// Arrange
-	d := createPlainDocument()
+	d := createTextDocument()
 	c := NewDocumentContainer(d)
 
 	// Act
@@ -103,9 +103,9 @@ func TestDocumentContainer_UnmarshalJSON_Plain(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, MediaTypeTextPlain(), d.Type)
-	actual, ok := d.Value.(*PlainDocument)
+	actual, ok := d.Value.(*TextDocument)
 	assert.True(t, ok)
-	assert.Equal(t, createPlainDocument(), *actual)
+	assert.Equal(t, createTextDocument(), *actual)
 }
 
 func TestDocumentContainer_UnmarshalJSON_JSON(t *testing.T) {
@@ -151,7 +151,7 @@ func TestDocumentCollection_MarshalJSON_Plain(t *testing.T) {
 	// Arrange
 	items := make([]Document, 3)
 	for i := 0; i < len(items); i++ {
-		items[i] = PlainDocument(fmt.Sprintf("Hello world %v!", i+1))
+		items[i] = TextDocument(fmt.Sprintf("Hello world %v!", i+1))
 	}
 	c := NewDocumentCollection(items, MediaTypeTextPlain())
 
@@ -198,9 +198,9 @@ func TestDocumentCollection_UnmarshalJSON_Plain(t *testing.T) {
 	assert.Equal(t, 3, c.Total)
 	assert.Equal(t, MediaTypeTextPlain(), c.ItemType)
 	for i, d := range c.Items {
-		actual, ok := d.(*PlainDocument)
+		actual, ok := d.(*TextDocument)
 		assert.True(t, ok)
-		assert.Equal(t, PlainDocument(fmt.Sprintf("Hello world %v!", i+1)), *actual)
+		assert.Equal(t, TextDocument(fmt.Sprintf("Hello world %v!", i+1)), *actual)
 	}
 }
 

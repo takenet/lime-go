@@ -103,7 +103,7 @@ func main() {
 
 		fmt.Print("Content: ")
 		scanner.Scan()
-		content := lime.PlainDocument(scanner.Text())
+		content := lime.TextDocument(scanner.Text())
 
 		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 

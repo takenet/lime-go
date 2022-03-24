@@ -7,7 +7,7 @@ import (
 
 func init() {
 	RegisterDocumentFactory(func() Document {
-		d := PlainDocument("")
+		d := TextDocument("")
 		return &d
 	})
 	RegisterDocumentFactory(func() Document {
@@ -34,10 +34,10 @@ func (d *JsonDocument) MediaType() MediaType {
 	return MediaTypeApplicationJson()
 }
 
-// PlainDocument represents a plain document.
-type PlainDocument string
+// TextDocument represents a plain document.
+type TextDocument string
 
-func (d PlainDocument) MediaType() MediaType {
+func (d TextDocument) MediaType() MediaType {
 	return MediaTypeTextPlain()
 }
 

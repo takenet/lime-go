@@ -13,7 +13,7 @@ func createMessage() *Message {
 	m.To.Name = "golang"
 	m.To.Domain = "limeprotocol.org"
 	m.To.Instance = "default"
-	var d PlainDocument = "Hello world"
+	var d TextDocument = "Hello world"
 	m.SetContent(&d)
 	return &m
 }
@@ -26,7 +26,7 @@ func TestMessage_MarshalJSON_TextPlain(t *testing.T) {
 	m.To.Name = "golang"
 	m.To.Domain = "limeprotocol.org"
 	m.To.Instance = "default"
-	var d PlainDocument = "Hello world"
+	var d TextDocument = "Hello world"
 	m.SetContent(&d)
 
 	// Act
@@ -47,7 +47,7 @@ func TestMessage_MarshalJSON_Metadata(t *testing.T) {
 	m.To.Name = "golang"
 	m.To.Domain = "limeprotocol.org"
 	m.To.Instance = "default"
-	var d PlainDocument = "Hello world"
+	var d TextDocument = "Hello world"
 	m.SetContent(&d)
 	m.Metadata = make(map[string]string)
 	m.Metadata["property1"] = "value1"
@@ -71,7 +71,7 @@ func TestMessage_MarshalJSON_TextUnknownPlain(t *testing.T) {
 	m.To.Name = "golang"
 	m.To.Domain = "limeprotocol.org"
 	m.To.Instance = "default"
-	var d PlainDocument = "Hello world"
+	var d TextDocument = "Hello world"
 	m.Content = d
 	m.Type = MediaType{"text", "unknown", ""}
 
@@ -144,11 +144,11 @@ func TestMessage_UnmarshalJSON_TextPlain(t *testing.T) {
 	assert.Zero(t, m.From)
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, m.To)
 	assert.Equal(t, mediaTypeTextPlain, m.Type)
-	d, ok := m.Content.(*PlainDocument)
+	d, ok := m.Content.(*TextDocument)
 	if !assert.True(t, ok) {
 		t.Fatal()
 	}
-	assert.Equal(t, PlainDocument("Hello world"), *d)
+	assert.Equal(t, TextDocument("Hello world"), *d)
 }
 func TestMessage_UnmarshalJSON_Metadata(t *testing.T) {
 	// Arrange
@@ -166,11 +166,11 @@ func TestMessage_UnmarshalJSON_Metadata(t *testing.T) {
 	assert.Zero(t, m.From)
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, m.To)
 	assert.Equal(t, mediaTypeTextPlain, m.Type)
-	d, ok := m.Content.(*PlainDocument)
+	d, ok := m.Content.(*TextDocument)
 	if !assert.True(t, ok) {
 		t.Fatal()
 	}
-	assert.Equal(t, PlainDocument("Hello world"), *d)
+	assert.Equal(t, TextDocument("Hello world"), *d)
 	assert.Contains(t, m.Metadata, "property1")
 	assert.Equal(t, "value1", m.Metadata["property1"])
 	assert.Contains(t, m.Metadata, "property2")
@@ -193,11 +193,11 @@ func TestMessage_UnmarshalJSON_TextUnknownPlain(t *testing.T) {
 	assert.Zero(t, m.From)
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, m.To)
 	assert.Equal(t, MediaType{"text", "unknown", ""}, m.Type)
-	d, ok := m.Content.(*PlainDocument)
+	d, ok := m.Content.(*TextDocument)
 	if !assert.True(t, ok) {
 		t.Fatal()
 	}
-	assert.Equal(t, PlainDocument("Hello world"), *d)
+	assert.Equal(t, TextDocument("Hello world"), *d)
 }
 
 func TestMessage_UnmarshalJSON_ApplicationUnknownJson(t *testing.T) {
