@@ -6,27 +6,36 @@ import (
 	"fmt"
 )
 
-// Notification Information about events associated to a Message in a Session.
-// Can be originated by a server or by the Message destination Node.
+// Notification provides information about events associated to a Message.
+// It can be originated by an intermediate node, like a server, or by the destination of the message.
 type Notification struct {
 	Envelope
-
-	// Event Related event To the notification
+	// Event Related event to the notification
 	Event NotificationEvent
-
-	// Reason In the case of a failed event, brings more details about the problem.
+	// In the case of a failed event, the Reason value brings more details about the problem.
 	Reason *Reason
 }
 
-func (n Notification) MarshalJSON() ([]byte, error) {
-	raw, err := n.toRawEnvelope()
+func (not *Notification) SetEvent(event NotificationEvent) *Notification {
+	not.Event = event
+	return not
+}
+
+func (not *Notification) SetFailed(reason *Reason) *Notification {
+	not.Event = NotificationEventFailed
+	not.Reason = reason
+	return not
+}
+
+func (not Notification) MarshalJSON() ([]byte, error) {
+	raw, err := not.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
 	return json.Marshal(raw)
 }
 
-func (n *Notification) UnmarshalJSON(b []byte) error {
+func (not *Notification) UnmarshalJSON(b []byte) error {
 	raw := rawEnvelope{}
 	err := json.Unmarshal(b, &raw)
 	if err != nil {
@@ -39,27 +48,27 @@ func (n *Notification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	*n = notification
+	*not = notification
 	return nil
 }
 
-func (n *Notification) toRawEnvelope() (*rawEnvelope, error) {
-	raw, err := n.Envelope.toRawEnvelope()
+func (not *Notification) toRawEnvelope() (*rawEnvelope, error) {
+	raw, err := not.Envelope.toRawEnvelope()
 	if err != nil {
 		return nil, err
 	}
 
-	if n.Event != "" {
-		raw.Event = &n.Event
+	if not.Event != "" {
+		raw.Event = &not.Event
 	}
 
-	raw.Reason = n.Reason
+	raw.Reason = not.Reason
 
 	return raw, nil
 }
 
-func (n *Notification) populate(raw *rawEnvelope) error {
-	err := n.Envelope.populate(raw)
+func (not *Notification) populate(raw *rawEnvelope) error {
+	err := not.Envelope.populate(raw)
 	if err != nil {
 		return err
 	}
@@ -68,20 +77,20 @@ func (n *Notification) populate(raw *rawEnvelope) error {
 		return errors.New("notification event is required")
 	}
 
-	n.Event = *raw.Event
-	n.Reason = raw.Reason
+	not.Event = *raw.Event
+	not.Reason = raw.Reason
 
 	return nil
 }
 
-// NotificationEvent Events that can happen in the message pipeline.
+// NotificationEvent represent the events that can happen in the message pipeline.
 type NotificationEvent string
 
 const (
 	// NotificationEventAccepted The message was received and accepted by the server.
 	// This event is similar To 'received' but is emitted by an intermediate node (hop) and not by the message's final destination.
 	NotificationEventAccepted = NotificationEvent("accepted")
-	// NotificationEventDispatched The message was dispatched To the destination by the server.
+	// NotificationEventDispatched The message was dispatched to the destination by the server.
 	// This event is similar To the 'consumed' but is emitted by an intermediate node (hop) and not by the message's final destination.
 	NotificationEventDispatched = NotificationEvent("dispatched")
 	// NotificationEventReceived The node has received the message.
