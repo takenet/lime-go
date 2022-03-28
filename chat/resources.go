@@ -1,4 +1,4 @@
-package messaging
+package chat
 
 import (
 	"github.com/takenet/lime-go"
@@ -160,10 +160,10 @@ func (p *Presence) MediaType() lime.MediaType {
 type PresenceStatus string
 
 const (
-	// PresenceStatusUnavailable indicates that the node is not available for messaging and should not receive any
+	// PresenceStatusUnavailable indicates that the node is not available for chat and should not receive any
 	// envelope by any node, except by the connected server.
 	PresenceStatusUnavailable = PresenceStatus("unavailable")
-	// PresenceStatusAvailable indicates that the node is available for messaging and envelopes can be routed to the
+	// PresenceStatusAvailable indicates that the node is available for chat and envelopes can be routed to the
 	// node according to the defined routing rule.
 	PresenceStatusAvailable = PresenceStatus("available")
 	// PresenceStatusBusy indicates that the node is available but the senders should notice that it is busy and doesn't
@@ -172,7 +172,7 @@ const (
 	// PresenceStatusAway indicates that the node is available but the senders should notice that it may not be reading
 	// or processing the received envelopes.
 	PresenceStatusAway = PresenceStatus("away")
-	// PresenceStatusInvisible indicates that the node is available for messaging but the actual stored presence value
+	// PresenceStatusInvisible indicates that the node is available for chat but the actual stored presence value
 	// is unavailable.
 	PresenceStatusInvisible = PresenceStatus("invisible")
 )
@@ -197,3 +197,18 @@ const (
 	// This rule is intended to be used only by sessions authenticated with DomainRole value as DomainRoleRootAuthority.
 	RoutingRuleRootDomain = RoutingRule("rootDomain")
 )
+
+// Ping allows the nodes to test the network connectivity.
+type Ping struct{}
+
+func MediaTypePing() lime.MediaType {
+	return lime.MediaType{
+		Type:    "application",
+		Subtype: "vnd.lime.ping",
+		Suffix:  "json",
+	}
+}
+
+func (p *Ping) MediaType() lime.MediaType {
+	return MediaTypePing()
+}

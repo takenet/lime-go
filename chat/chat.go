@@ -1,8 +1,8 @@
-package messaging
+package chat
 
 import "github.com/takenet/lime-go"
 
-func RegisterMessagingDocuments() {
+func RegisterChatDocuments() {
 	lime.RegisterDocumentFactory(func() lime.Document {
 		return &Account{}
 	})
