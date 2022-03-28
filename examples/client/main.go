@@ -74,7 +74,7 @@ func main() {
 			},
 			Resource: &presence,
 		},
-		URI: &presenceUri,
+		URI: presenceUri,
 	})
 	if err != nil {
 		log.Fatalln(err)
@@ -95,11 +95,7 @@ func main() {
 			break
 		}
 
-		to, err := lime.ParseNode(toValue)
-		if err != nil {
-			fmt.Printf("Invalid node: %v\n", err)
-			continue
-		}
+		to := lime.ParseNode(toValue)
 
 		fmt.Print("Content: ")
 		scanner.Scan()

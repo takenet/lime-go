@@ -17,6 +17,11 @@ type Command struct {
 	Resource Document      // Resource defines the document that is subject of the command.
 }
 
+func (cmd *Command) SetMethod(method CommandMethod) *Command {
+	cmd.Method = method
+	return cmd
+}
+
 func (cmd *Command) SetResource(d Document) *Command {
 	cmd.Resource = d
 	t := d.MediaType()
@@ -80,6 +85,21 @@ func (cmd *Command) populate(raw *rawEnvelope) error {
 type RequestCommand struct {
 	Command
 	URI *URI // URI is the universal identifier of the resource.
+}
+
+// SetURI sets a value to the URI property.
+func (cmd *RequestCommand) SetURI(uri *URI) *RequestCommand {
+	cmd.URI = uri
+	return cmd
+}
+
+// SetURIString try parse the provided string to a URI and sets it to the request command.
+// It fails silently in case of any parsing error.
+func (cmd *RequestCommand) SetURIString(s string) *RequestCommand {
+	if uri, err := ParseLimeURI(s); err != nil {
+		return cmd.SetURI(uri)
+	}
+	return cmd
 }
 
 // SuccessResponse creates a success response Command for the current request.
@@ -293,28 +313,64 @@ const (
 
 const URISchemeLime = "lime"
 
+// URI defines a Lime resource identifier.
+// It can be represented in the short form (like '/presence') or in the absolute form, that includes the URI scheme and
+// resource owner identity (like 'lime://name@domain/presence').
 type URI struct {
 	url *url.URL
 }
 
-func (u URI) ToURL() url.URL {
-	return *u.url
+// URL returns the raw URL associated with the Lime URI.
+func (u *URI) URL() *url.URL {
+	if u.url == nil {
+		return nil
+	}
+
+	// Returns a copy to avoid potential changes in the url
+	url2, err := url.Parse(u.String())
+	if err != nil {
+		// should not occur...
+		panic(err)
+	}
+	return url2
 }
 
-func ParseLimeURI(s string) (URI, error) {
+func ParseLimeURI(s string) (*URI, error) {
 	u, err := url.Parse(s)
 	if err != nil {
-		return URI{}, err
+		return nil, err
 	}
 
 	if u.IsAbs() && u.Scheme != URISchemeLime {
-		return URI{}, fmt.Errorf("invalid scheme '%v'", u.Scheme)
+		return nil, fmt.Errorf("invalid scheme '%v'", u.Scheme)
 	}
 
-	return URI{u}, nil
+	return &URI{u}, nil
 }
 
-func (u URI) MarshalText() ([]byte, error) {
+func (u *URI) String() string {
+	if u.url == nil {
+		return ""
+	}
+	return u.url.String()
+}
+
+func (u *URI) Path() string {
+	if u.url == nil {
+		return ""
+	}
+	return u.url.Path
+}
+
+func (u *URI) Owner() *Identity {
+	if u.url == nil || u.url.User == nil {
+		return nil
+	}
+	i := ParseIdentity(u.url.User.Username())
+	return &i
+}
+
+func (u *URI) MarshalText() ([]byte, error) {
 	if u.url == nil {
 		return nil, nil
 	}
@@ -327,6 +383,6 @@ func (u *URI) UnmarshalText(text []byte) error {
 	if err != nil {
 		return err
 	}
-	*u = uri
+	*u = *uri
 	return nil
 }

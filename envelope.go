@@ -30,9 +30,19 @@ func (env *Envelope) SetID(id string) *Envelope {
 	return env
 }
 
+func (env *Envelope) SetNewEnvelopeID() *Envelope {
+	env.ID = NewEnvelopeID()
+	return env
+}
+
 func (env *Envelope) SetFrom(from Node) *Envelope {
 	env.From = from
 	return env
+}
+
+func (env *Envelope) SetFromString(s string) *Envelope {
+	from := ParseNode(s)
+	return env.SetFrom(from)
 }
 
 func (env *Envelope) SetTo(to Node) *Envelope {
@@ -41,11 +51,18 @@ func (env *Envelope) SetTo(to Node) *Envelope {
 }
 
 func (env *Envelope) SetToString(s string) *Envelope {
-	to, err := ParseNode(s)
-	if err != nil {
-		env.To = to
-	}
+	to := ParseNode(s)
+	return env.SetTo(to)
+}
+
+func (env *Envelope) SetPP(pp Node) *Envelope {
+	env.PP = pp
 	return env
+}
+
+func (env *Envelope) SetPPString(s string) *Envelope {
+	pp := ParseNode(s)
+	return env.SetPP(pp)
 }
 
 func (env *Envelope) SetMetadataKeyValue(key string, value string) *Envelope {

@@ -29,7 +29,7 @@ func TestRequestCommand_MarshalJSON_MergeDocumentContainerRequest(t *testing.T) 
 	c.To.Domain = "limeprotocol.org"
 	c.Method = CommandMethodMerge
 	u, _ := ParseLimeURI("/document/john.doe%40limeprotocol.org")
-	c.URI = &u
+	c.URI = u
 	d := DocumentContainer{
 		Type: MediaType{"application", "vnd.lime.account", "json"},
 		Value: &JsonDocument{
@@ -164,7 +164,7 @@ func TestRequestCommand_UnmarshalJSON_GetPingRequest(t *testing.T) {
 	assert.Equal(t, Node{Identity{"golang", "limeprotocol.org"}, "default"}, c.To)
 	assert.Equal(t, CommandMethodGet, c.Method)
 	u, _ := ParseLimeURI("/ping")
-	assert.Equal(t, u, *c.URI)
+	assert.Equal(t, u, c.URI)
 	assert.Nil(t, c.Resource)
 }
 
@@ -186,7 +186,7 @@ func TestRequestCommand_UnmarshalJSON_MergeDocumentContainerRequest(t *testing.T
 	assert.Equal(t, CommandMethodMerge, c.Method)
 	assert.NotNil(t, c.URI)
 	u, _ := ParseLimeURI("/documentContainer/john.doe%40limeprotocol.org")
-	assert.Equal(t, u, *c.URI)
+	assert.Equal(t, u, c.URI)
 	assert.NotNil(t, c.Type)
 	assert.Equal(t, MediaType{"application", "vnd.lime.container", "json"}, *c.Type)
 	assert.NotNil(t, c.Resource)
@@ -320,7 +320,7 @@ func createGetPingCommand() *RequestCommand {
 	c.To.Domain = "limeprotocol.org"
 	c.Method = CommandMethodGet
 	u, _ := ParseLimeURI("/ping")
-	c.URI = &u
+	c.URI = u
 
 	return &c
 }

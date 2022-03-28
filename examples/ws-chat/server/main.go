@@ -58,7 +58,7 @@ func main() {
 		// Handler for commands with the "/friends" resource
 		RequestCommandHandlerFunc(
 			func(cmd *lime.RequestCommand) bool {
-				uri := cmd.URI.ToURL()
+				uri := cmd.URI.URL()
 				return cmd.ID != "" && strings.HasPrefix(uri.Path, "/friends")
 			},
 			handleFriendsCommand).
@@ -184,7 +184,7 @@ func addFriend(cmd *lime.RequestCommand, node lime.Node) *lime.ResponseCommand {
 func removeFriend(cmd *lime.RequestCommand, node lime.Node) *lime.ResponseCommand {
 	var respCmd *lime.ResponseCommand
 
-	url := cmd.URI.ToURL()
+	url := cmd.URI.URL()
 
 	segments := strings.Split(url.Path, "/")
 	if len(segments) >= 2 {

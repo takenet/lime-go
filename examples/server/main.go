@@ -37,7 +37,7 @@ func main() {
 					return false
 				}
 
-				url := cmd.URI.ToURL()
+				url := cmd.URI.URL()
 				return url.String() == "/presence"
 			},
 			func(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
