@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/takenet/lime-go"
+	"github.com/takenet/lime-go/chat"
 	"log"
 	"net"
 	"os"
@@ -50,38 +51,21 @@ func main() {
 
 	log.Println("Session established")
 
-	presenceUri, _ := lime.ParseLimeURI("/presence")
+	reqCmd := &lime.RequestCommand{}
+	reqCmd.SetURIString("/presence").
+		SetResource(&chat.Presence{
+			Status:      chat.PresenceStatusAvailable,
+			RoutingRule: chat.RoutingRuleIdentity}).
+		SetMethod(lime.CommandMethodSet).
+		SetID(lime.NewEnvelopeID())
 
-	presence := lime.JsonDocument{
-		"status":      "available",
-		"routingRule": "identity",
-	}
-
-	cmd, err := client.ProcessCommand(ctx, &lime.RequestCommand{
-		Command: lime.Command{
-			Envelope: lime.Envelope{
-				ID: lime.NewEnvelopeID(),
-				To: lime.Node{
-					Identity: lime.Identity{Name: "postmaster", Domain: "msging.net"},
-					Instance: "",
-				},
-			},
-			Method: lime.CommandMethodSet,
-			Type: &lime.MediaType{
-				Type:    "application",
-				Subtype: "vnd.lime.presence",
-				Suffix:  "json",
-			},
-			Resource: &presence,
-		},
-		URI: presenceUri,
-	})
+	respCmd, err := client.ProcessCommand(ctx, reqCmd)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	if cmd != nil {
-		log.Printf("Command response received - ID: %v - Status: %v\n", cmd.ID, cmd.Status)
+	if respCmd != nil {
+		log.Printf("Command response received - ID: %v - Status: %v\n", respCmd.ID, respCmd.Status)
 	}
 
 	scanner := bufio.NewScanner(os.Stdin)

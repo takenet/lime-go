@@ -96,7 +96,7 @@ func (cmd *RequestCommand) SetURI(uri *URI) *RequestCommand {
 // SetURIString try parse the provided string to a URI and sets it to the request command.
 // It fails silently in case of any parsing error.
 func (cmd *RequestCommand) SetURIString(s string) *RequestCommand {
-	if uri, err := ParseLimeURI(s); err != nil {
+	if uri, err := ParseLimeURI(s); err == nil {
 		return cmd.SetURI(uri)
 	}
 	return cmd
