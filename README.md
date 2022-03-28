@@ -1,6 +1,6 @@
 
 LIME - A lightweight messaging library  
-================================
+======================================
 
 ![Go](https://github.com/takenet/lime-go/workflows/Go/badge.svg?branch=master)
 
@@ -52,16 +52,16 @@ func main() {
 	// Message handler that echoes all received messages to the originator
 	msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
 		return s.SendMessage(ctx, &lime.Message{
-			EnvelopeBase: lime.EnvelopeBase{ID: msg.ID, To: msg.From},
-			Type:         msg.Type,
-			Content:      msg.Content,
+			Envelope: lime.Envelope{ID: msg.ID, To: msg.From},
+			Type:     msg.Type,
+			Content:  msg.Content,
 		})
 	}
 
 	// Build a server, listening for TCP connections in the 55321 port
 	server := lime.NewServerBuilder().
 		MessagesHandlerFunc(msgHandler).
-		ListenTCP(net.TCPAddr{Port: 55321}, &lime.TCPConfig{}).
+		ListenTCP(&net.TCPAddr{Port: 55321}, &lime.TCPConfig{}).
 		Build()
 	
 	// Listen for the OS termination signals
@@ -103,7 +103,9 @@ func main() {
 	// Defines a simple handler function for printing  
 	// the received messages to the stdout
 	msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
-		log.Printf("Message received - Type: %v - Content: %v\n", msg.Type, msg.Content)
+		if txt, ok := msg.Content.(lime.TextDocument); ok {
+			log.Printf("Text message received - ID: %v - Type: %v - Content: %v\n", msg.ID, msg.Type, txt)
+		}
 		close(done)
 		return nil
 	}
@@ -117,7 +119,7 @@ func main() {
 	// Prepare a simple text message to be sent
 	msg := &lime.Message{
 		Type: lime.MediaTypeTextPlain(),
-		Content: lime.PlainDocument("Hello world!"),
+		Content: lime.TextDocument("Hello world!"),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -155,12 +157,12 @@ much like a header in the HTTP protocol.
 The message envelope is used to transport a **document** between sessions. 
 A document is just a type with a known MIME type. 
 
-For instance, a message with a **text document** can be represented like this:
+For instance, a message with a **text document** can be represented like this in JSON:
 
 ```json
 {
   "id": "1",
-  "to": "someone@domain.com",
+  "to": "john",
   "type": "text/plain",
   "content": "Hello from Lime!"
 }
@@ -170,9 +172,9 @@ In Go, the message envelope is implemented by the `lime.Message` type:
 
 ```go
 msg := &lime.Message{}
-msg.SetContent(lime.PlainDocument("Hello from Lime!")).
+msg.SetContent(lime.TextDocument("Hello from Lime!")).
     SetID("1").
-    SetToString("someone@domain.com")
+    SetToString("john")
 ```
 
 In this example, the document value is the `Hello from Lime!` text and its MIME type is `text/plain`. 
@@ -187,8 +189,8 @@ id property.
 The `to` property specifies the destination address of the message, and it is used by the server to route the envelope 
 to the correct destination.
 The address format is called **node** and is presented in the `name@domain/instance` format, similar to the 
-[XMPP's Jabber ID](https://xmpp.org/rfcs/rfc3920.html#rfc.section.3).
-But the _domain_ and _instance_ portions of the node are optional.
+[XMPP's Jabber ID](https://xmpp.org/rfcs/rfc3920.html#rfc.section.3), but the _domain_ and _instance_ portions of the 
+node are optional.
 
 In this example, the content is a simple text but a message can be used to transport any type of document that can be 
 represented as JSON.
@@ -198,7 +200,7 @@ For instance, to send a generic JSON document you can use the `application/json`
 ```json
 {
   "id": "1",
-  "to": "someone@domain.com",
+  "to": "john",
   "type": "application/json",
   "content": {
     "text": "Hello from Lime!",
@@ -215,7 +217,7 @@ msg.SetContent(&lime.JsonDocument{
     "timestamp": "2022-03-23T00:00:00.000Z",
     }).
     SetID("1").
-    SetToString("someone@domain.com")
+    SetToString("john")
 ```
 
 
@@ -225,7 +227,7 @@ domain:
 ```json
 {
   "id": "1",
-  "to": "someone@domain.com",
+  "to": "john",
   "type": "application/x-app-image+json",
   "content": {
     "caption": "Look at this kitten!",
@@ -260,14 +262,14 @@ func init() {
 }
 ```
 
-To send a message to someone, you can use the `SendMessage` method that is implemented both by the `lime.Server`
+To send a message to john, you can use the `SendMessage` method that is implemented both by the `lime.Server`
 and `lime.Client` types:
 
 ```go
 msg := &lime.Message{}
 msg.SetContent(lime.TextDocument("Hello from Lime!")).
     SetID("1").
-    SetToString("someone@domain.com")
+    SetToString("john")
 
 err := client.SendMessage(context.Background(), msg)
 ```
@@ -279,7 +281,7 @@ server:
 client := lime.NewClientBuilder().
     MessagesHandlerFunc(
         func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
-            if txt, ok := msg.Content.(TextDocument); ok {
+            if txt, ok := msg.Content.(lime.TextDocument); ok {
                 fmt.Printf("Text message received - ID: %v - Type: %v - Content: %v\n", msg.ID, msg.Type, txt)	
             }
             return nil
@@ -289,21 +291,23 @@ client := lime.NewClientBuilder().
 
 ### Notification
 
-A notification provides information about a message to its sender.
+A notification provide information about a message to its sender.
 They are sent only for messages that have the `id` value defined.
 
-For instance, a node can notify to the sender the that a message was received like this:
+To illustrate, a node can notify to the sender that a message was received like this:
 
 ```json
 {
   "id": "1",
-  "to": "sender@domain.com",
+  "to": "mary",
   "event": "received"
 }
 ```
-The notification `to` value should have the value of the `from` property of the message. 
 
-In Go, you can use the `Notification(event)` method from the `*lime.Message` type for building a notification for a message:
+The notification `to` value should have the value of the `from` property of the message (or the `pp` value, if present). 
+
+In Go, you can use the `Notification(event)` method from the `*lime.Message` type for building a notification for the 
+message:
 
 ```go
 // Creates a corresponding notification to the message
@@ -314,7 +318,7 @@ if msg.ID != "" {
 }
 ```
 
-Notifications can be sent by intermediates that are handling the message (like the server) or by the destination of the
+Notifications can be sent by intermediates - like the server that routes the message - or by the destination of the
 message itself.
 
 The protocol define the following notification events:
@@ -324,11 +328,12 @@ The protocol define the following notification events:
 - **consumed**: The message was processed (read) by its destination.
 - **failed**: A problem occurred during the processing of the message.
 
-A single message can generate multiple notifications, one for each step on its path to the destination.
-By convention, the **consumed** and **failed** notifications are considered final, so no other notification should be
-received by the sender after one of these.
+A single message can **have multiple notifications**, one or more for each hop on its path to the destination.
 
-In case of failed notifications, a **reason** value should be present in the notification. 
+By convention, the **consumed** and **failed** notifications are considered final, so no other notification should be
+received by the message sender after one of these.
+
+In case of failed notifications, a **reason** value should be present. 
 
 For instance, a server (intermediate) should notify the sender if it is unable to determine the destination session of 
 a message:
@@ -336,7 +341,7 @@ a message:
 ```json
 {
   "id": "1",
-  "to": "sender@domain.com",
+  "to": "mary",
   "event": "failed",
   "reason": {
     "code": 1,
@@ -351,4 +356,104 @@ In Go, you can use the message's `FailedNotification(reason)` method for that:
 not := msg.FailedNotification(&lime.Reason{Code: 1, Description: "Destination not found"})
 ```
 
+### Command
 
+The command envelope is used to **manipulate resources of a server**. 
+It provides a REST capable interface, with a URI and methods (verbs), much like the HTTP protocol.
+It also supports multiplexing, so the connection is not blocked when a request is sent.
+
+A command can be a request - which haves the `uri` value - or a response - with the `status` value.
+
+As example, you can use it for managing your contact list or to set your current status (available, busy, away).
+Other common use is **the in-band registration**, where users can create Lime accounts in the protocol itself.
+
+The advantage of using commands is that you can use the **same existing connection** that is used for messaging instead
+of creating one or more out-of-band connections - like in HTTP for instance.
+This is more efficient in terms of energy consumption but also is more performatic as well. 
+The session is already established and authenticated, so it avoids the addition overhead of a TLS handshake and 
+authentication that a new connection would require. 
+
+But there is a limitation: the command interface only supports JSON payloads, so you should avoid use it for 
+transmitting binary or any kind of large content.
+
+Much like an HTTP service, the URI and methods that you may use in commands depends on what the server implements.
+
+For instance, a server could implement a contact management service. 
+In this example, you could be able to send a command like this:
+
+```json
+{
+  "id": "2",
+  "method": "get",
+  "uri": "/contacts"
+}
+```
+
+Semantically, this means that you want to retrieve all contacts that are stored in the server.
+And the server may respond to this request with something like this: 
+
+```json
+{
+  "id": "2",
+  "from": "postmaster@localhost/server1",
+  "method": "get",
+  "status": "success",
+  "type": "application/vnd.lime.collection+json",
+  "resource": {
+    "total": 2,
+    "itemType": "application/vnd.lime.contact+json",
+    "items": [
+      {
+        "identity": "john@localhost",
+        "name": "John Doe"
+      },
+      {
+        "identity": "mary@localhost",
+        "name": "Mary Jane"
+      }
+    ]
+  }
+}
+```
+
+This is a response command with a **status** and a **resource** value.
+
+Note that the value of the `id` property is the same of the request.
+This is how we know that a response is to a specific request, so it is important to avoid using duplicate ids to avoid
+collisions. A way for doing this is to use GUID (UUID) values as id for the requests.
+
+The status is always present in a response command, but the resource may be present depending on the method of the 
+request and the status of the response. In successful `get` methods, the value of `resource` - and consequently `type` -
+should be present. In `set` requests, the `resource` value will probably not be present. This is similar to the HTTP
+methods and body, when `GET` requests will have a value in the response body if successful and not always in `POST`
+requests.
+
+In case of `failure` response status, the command should have the `reason` property defined:
+
+```json
+{
+  "id": "2",
+  "from": "postmaster@localhost/server1",
+  "method": "get",
+  "status": "failure",
+  "reason": {
+    "code": 10,
+    "description": "No contact was found" 
+  }
+}
+```
+
+For creating a request command in Go, you can use the `lime.RequestCommand` type:
+
+```go
+cmd := &lime.RequestCommand{}
+cmd.SetURIString("/contacts").
+    SetMethod(lime.CommandMethodGet).
+    SetID(lime.NewEnvelopeID())
+```
+
+Note that for the `id` value, we are using the value returned by the `lime.NewEnvelopeID()` function, which will return
+a UUID v4 string (something like `3cdd2654-911d-497e-834a-3b7865510155`).
+
+If you are building a server, you can add handlers for specific commands using the `RequestCommandHandler*` methods from
+the `lime.Client` and `lime.Server` types.
