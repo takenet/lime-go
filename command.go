@@ -84,7 +84,7 @@ func (cmd *Command) populate(raw *rawEnvelope) error {
 // RequestCommand represents a request for a resource that can be sent to a remote party.
 type RequestCommand struct {
 	Command
-	URI *URI // URI is the universal identifier of the resource.
+	URI *URI // URI is the universal identifier of the resource. It should never be nil.
 }
 
 // SetURI sets a value to the URI property.

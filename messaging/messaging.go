@@ -6,4 +6,7 @@ func RegisterMessagingDocuments() {
 	lime.RegisterDocumentFactory(func() lime.Document {
 		return &Account{}
 	})
+	lime.RegisterDocumentFactory(func() lime.Document {
+		return &Contact{}
+	})
 }
