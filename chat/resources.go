@@ -190,11 +190,13 @@ const (
 	RoutingRuleIdentity = RoutingRule("identity")
 	// RoutingRuleDomain indicates that the server should deliver envelopes addressed to the current session instance
 	// (name@domain/instance) and to the node domain.
-	// This rule is intended to be used only by sessions authenticated with DomainRole value as DomainRoleAuthority.
+	// This rule is intended to be used only by sessions authenticated with lime.DomainRole value as
+	// lime.DomainRoleAuthority.
 	RoutingRuleDomain = RoutingRule("domain")
 	// RoutingRuleRootDomain indicates that the server should Deliver envelopes addressed to the current session
 	// instance (name@domain/instance), to the node domain and all its subdomains.
-	// This rule is intended to be used only by sessions authenticated with DomainRole value as DomainRoleRootAuthority.
+	// This rule is intended to be used only by sessions authenticated with lime.DomainRole value as
+	// lime.DomainRoleRootAuthority.
 	RoutingRuleRootDomain = RoutingRule("rootDomain")
 )
 
@@ -211,4 +213,68 @@ func MediaTypePing() lime.MediaType {
 
 func (p *Ping) MediaType() lime.MediaType {
 	return MediaTypePing()
+}
+
+// Receipt represents the events that should generate receipts (notifications) for the messages sent by the owner
+// identity.
+type Receipt struct {
+	// Events indicates which message events that the identity want to receive.
+	Events []lime.NotificationEvent `json:"events,omitempty"`
+}
+
+func MediaTypeReceipt() lime.MediaType {
+	return lime.MediaType{
+		Type:    "application",
+		Subtype: "vnd.lime.receipt",
+		Suffix:  "json",
+	}
+}
+
+func (r *Receipt) MediaType() lime.MediaType {
+	return MediaTypeReceipt()
+}
+
+// Delegation represents a delegation to send envelopes on behalf of another node.
+// The delegation can be constrained to specific envelope types and specific details.
+type Delegation struct {
+	// Target node which will receive the delegation.
+	Target lime.Node
+	// EnvelopeTypes for delegation.
+	// If none is specified, indicates that all envelope types should be delegated.
+	EnvelopeTypes []string
+	// Constraints for Messages delegation.
+	// If not present, the delegation is given without any restriction for the lime.Message envelope type.
+	Messages []DelegationMessage
+	// Constraints for Notifications delegation.
+	// If not present, the delegation is given without any restriction for the lime.Notification envelope type.
+	Notifications []DelegationNotification
+	// Constraints for Commands delegation.
+	// If not present, the delegation is given without any restriction for the lime.Command envelope type.
+	Commands []DelegationCommand
+}
+
+func MediaTypeDelegation() lime.MediaType {
+	return lime.MediaType{
+		Type:    "application",
+		Subtype: "vnd.lime.delegation",
+		Suffix:  "json",
+	}
+}
+
+func (d *Delegation) MediaType() lime.MediaType {
+	return MediaTypeDelegation()
+}
+
+type DelegationMessage struct {
+	Type lime.MediaType `json:"type,omitempty"`
+}
+
+type DelegationNotification struct {
+	Event lime.NotificationEvent `json:"event,omitempty"`
+}
+
+type DelegationCommand struct {
+	Method lime.CommandMethod `json:"method,omitempty"`
+	URI    *lime.URI          `json:"uri,omitempty"`
+	Status lime.CommandStatus `json:"status,omitempty"`
 }
