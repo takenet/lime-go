@@ -7,16 +7,17 @@ import (
 	"fmt"
 )
 
-// Session Allows the configuration and establishment of the communication channel between nodes.
+// The Session envelope is used for the negotiation, authentication and establishment of the communication channel
+// between the client and a server.
 type Session struct {
 	Envelope
-	// State Informs or changes the state of a session.
+	// State informs or changes the state of a session.
 	// Only the server can change the session state, but the client can request
 	// the state transition.
 	State SessionState
-	// EncryptionOptions Options provided by the server during the session negotiation.
+	// EncryptionOptions represent the options provided by the server during the session negotiation.
 	EncryptionOptions []SessionEncryption
-	// Encryption The encryption option selected for the session.
+	// Encryption represents the encryption option selected for the session.
 	// This property is provided by the client in the  negotiation and by the
 	// server in the confirmation after that.
 	Encryption SessionEncryption
@@ -32,8 +33,8 @@ type Session struct {
 	// The authentication scheme option selected for the session.
 	// This property must be present if the property authentication is defined.
 	Scheme AuthenticationScheme
-	// RawAuthentication data, related To the selected schema.
-	// Information like password sent by the client or roundtrip data sent by the server.
+	// Authentication data, related To the selected schema.
+	// Information like password sent by the client or round-trip data sent by the server.
 	Authentication Authentication
 	// In cases where the client receives a session with failed state,
 	// this property should provide more details about the problem.

@@ -33,7 +33,7 @@ func main() {
 			}).
 		RequestCommandHandlerFunc(
 			func(cmd *lime.RequestCommand) bool {
-				return cmd.URI.Path() == "/presence"
+				return cmd.Method == lime.CommandMethodSet && cmd.URI.Path() == "/presence"
 			},
 			func(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
 				return s.SendResponseCommand(

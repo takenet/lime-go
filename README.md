@@ -358,7 +358,7 @@ not := msg.FailedNotification(&lime.Reason{Code: 1, Description: "Destination no
 
 ### Command
 
-The command envelope is used to **manipulate resources of a server**. 
+The command envelope is used to **manipulate resources of a remote node**. 
 It provides a REST capable interface, with a URI and methods (verbs), much like the HTTP protocol.
 It also supports multiplexing, so the connection is not blocked when a request is sent.
 
@@ -446,8 +446,8 @@ In case of `failure` response status, the command should have the `reason` prope
 For creating a request command in Go, you can use the `lime.RequestCommand` type:
 
 ```go
-cmd := &lime.RequestCommand{}
-cmd.SetURIString("/contacts").
+reqCmd := &lime.RequestCommand{}
+reqCmd.SetURIString("/contacts").
     SetMethod(lime.CommandMethodGet).
     SetID(lime.NewEnvelopeID())
 ```
@@ -455,5 +455,87 @@ cmd.SetURIString("/contacts").
 Note that for the `id` value, we are using the value returned by the `lime.NewEnvelopeID()` function, which will return
 a UUID v4 string (something like `3cdd2654-911d-497e-834a-3b7865510155`).
 
-If you are building a server, you can add handlers for specific commands using the `RequestCommandHandler*` methods from
-the `lime.Client` and `lime.Server` types.
+For sending a command request, you should use the `ProcessCommand` method from the `lime.Client` and `lime.Server` 
+types, instead of the `SendCommand` method. The `ProcessCommand` method take care of await for the correspondent
+response command.
+
+```go
+respCmd, err := client.ProcessCommand(context.Background(), reqCmd)
+if err == nil {
+    // TODO: Handle the response
+}
+```
+
+In the server side, you can add handlers for specific commands using the `RequestCommandHandler*` methods from
+the `lime.Server` type.
+
+```go
+server := lime.NewServerBuilder(). 	
+    RequestCommandHandlerFunc(
+        // Set a predicate for filtering only the get contacts commands
+        func(cmd *lime.RequestCommand) bool {
+            return cmd.Method == lime.CommandMethodGet && cmd.URI.Path() == "/contacts"
+        },
+        // The handler implementation
+        func(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
+            // Create a document collection of contacts
+            contacts := &lime.DocumentCollection{
+                Total:    2,
+                ItemType: chat.MediaTypeContact(),
+                Items: []lime.Document{
+                    &chat.Contact{Name: "John Doe"},
+                    &chat.Contact{Name: "Mary"},
+                },
+            }
+            // Send the response to the sender
+            respCmd := cmd.SuccessResponseWithResource(contacts)
+            return s.SendResponseCommand(ctx, respCmd)
+        }).
+    // TODO: Setup other server options
+    Build()
+```
+
+This is also valid for the `lime.Client` type. 
+In Lime, the **client can receive and process commands requests** from other nodes, like the server.
+
+### Session
+
+The session envelope is used for the negotiation, authentication and establishment of the communication channel between
+the client and a server. 
+It helps select the transport options, like compression and encryption (TLS), authentication credentials, and session
+metadata, like its `id` and local/remote node addresses.
+
+For instance, the first envelope sent in every like session is the **new session** envelope, which the client sends to
+the server after the transport connection is established:
+
+```json
+{
+  "state": "new"
+}
+```
+The server should reply this with another session envelope, according to the session state that it wants to enforce.
+
+For instance, the server may want to present the client the transport options for negotiation.
+This is useful for applying the TLS encryption to an unencrypted connection (the TCP connection starts without 
+encryption by default).
+
+```json
+{
+  "id": "0676a702-a7d6-43e6-947f-bde3c3e25eb5",
+  "from": "server@localhost/s1",
+  "state": "negotiating",
+  "compressionOptions": ["none"],
+  "encryptionOptions": ["none", "tls"]
+}
+```
+
+Note that this envelope haves a `id` defined, which is the **session id**. 
+The next session envelopes sent by the client should use this same id, until the end of the session.
+
+The session state progression can occur in the following order:
+1. new (client started)
+2. negotiating (optional) 
+3. authenticating (optional)
+4. established 
+5. finishing (optional, client started)
+6. finished OR failed
