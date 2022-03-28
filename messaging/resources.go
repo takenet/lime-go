@@ -123,6 +123,77 @@ func MediaTypeContact() lime.MediaType {
 	}
 }
 
-func (a *Contact) MediaType() lime.MediaType {
+func (c *Contact) MediaType() lime.MediaType {
 	return MediaTypeContact()
 }
+
+// Presence represents the availability status of a node in a network.
+// A node can only receive envelopes from another nodes in the network if it sets its presence to an available status
+// (except from the server, who always knows if a node is available or node, since this information is enforced by the
+// existing session). In a new session, the node starts with an unavailable status.
+type Presence struct {
+	Status           PresenceStatus `json:"status,omitempty"`
+	Message          string         `json:"message,omitempty"`
+	RoutingRule      RoutingRule    `json:"routingRule,omitempty"`
+	LastSeen         *time.Time     `json:"lastSeen,omitempty"`
+	Priority         *int           `json:"priority,omitempty"`
+	FilterByDistance *bool          `json:"filterByDistance,omitempty"`
+	RoundRobin       *bool          `json:"roundRobin,omitempty"`
+	Echo             *bool          `json:"echo,omitempty"`
+	Promiscuous      *bool          `json:"promiscuous,omitempty"`
+	Instances        []string       `json:"instances,omitempty"`
+}
+
+func MediaTypePresence() lime.MediaType {
+	return lime.MediaType{
+		Type:    "application",
+		Subtype: "vnd.lime.presence",
+		Suffix:  "json",
+	}
+}
+
+func (p *Presence) MediaType() lime.MediaType {
+	return MediaTypePresence()
+}
+
+// PresenceStatus represents the possible presence status values.
+type PresenceStatus string
+
+const (
+	// PresenceStatusUnavailable indicates that the node is not available for messaging and should not receive any
+	// envelope by any node, except by the connected server.
+	PresenceStatusUnavailable = PresenceStatus("unavailable")
+	// PresenceStatusAvailable indicates that the node is available for messaging and envelopes can be routed to the
+	// node according to the defined routing rule.
+	PresenceStatusAvailable = PresenceStatus("available")
+	// PresenceStatusBusy indicates that the node is available but the senders should notice that it is busy and doesn't
+	//want to the disturbed, or it is on heavy load and don't want to receive any envelope.
+	PresenceStatusBusy = PresenceStatus("busy")
+	// PresenceStatusAway indicates that the node is available but the senders should notice that it may not be reading
+	// or processing the received envelopes.
+	PresenceStatusAway = PresenceStatus("away")
+	// PresenceStatusInvisible indicates that the node is available for messaging but the actual stored presence value
+	// is unavailable.
+	PresenceStatusInvisible = PresenceStatus("invisible")
+)
+
+// RoutingRule defines the routing rules that should be applied by the server during the node's session for receiving
+// envelopes.
+type RoutingRule string
+
+const (
+	// RoutingRuleInstance indicates that the server should only deliver envelopes addressed to the current session
+	// instance (name@domain/instance).
+	RoutingRuleInstance = RoutingRule("instance")
+	// RoutingRuleIdentity indicates that the server should deliver envelopes addressed to the current session instance
+	// (name@domain/instance) and to the identity (name@domain).
+	RoutingRuleIdentity = RoutingRule("identity")
+	// RoutingRuleDomain indicates that the server should deliver envelopes addressed to the current session instance
+	// (name@domain/instance) and to the node domain.
+	// This rule is intended to be used only by sessions authenticated with DomainRole value as DomainRoleAuthority.
+	RoutingRuleDomain = RoutingRule("domain")
+	// RoutingRuleRootDomain indicates that the server should Deliver envelopes addressed to the current session
+	// instance (name@domain/instance), to the node domain and all its subdomains.
+	// This rule is intended to be used only by sessions authenticated with DomainRole value as DomainRoleRootAuthority.
+	RoutingRuleRootDomain = RoutingRule("rootDomain")
+)
