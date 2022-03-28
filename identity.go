@@ -26,14 +26,14 @@ func (i Identity) String() string {
 }
 
 // ParseIdentity parses the string To a valid Identity.
-func ParseIdentity(s string) (Identity, error) {
+func ParseIdentity(s string) Identity {
 	var name, domain string
 	values := strings.Split(s, "@")
 	if len(values) > 1 {
 		domain = values[1]
 	}
 	name = values[0]
-	return Identity{name, domain}, nil
+	return Identity{name, domain}
 }
 
 func (i Identity) MarshalText() ([]byte, error) {
@@ -41,10 +41,7 @@ func (i Identity) MarshalText() ([]byte, error) {
 }
 
 func (i *Identity) UnmarshalText(text []byte) error {
-	identity, err := ParseIdentity(string(text))
-	if err != nil {
-		return err
-	}
+	identity := ParseIdentity(string(text))
 	*i = identity
 	return nil
 }

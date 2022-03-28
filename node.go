@@ -24,18 +24,14 @@ func (n Node) String() string {
 	return fmt.Sprintf("%v/%v", n.Identity, n.Instance)
 }
 
-func ParseNode(s string) (Node, error) {
+func ParseNode(s string) Node {
 	var instance string
 	values := strings.Split(s, "/")
 	if len(values) > 1 {
 		instance = values[1]
 	}
-	identity, err := ParseIdentity(values[0])
-	if err != nil {
-		return Node{}, err
-	}
-
-	return Node{identity, instance}, nil
+	identity := ParseIdentity(values[0])
+	return Node{identity, instance}
 }
 
 func (n Node) MarshalText() ([]byte, error) {
@@ -43,10 +39,7 @@ func (n Node) MarshalText() ([]byte, error) {
 }
 
 func (n *Node) UnmarshalText(text []byte) error {
-	node, err := ParseNode(string(text))
-	if err != nil {
-		return err
-	}
+	node := ParseNode(string(text))
 	*n = node
 	return nil
 }
