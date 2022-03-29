@@ -316,7 +316,7 @@ func (g *GuestAuthentication) GetAuthenticationScheme() AuthenticationScheme {
 // PlainAuthentication defines a plain authentication scheme, that uses a password for authentication.
 // Should be used only with encrypted sessions.
 type PlainAuthentication struct {
-	// Base64 representation of the password
+	// Password is the base64 representation of the password.
 	Password string `json:"password"`
 }
 
@@ -326,6 +326,14 @@ func (a *PlainAuthentication) GetAuthenticationScheme() AuthenticationScheme {
 
 func (a *PlainAuthentication) SetPasswordAsBase64(password string) {
 	a.Password = base64.StdEncoding.EncodeToString([]byte(password))
+}
+
+func (a *PlainAuthentication) GetPasswordFromBase64() (string, error) {
+	str, err := base64.StdEncoding.DecodeString(a.Password)
+	if err != nil {
+		return "", err
+	}
+	return string(str), nil
 }
 
 // KeyAuthentication defines a plain authentication scheme, that uses a key for authentication.
@@ -341,6 +349,14 @@ func (a *KeyAuthentication) GetAuthenticationScheme() AuthenticationScheme {
 
 func (a *KeyAuthentication) SetKeyAsBase64(key string) {
 	a.Key = base64.StdEncoding.EncodeToString([]byte(key))
+}
+
+func (a *KeyAuthentication) GetKeyFromBase64() (string, error) {
+	str, err := base64.StdEncoding.DecodeString(a.Key)
+	if err != nil {
+		return "", err
+	}
+	return string(str), nil
 }
 
 // TransportAuthentication defines a transport layer authentication scheme.
