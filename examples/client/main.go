@@ -21,10 +21,13 @@ func main() {
 	}
 
 	client := lime.NewClientBuilder().
+		Encryption(lime.SessionEncryptionTLS).
 		UseTCP(addr, &lime.TCPConfig{
 			TLSConfig:   &tls.Config{ServerName: "localhost", InsecureSkipVerify: true},
 			TraceWriter: lime.NewStdoutTraceWriter(),
 		}).
+		Name("john").
+		PlainAuthentication("mysecretpassword").
 		MessagesHandlerFunc(
 			func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
 				fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)

@@ -45,6 +45,7 @@ func main() {
 				fmt.Printf("RequestCommand received - ID: %v\n", cmd.ID)
 				return nil
 			}).
+		EncryptionOptions(lime.SessionEncryptionTLS).
 		ListenTCP(
 			addr,
 			&lime.TCPConfig{
@@ -56,6 +57,12 @@ func main() {
 				TraceWriter: lime.NewStdoutTraceWriter(),
 			}).
 		EnableGuestAuthentication().
+		EnablePlainAuthentication(func(ctx context.Context, identity lime.Identity, password string) (*lime.AuthenticationResult, error) {
+			if checkCredentials(identity.Name, password) {
+				return &lime.AuthenticationResult{Role: lime.DomainRoleMember}, nil
+			}
+			return &lime.AuthenticationResult{Role: lime.DomainRoleUnknown}, nil
+		}).
 		Build()
 
 	go func() {

@@ -500,13 +500,16 @@ In Lime, the **client can receive and process commands requests** from other nod
 
 ### Session
 
+> The session establishment flow is automatically handled by the library. 
+> This section is for informative purposes only. 
+
 The session envelope is used for the negotiation, authentication and establishment of the communication channel between
 the client and a server. 
-It helps select the transport options, like compression and encryption (TLS), authentication credentials, and session
-metadata, like its `id` and local/remote node addresses.
+It helps the parties to select the transport options, like compression and encryption (TLS), authentication credentials,
+and session metadata, like its `id` and local/remote node addresses.
 
-For instance, the first envelope sent in every like session is the **new session** envelope, which the client sends to
-the server after the transport connection is established:
+The first envelope sent in every Lime session is the **new session** envelope, which the client sends to the server
+after the transport connection is established:
 
 ```json
 {
@@ -531,11 +534,88 @@ encryption by default).
 
 Note that this envelope haves a `id` defined, which is the **session id**. 
 The next session envelopes sent by the client should use this same id, until the end of the session.
+During the session establishment, only session envelopes are allowed.
 
-The session state progression can occur in the following order:
-1. new (client started)
+The server can skip the `negotiating` state and jump directly to the `authenticating` or even to the `established`
+state. The session state progression can occur in the following order:
+
+1. new (started by the client)
 2. negotiating (optional) 
 3. authenticating (optional)
 4. established 
-5. finishing (optional, client started)
-6. finished OR failed
+5. finishing (optional, started by the client)
+6. finished OR failed (final)
+
+In Go, the session negotiation, authentication, and establishment process is **automatically handled** by the 
+`lime.Client` and `lime.Server` types.
+You just need to make sure that the server and client are configured accordingly the desired behavior.
+
+For instance, if you want to ensure that the TCP transport connections are using the TLS encryption, you will need to
+configure the server similarly to this:
+
+```go
+server := lime.NewServerBuilder().
+    // Enable the TLS encryption option for all sessions
+    EncryptionOptions(lime.SessionEncryptionTLS).
+    // Set up the TCP listener providing a certificate
+    ListenTCP(addr, &lime.TCPConfig{
+        TLSConfig: &tls.Config{
+            GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+                cert, err := tls.LoadX509KeyPair("cert.pem", "key.pem")
+                if err != nil {
+                    return nil, err
+                }
+                return &cert, nil
+            },
+        }}).
+    // TODO: Setup other server options
+    Build()
+```
+
+And in the client side, you should set up the TLS encryption option and the TCP config:
+
+```go
+client := lime.NewClientBuilder().
+    Encryption(lime.SessionEncryptionTLS).
+    UseTCP(addr, &lime.TCPConfig{
+        TLSConfig:   &tls.Config{ServerName: "localhost"},
+    }).
+    // TODO: Setup other client options
+    Build()
+```
+
+You may also want to configure the server and client authentication mechanisms.
+The Lime Go library supports the following schemes:
+- Guest (no authentication)
+- Plain (password)
+- Key
+- Transport (mutual TLS on TCP)
+- External (token emitted by an issuer)
+
+To enable the use of plain authentication, in the server you should use the `EnablePlainAuthentication` method passing
+the authentication handler function, like in the example below:
+
+```go
+server := lime.NewServerBuilder().
+    EnablePlainAuthentication(
+        func(ctx context.Context, i lime.Identity, pwd string) (*lime.AuthenticationResult, error) {
+        // TODO: implement checkCredentials to validate the user/password in your secret store
+        if checkCredentials(i.Name, pwd) {
+            return &lime.AuthenticationResult{Role: lime.DomainRoleMember}, nil
+        }
+        return &lime.AuthenticationResult{Role: lime.DomainRoleUnknown}, nil
+    }).
+    // TODO: Setup other server options
+    Build()
+```
+
+On the client side, you can use the `PlainAuthentication` method to set the password that should be used:
+
+```go
+client := lime.NewClientBuilder().
+    // Sets the identity name and password
+    Name("john").
+    PlainAuthentication("mysecretpassword").
+    // TODO: Setup other client options
+    Build()
+```
