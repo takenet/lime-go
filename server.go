@@ -386,6 +386,24 @@ func (b *ServerBuilder) ListenInProcess(addr InProcessAddr) *ServerBuilder {
 	return b
 }
 
+// CompressionOptions defines the compression options to be used in the session negotiation.
+func (b *ServerBuilder) CompressionOptions(compOpts ...SessionCompression) *ServerBuilder {
+	if len(compOpts) == 0 {
+		panic("empty compOpts")
+	}
+	b.config.CompOpts = compOpts
+	return b
+}
+
+// EncryptionOptions defines the encryption options to be used in the session negotiation.
+func (b *ServerBuilder) EncryptionOptions(encryptOpts ...SessionEncryption) *ServerBuilder {
+	if len(encryptOpts) == 0 {
+		panic("empty encryptOpts")
+	}
+	b.config.EncryptOpts = encryptOpts
+	return b
+}
+
 // EnableGuestAuthentication enables the use of guest authentication scheme during the authentication of the
 // client sessions.
 // The guest authentication scheme do not require any credentials from the clients.
@@ -504,12 +522,20 @@ func buildAuthenticate(plainAuth PlainAuthenticator, keyAuth KeyAuthenticator, e
 			if plainAuth == nil {
 				return nil, errors.New("plain authenticator is nil")
 			}
-			return plainAuth(ctx, identity, a.Password)
+			pwd, err := a.GetPasswordFromBase64()
+			if err != nil {
+				return nil, fmt.Errorf("plain authenticator: %w", err)
+			}
+			return plainAuth(ctx, identity, pwd)
 		case *KeyAuthentication:
 			if keyAuth == nil {
 				return nil, errors.New("key authenticator is nil")
 			}
-			return keyAuth(ctx, identity, a.Key)
+			key, err := a.GetKeyFromBase64()
+			if err != nil {
+				return nil, fmt.Errorf("key authenticator: %w", err)
+			}
+			return keyAuth(ctx, identity, key)
 		case *ExternalAuthentication:
 			if externalAuth == nil {
 				return nil, errors.New("external authenticator is nil")
