@@ -436,10 +436,11 @@ func (b *ServerBuilder) EnablePlainAuthentication(a PlainAuthenticator) *ServerB
 	if a == nil {
 		panic("nil authenticator")
 	}
-
+	b.plainAuth = a
 	if !contains(b.config.SchemeOpts, AuthenticationSchemePlain) {
 		b.config.SchemeOpts = append(b.config.SchemeOpts, AuthenticationSchemePlain)
 	}
+
 	return b
 }
 
@@ -452,7 +453,7 @@ func (b *ServerBuilder) EnableKeyAuthentication(a KeyAuthenticator) *ServerBuild
 	if a == nil {
 		panic("nil authenticator")
 	}
-
+	b.keyAuth = a
 	if !contains(b.config.SchemeOpts, AuthenticationSchemeKey) {
 		b.config.SchemeOpts = append(b.config.SchemeOpts, AuthenticationSchemeKey)
 	}
@@ -468,7 +469,7 @@ func (b *ServerBuilder) EnableExternalAuthentication(a ExternalAuthenticator) *S
 	if a == nil {
 		panic("nil authenticator")
 	}
-
+	b.externalAuth = a
 	if !contains(b.config.SchemeOpts, AuthenticationSchemeExternal) {
 		b.config.SchemeOpts = append(b.config.SchemeOpts, AuthenticationSchemeExternal)
 	}
