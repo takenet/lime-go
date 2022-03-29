@@ -213,9 +213,8 @@ Building the same message in Go would be like this:
 ```go
 msg := &lime.Message{}
 msg.SetContent(&lime.JsonDocument{
-    "text": "Hello from Lime!",
-    "timestamp": "2022-03-23T00:00:00.000Z",
-    }).
+        "text": "Hello from Lime!",
+        "timestamp": "2022-03-23T00:00:00.000Z"}).
     SetID("1").
     SetToString("john")
 ```
@@ -236,9 +235,8 @@ domain:
 }
 ```
 
-Using custom MIME types enables the mapping of types from your code. 
-For that, these types need to implement the `Document` interface.
-
+Using custom MIME types enables the mapping of documents with types from your code. 
+For this to be possible, these types need to implement the `lime.Document` interface.
 
 ```go
 type Image struct {
@@ -262,8 +260,8 @@ func init() {
 }
 ```
 
-To send a message to john, you can use the `SendMessage` method that is implemented both by the `lime.Server`
-and `lime.Client` types:
+For instance, to send a message to the "john" addresss you can use the `SendMessage` method that is implemented both by 
+the `lime.Server` and `lime.Client` types:
 
 ```go
 msg := &lime.Message{}
@@ -274,8 +272,8 @@ msg.SetContent(lime.TextDocument("Hello from Lime!")).
 err := client.SendMessage(context.Background(), msg)
 ```
 
-And for receiving messages, you can use a handler that can be registered during the instantiation of the client or the
-server:
+And for receiving messages, you can use a message handler that can be registered during the instantiation of the client
+or the server:
 
 ```go
 client := lime.NewClientBuilder().
@@ -294,7 +292,8 @@ client := lime.NewClientBuilder().
 A notification provide information about a message to its sender.
 They are sent only for messages that have the `id` value defined.
 
-To illustrate, a node can notify to the sender that a message was received like this:
+To illustrate, a node may want to notify the sender that a message was received.
+It can be done like this:
 
 ```json
 {
@@ -318,8 +317,8 @@ if msg.ID != "" {
 }
 ```
 
-Notifications can be sent by intermediates - like the server that routes the message - or by the destination of the
-message itself.
+Notifications can be sent by the **destination of the message or by intermediates** - like a server that routes the 
+message.
 
 The protocol define the following notification events:
 - **accepted**: The message was received and accepted by an intermediate.
@@ -500,8 +499,7 @@ In Lime, the **client can receive and process commands requests** from other nod
 
 ### Session
 
-> The session establishment flow is automatically handled by the library. 
-> This section is for informative purposes only. 
+> Note: The session establishment flow is automatically handled by the library.
 
 The session envelope is used for the negotiation, authentication and establishment of the communication channel between
 the client and a server. 
