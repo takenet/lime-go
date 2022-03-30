@@ -5,7 +5,7 @@ LIME - A lightweight messaging library
 ![Go](https://github.com/takenet/lime-go/workflows/Go/badge.svg?branch=master)
 
 LIME allows you to build scalable, real-time messaging applications using a JSON-based 
-[open protocol](http://limeprotocol.org). 
+[open protocol](http://limeprotocol.org).
 It's **fully asynchronous** and support persistent transports like TCP or Websockets.
 
 You can send and receive any type of document into the wire as long it can be represented as JSON or text (plain or 
@@ -49,35 +49,33 @@ import (
 )
 
 func main() {
-	// Message handler that echoes all received messages to the originator
-	msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
-		return s.SendMessage(ctx, &lime.Message{
-			Envelope: lime.Envelope{ID: msg.ID, To: msg.From},
-			Type:     msg.Type,
-			Content:  msg.Content,
-		})
-	}
-
-	// Build a server, listening for TCP connections in the 55321 port
-	server := lime.NewServerBuilder().
-		MessagesHandlerFunc(msgHandler).
-		ListenTCP(&net.TCPAddr{Port: 55321}, &lime.TCPConfig{}).
-		Build()
-	
-	// Listen for the OS termination signals
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigs
-		if err := server.Close(); err != nil {
-			log.Printf("close: %v\n", err)
-		}
-	}()
-
-	// Start listening (blocking call)
-	if err := server.ListenAndServe(); err != lime.ErrServerClosed {
-		log.Printf("listen: %v\n", err)
-	}
+    // Message handler that echoes all received messages to the originator
+    msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
+        echoMsg := &lime.Message{}
+        echoMsg.SetContent(msg.Content).SetTo(msg.From)
+        return s.SendMessage(ctx, echoMsg)
+    }
+    
+    // Build a server, listening for TCP connections in the 55321 port
+    server := lime.NewServerBuilder().
+        MessagesHandlerFunc(msgHandler).
+        ListenTCP(&net.TCPAddr{Port: 55321}, &lime.TCPConfig{}).
+        Build()
+    
+    // Listen for the OS termination signals
+    sigs := make(chan os.Signal, 1)
+    signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+    go func() {
+        <-sigs
+        if err := server.Close(); err != nil {
+            log.Printf("close: %v\n", err)
+        }
+    }()
+    
+    // Start listening (blocking call)
+    if err := server.ListenAndServe(); err != lime.ErrServerClosed {
+        log.Printf("listen: %v\n", err)
+    }
 }
 ```
 
@@ -98,46 +96,44 @@ import (
 )
 
 func main() {
-	done := make(chan bool)
-	
-	// Defines a simple handler function for printing  
-	// the received messages to the stdout
-	msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
-		if txt, ok := msg.Content.(lime.TextDocument); ok {
-			log.Printf("Text message received - ID: %v - Type: %v - Content: %v\n", msg.ID, msg.Type, txt)
-		}
-		close(done)
-		return nil
-	}
-	
-	// Initialize the client
-	client := lime.NewClientBuilder().
-		UseTCP(&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 55321}, &lime.TCPConfig{}).
-		MessagesHandlerFunc(msgHandler).
-		Build()
-
-	// Prepare a simple text message to be sent
-	msg := &lime.Message{
-		Type: lime.MediaTypeTextPlain(),
-		Content: lime.TextDocument("Hello world!"),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	
-	// Send the message
-	if err := client.SendMessage(ctx, msg); err != nil {
-		log.Printf("send message: %v\n", err)
-	}
-	
-	// Wait for the echo message
-	<-done
-	
-	// Close the client
-	err := client.Close()
-	if err != nil {
-		log.Printf("close: %v\n", err)
-	}
+    done := make(chan bool)
+    
+    // Defines a simple handler function for printing  
+    // the received messages to the stdout
+    msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
+    if txt, ok := msg.Content.(lime.TextDocument); ok {
+        log.Printf("Text message received - ID: %v - Type: %v - Content: %v\n", msg.ID, msg.Type, txt)
+    }
+        close(done)
+        return nil
+    }
+    
+    // Initialize the client
+    client := lime.NewClientBuilder().
+        UseTCP(&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 55321}, &lime.TCPConfig{}).
+        MessagesHandlerFunc(msgHandler).
+        Build()
+    
+    // Prepare a simple text message to be sent
+    msg := &lime.Message{}
+    msg.SetContent(lime.TextDocument("Hello world!"))
+    
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    
+    // Send the message
+    if err := client.SendMessage(ctx, msg); err != nil {
+        log.Printf("send message: %v\n", err)
+    }
+    
+    // Wait for the echo message
+    <-done
+    
+    // Close the client
+    err := client.Close()
+    if err != nil {
+        log.Printf("close: %v\n", err)
+    }
 }
 ```
 
@@ -179,21 +175,21 @@ msg.SetContent(lime.TextDocument("Hello from Lime!")).
 
 In this example, the document value is the `Hello from Lime!` text and its MIME type is `text/plain`. 
 
-This message also have a `id` property with value `1`. 
-The id used to **correlate notifications** about the message.
-This means that the message destination and intermediates may send notifications about the message status, using the 
-same id.
-So, if you are interested to know if a message that was sent by you was delivered or not, you should put a value in the 
-id property.
+This message also have a `id` property with `1` value . 
+The id value is useful to **correlate notifications** about the message.
+When the id is set, the sender may receive notifications (receipts) with message events, which will have the same id.
+For instance, you may want to know if a message was received or read by its destination.
+In this case, you should provide an id value to the message.
 
-The `to` property specifies the destination address of the message, and it is used by the server to route the envelope 
+The `to` property sets the destination address of the message, and it is used by the server to route the envelope 
 to the correct destination.
-The address format is called **node** and is presented in the `name@domain/instance` format, similar to the 
-[XMPP's Jabber ID](https://xmpp.org/rfcs/rfc3920.html#rfc.section.3), but the _domain_ and _instance_ portions of the 
-node are optional.
+The address format is called **node** and in its full form is presented in the `name@domain/instance` format, similar to
+the [XMPP's Jabber ID](https://xmpp.org/rfcs/rfc3920.html#rfc.section.3).
+The node's _domain_ and _instance_ portions are optional, so the value `john` used in the example is a valid node 
+address.
 
-In this example, the content is a simple text but a message can be used to transport any type of document that can be 
-represented as JSON.
+In the previous example, the content is a simple text. 
+But a message can be used to transport any type of document that can be represented as JSON.
 
 For instance, to send a generic JSON document you can use the `application/json` type:
 
@@ -218,7 +214,6 @@ msg.SetContent(&lime.JsonDocument{
     SetID("1").
     SetToString("john")
 ```
-
 
 You can also can (and probably should) use custom MIME types for representing well-known types from your application
 domain:
@@ -260,7 +255,7 @@ func init() {
 }
 ```
 
-For instance, to send a message to the "john" addresss you can use the `SendMessage` method that is implemented both by 
+For instance, to send a message to the `john` node, you can use the `SendMessage` method that is implemented both by 
 the `lime.Server` and `lime.Client` types:
 
 ```go
@@ -317,7 +312,7 @@ if msg.ID != "" {
 }
 ```
 
-Notifications can be sent by the **destination of the message or by intermediates** - like a server that routes the 
+Notifications can be emitted by the **destination of the message or by intermediates** - like a server that route the 
 message.
 
 The protocol define the following notification events:
@@ -357,28 +352,33 @@ not := msg.FailedNotification(&lime.Reason{Code: 1, Description: "Destination no
 
 ### Command
 
-The command envelope is used to **manipulate resources of a remote node**. 
-It provides a REST capable interface, with a URI and methods (verbs), much like the HTTP protocol.
-It also supports multiplexing, so the connection is not blocked when a request is sent.
+The command envelope is used to **read and write resources of a remote node**. 
+It provides a REST capable interface, with URI and methods (verbs), similar to the HTTP protocol.
+It also supports multiplexing, so the connection is not blocked to wait for a response when a request is sent.
 
-A command can be a request - which haves the `uri` value - or a response - with the `status` value.
+There are two types of commands: a request command - which contains a `uri` value - or a response command - with a 
+`status` value.
 
-As example, you can use it for managing your contact list or to set your current status (available, busy, away).
-Other common use is **the in-band registration**, where users can create Lime accounts in the protocol itself.
+For instance, you can use commands for managing your contact list or to set your current status (available, busy, away).
+Other common use is **the in-band registration**, where users can create accounts for your service in the protocol 
+itself.
 
-The advantage of using commands is that you can use the **same existing connection** that is used for messaging instead
-of creating one or more out-of-band connections - like in HTTP for instance.
-This is more efficient in terms of energy consumption but also is more performatic as well. 
-The session is already established and authenticated, so it avoids the addition overhead of a TLS handshake and 
-authentication that a new connection would require. 
+The advantage of using commands is that you can use the **same existing connection** that is used for messaging for
+handling resources, instead of creating out-of-band connections for that. 
 
-But there is a limitation: the command interface only supports JSON payloads, so you should avoid use it for 
-transmitting binary or any kind of large content.
+In practice, you can avoid having an external HTTP service for handling resources related to your messaging service. 
 
-Much like an HTTP service, the URI and methods that you may use in commands depends on what the server implements.
+This is more efficient in terms of energy consumption but also is usually more performatic as well. 
+Using a session that is already established and authenticated avoids the additional overhead of a TLS handshake and 
+authentication that an external connection would require. 
+
+But there is a limitation: the command interface only supports JSON payloads, so you should not use it for 
+transporting binary or any kind of large content.
+
+Like in an HTTP service, the URI and methods that you may use in commands depends on what the server implements.
 
 For instance, a server could implement a contact management service. 
-In this example, you could be able to send a command like this:
+In this example, to retrieve all contacts, you could send a command like this:
 
 ```json
 {
@@ -388,8 +388,7 @@ In this example, you could be able to send a command like this:
 }
 ```
 
-Semantically, this means that you want to retrieve all contacts that are stored in the server.
-And the server may respond to this request with something like this: 
+And the server may respond to this request like this: 
 
 ```json
 {

@@ -18,13 +18,9 @@ func main() {
 		MessagesHandlerFunc(
 			func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
 				fmt.Printf("Message received - ID: %v - From: %v - Type: %v\n", msg.ID, msg.From, msg.Type)
-				return s.SendMessage(ctx, &lime.Message{
-					Envelope: lime.Envelope{
-						To: msg.From,
-					},
-					Type:    msg.Type,
-					Content: msg.Content,
-				})
+				echoMsg := &lime.Message{}
+				echoMsg.SetContent(msg.Content).SetTo(msg.From)
+				return s.SendMessage(ctx, echoMsg)
 			}).
 		NotificationsHandlerFunc(
 			func(ctx context.Context, not *lime.Notification) error {
