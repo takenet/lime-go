@@ -213,30 +213,14 @@ func TestChannel_ReceiveMessage_WhenEstablished(t *testing.T) {
 	_ = server.Send(ctx, m)
 
 	// Act
-	actual, err := c.ReceiveMessage(ctx)
-
-	// Assert
-	assert.NoError(t, err)
-	assert.Equal(t, m, actual)
-}
-
-func TestChannel_ReceiveMessage_WhenContextDeadline(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t)
-	client, _ := newInProcessTransportPair("localhost", 1)
-	c := newChannel(client, 1)
-	defer silentClose(c)
-	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
-	defer cancel()
-
-	// Act
-	actual, err := c.ReceiveMessage(ctx)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "receive message: context deadline exceeded", err.Error())
-	assert.Nil(t, actual)
+	select {
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	case actual, ok := <-c.MsgChan():
+		// Assert
+		assert.True(t, ok)
+		assert.Equal(t, m, actual)
+	}
 }
 
 func TestChannel_ReceiveMessage_WhenFinishedState(t *testing.T) {
@@ -262,12 +246,16 @@ func receiveMessageWithState(t *testing.T, state SessionState) {
 		time.Sleep(50 * time.Millisecond)
 		c.setState(state)
 	}()
-	actual, err := c.ReceiveMessage(ctx)
 
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "receive message: channel closed", err.Error())
-	assert.Nil(t, actual)
+	// Act
+	select {
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	case actual, ok := <-c.MsgChan():
+		// Assert
+		assert.False(t, ok)
+		assert.Nil(t, actual)
+	}
 }
 
 func TestChannel_SendNotification_WhenEstablished(t *testing.T) {
@@ -429,30 +417,14 @@ func TestChannel_ReceiveNotification_WhenEstablished(t *testing.T) {
 	_ = server.Send(ctx, n)
 
 	// Act
-	actual, err := c.ReceiveNotification(ctx)
-
-	// Assert
-	assert.NoError(t, err)
-	assert.Equal(t, n, actual)
-}
-
-func TestChannel_ReceiveNotification_WhenContextCanceled(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t)
-	client, _ := newInProcessTransportPair("localhost", 1)
-	c := newChannel(client, 1)
-	defer silentClose(c)
-	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
-	defer cancel()
-
-	// Act
-	actual, err := c.ReceiveNotification(ctx)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "receive notification: context deadline exceeded", err.Error())
-	assert.Nil(t, actual)
+	select {
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	case actual, ok := <-c.NotChan():
+		// Assert
+		assert.True(t, ok)
+		assert.Equal(t, n, actual)
+	}
 }
 
 func TestChannel_ReceiveNotification_WhenFinishedState(t *testing.T) {
@@ -479,12 +451,16 @@ func receiveNotificationWithState(t *testing.T, state SessionState) {
 		time.Sleep(50 * time.Millisecond)
 		c.setState(state)
 	}()
-	actual, err := c.ReceiveNotification(ctx)
 
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "receive notification: channel closed", err.Error())
-	assert.Nil(t, actual)
+	// Act
+	select {
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	case actual, ok := <-c.NotChan():
+		// Assert
+		assert.False(t, ok)
+		assert.Nil(t, actual)
+	}
 }
 
 func TestChannel_SendRequestCommand_WhenEstablished(t *testing.T) {
@@ -648,30 +624,14 @@ func TestChannel_ReceiveCommand_WhenEstablished(t *testing.T) {
 	_ = server.Send(ctx, cmd)
 
 	// Act
-	actual, err := c.ReceiveRequestCommand(ctx)
-
-	// Assert
-	assert.NoError(t, err)
-	assert.Equal(t, cmd, actual)
-}
-
-func TestChannel_ReceiveCommand_WhenContextCanceled(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t)
-	client, _ := newInProcessTransportPair("localhost", 1)
-	c := newChannel(client, 1)
-	defer silentClose(c)
-	c.setState(SessionStateEstablished)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
-	defer cancel()
-
-	// Act
-	actual, err := c.ReceiveRequestCommand(ctx)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "receive request command: context deadline exceeded", err.Error())
-	assert.Nil(t, actual)
+	select {
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	case actual, ok := <-c.ReqCmdChan():
+		// Assert
+		assert.True(t, ok)
+		assert.Equal(t, cmd, actual)
+	}
 }
 
 func TestChannel_ReceiveCommand_WhenFinishedState(t *testing.T) {
@@ -698,12 +658,16 @@ func receiveCommandWithState(t *testing.T, state SessionState) {
 		time.Sleep(50 * time.Millisecond)
 		c.setState(state)
 	}()
-	actual, err := c.ReceiveRequestCommand(ctx)
 
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, "receive request command: channel closed", err.Error())
-	assert.Nil(t, actual)
+	// Act
+	select {
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	case actual, ok := <-c.ReqCmdChan():
+		// Assert
+		assert.False(t, ok)
+		assert.Nil(t, actual)
+	}
 }
 
 func TestChannel_ProcessCommand(t *testing.T) {
@@ -787,7 +751,13 @@ func TestChannel_ProcessCommand_ResponseWithAnotherId(t *testing.T) {
 	assert.Nil(t, actual)
 	ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-	actualRespCmd, err := c.ReceiveResponseCommand(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, respCmd, actualRespCmd)
+
+	// Act
+	select {
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	case actualRespCmd, ok := <-c.RespCmdChan():
+		assert.True(t, ok)
+		assert.Equal(t, respCmd, actualRespCmd)
+	}
 }

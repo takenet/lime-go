@@ -64,13 +64,6 @@ type Sender interface {
 	ResponseCommandSender
 }
 
-// ChannelModule defines a proxy interface for executing actions to the envelope channels.
-type ChannelModule interface {
-	StateChanged(ctx context.Context, state SessionState) // StateChanged is called when the session state is changed.
-	Receiving(ctx context.Context, env envelope) envelope // Receiving is called when an envelope is being received by the channel.
-	Sending(ctx context.Context, env envelope) envelope   // Sending is called when an envelope is being sent by the channel.
-}
-
 type channel struct {
 	transport     Transport
 	sessionID     string
@@ -317,79 +310,16 @@ func (c *channel) SendMessage(ctx context.Context, msg *Message) error {
 	return c.sendToTransport(ctx, msg, "send message")
 }
 
-func (c *channel) ReceiveMessage(ctx context.Context) (*Message, error) {
-	if err := c.ensureEstablished("receive message"); err != nil {
-		return nil, err
-	}
-
-	select {
-	case <-ctx.Done():
-		return nil, fmt.Errorf("receive message: %w", ctx.Err())
-	case msg, ok := <-c.inMsgChan:
-		if !ok {
-			return nil, errors.New("receive message: channel closed")
-		}
-		return msg, nil
-	}
-}
 func (c *channel) SendNotification(ctx context.Context, not *Notification) error {
 	return c.sendToTransport(ctx, not, "send notification")
-}
-
-func (c *channel) ReceiveNotification(ctx context.Context) (*Notification, error) {
-	if err := c.ensureEstablished("receive notification"); err != nil {
-		return nil, err
-	}
-
-	select {
-	case <-ctx.Done():
-		return nil, fmt.Errorf("receive notification: %w", ctx.Err())
-	case not, ok := <-c.inNotChan:
-		if !ok {
-			return nil, errors.New("receive notification: channel closed")
-		}
-		return not, nil
-	}
 }
 
 func (c *channel) SendRequestCommand(ctx context.Context, cmd *RequestCommand) error {
 	return c.sendToTransport(ctx, cmd, "send request command")
 }
 
-func (c *channel) ReceiveRequestCommand(ctx context.Context) (*RequestCommand, error) {
-	if err := c.ensureEstablished("receive request command"); err != nil {
-		return nil, err
-	}
-
-	select {
-	case <-ctx.Done():
-		return nil, fmt.Errorf("receive request command: %w", ctx.Err())
-	case cmd, ok := <-c.inReqCmdChan:
-		if !ok {
-			return nil, errors.New("receive request command: channel closed")
-		}
-		return cmd, nil
-	}
-}
-
 func (c *channel) SendResponseCommand(ctx context.Context, cmd *ResponseCommand) error {
 	return c.sendToTransport(ctx, cmd, "send response command")
-}
-
-func (c *channel) ReceiveResponseCommand(ctx context.Context) (*ResponseCommand, error) {
-	if err := c.ensureEstablished("receive response command"); err != nil {
-		return nil, err
-	}
-
-	select {
-	case <-ctx.Done():
-		return nil, fmt.Errorf("receive response command: %w", ctx.Err())
-	case cmd, ok := <-c.inRespCmdChan:
-		if !ok {
-			return nil, errors.New("receive response command: channel closed")
-		}
-		return cmd, nil
-	}
 }
 
 func (c *channel) ProcessCommand(ctx context.Context, reqCmd *RequestCommand) (*ResponseCommand, error) {
