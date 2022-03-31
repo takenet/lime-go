@@ -27,6 +27,7 @@ func main() {
 				fmt.Printf("Notification received - ID: %v - From: %v - Event: %v - Reason: %v\n", not.ID, not.From, not.Event, not.Reason)
 				return nil
 			}).
+		AutoReplyPings().
 		RequestCommandHandlerFunc(
 			func(cmd *lime.RequestCommand) bool {
 				return cmd.Method == lime.CommandMethodSet && cmd.URI.Path() == "/presence"

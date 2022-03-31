@@ -19,6 +19,9 @@ func init() {
 	RegisterDocumentFactory(func() Document {
 		return &DocumentCollection{}
 	})
+	RegisterDocumentFactory(func() Document {
+		return &Ping{}
+	})
 }
 
 // Document defines an entity with a media type.
@@ -231,4 +234,19 @@ func (d *DocumentCollection) populate(raw *rawDocumentCollection) error {
 	d.Total = raw.Total
 
 	return nil
+}
+
+// Ping allows the nodes to test the network connectivity.
+type Ping struct{}
+
+func MediaTypePing() MediaType {
+	return MediaType{
+		Type:    "application",
+		Subtype: "vnd.lime.ping",
+		Suffix:  "json",
+	}
+}
+
+func (p *Ping) MediaType() MediaType {
+	return MediaTypePing()
 }

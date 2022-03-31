@@ -200,21 +200,6 @@ const (
 	RoutingRuleRootDomain = RoutingRule("rootDomain")
 )
 
-// Ping allows the nodes to test the network connectivity.
-type Ping struct{}
-
-func MediaTypePing() lime.MediaType {
-	return lime.MediaType{
-		Type:    "application",
-		Subtype: "vnd.lime.ping",
-		Suffix:  "json",
-	}
-}
-
-func (p *Ping) MediaType() lime.MediaType {
-	return MediaTypePing()
-}
-
 // Receipt represents the events that should generate receipts (notifications) for the messages sent by the owner
 // identity.
 type Receipt struct {

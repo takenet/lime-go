@@ -17,9 +17,6 @@ func RegisterChatDocuments() {
 		return &Presence{}
 	})
 	lime.RegisterDocumentFactory(func() lime.Document {
-		return &Ping{}
-	})
-	lime.RegisterDocumentFactory(func() lime.Document {
 		return &Receipt{}
 	})
 }

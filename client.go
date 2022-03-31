@@ -404,6 +404,19 @@ func (b *ClientBuilder) RequestCommandHandler(handler RequestCommandHandler) *Cl
 	return b
 }
 
+// AutoReplyPings adds a RequestCommandHandler handler to automatically reply ping requests from the remote node.
+func (b *ClientBuilder) AutoReplyPings() *ClientBuilder {
+	return b.RequestCommandHandlerFunc(
+		func(cmd *RequestCommand) bool {
+			return cmd.Method == CommandMethodGet && cmd.URI.Path() == "/ping"
+		},
+		func(ctx context.Context, cmd *RequestCommand, s Sender) error {
+			return s.SendResponseCommand(
+				ctx,
+				cmd.SuccessResponseWithResource(&Ping{}))
+		})
+}
+
 // ResponseCommandHandlerFunc allows the registration of a function for handling received commands that matches
 // the specified predicate. Note that the registration order matters, since the receiving process stops when
 // the first predicate match occurs.

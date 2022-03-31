@@ -33,6 +33,7 @@ func main() {
 				fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)
 				return nil
 			}).
+		AutoReplyPings().
 		RequestCommandsHandlerFunc(
 			func(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
 				fmt.Printf("Request command received - ID: %v\n", cmd.ID)
