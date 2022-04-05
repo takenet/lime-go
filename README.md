@@ -6,20 +6,20 @@ LIME - A lightweight messaging library
 
 LIME allows you to build scalable, real-time messaging applications using a JSON-based 
 [open protocol](http://limeprotocol.org).
-It's **fully asynchronous** and support persistent transports like TCP or Websockets.
+It's **fully asynchronous** and supports persistent transports like TCP or Websockets.
 
 You can send and receive any type of document into the wire as long it can be represented as JSON or text (plain or 
-encoded with base64) and it has a **MIME type** to allow the other party handle it in the right way.
+encoded with base64) and it has a **MIME type** to allow the other party to handle it in the right way.
 
 The connected nodes can send receipts to the other parties to notify events about messages (for instance, a message was 
 received or the content invalid or not supported).
 
-Besides that, there's a **REST capable** command interface with verbs (*get, set and delete*) and resource identifiers 
+Besides that, there's a **REST capable** command interface with verbs (*get, set, and delete*) and resource identifiers 
 (URIs) to allow rich messaging scenarios. 
 You can use that to provide services like on-band account registration or instance-messaging resources, like presence or 
 roster management.
 
-Finally, it has built-in support for authentication, transport encryption and compression.
+Finally, it has built-in support for authentication, transport encryption, and compression.
 
 Getting started
 -----
