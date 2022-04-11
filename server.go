@@ -230,10 +230,10 @@ func NewServerConfig() *ServerConfig {
 		Register: func(ctx context.Context, node Node, serverChannel *ServerChannel) (Node, error) {
 			return Node{
 				Identity: Identity{
-					Name:   uuid.New().String(),
+					Name:   node.Name,
 					Domain: serverChannel.localNode.Domain,
 				},
-				Instance: serverChannel.localNode.Instance}, nil
+				Instance: uuid.New().String()}, nil
 		},
 	}
 }
@@ -529,6 +529,9 @@ func buildAuthenticate(plainAuth PlainAuthenticator, keyAuth KeyAuthenticator, e
 	return func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
 		switch a := authentication.(type) {
 		case *GuestAuthentication:
+			if _, err := uuid.Parse(identity.Name); err != nil {
+				return UnknownAuthenticationResult(), nil
+			}
 			return MemberAuthenticationResult(), nil
 		case *TransportAuthentication:
 			return nil, errors.New("transport auth not implemented yet")
