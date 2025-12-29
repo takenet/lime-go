@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"go.uber.org/multierr"
 	"log"
 	"net"
 	"net/http"
@@ -14,7 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/multierr"
+
 	"github.com/gorilla/websocket"
+)
+
+const (
+	errWSTransportSend = "ws transport: send: %w"
 )
 
 func DialWebsocket(ctx context.Context, urlStr string, requestHeader http.Header, tls *tls.Config) (Transport, error) {
@@ -43,9 +48,10 @@ func DialWebsocket(ctx context.Context, urlStr string, requestHeader http.Header
 }
 
 type websocketTransport struct {
-	conn *websocket.Conn
-	c    SessionCompression
-	e    SessionEncryption
+	conn    *websocket.Conn
+	c       SessionCompression
+	e       SessionEncryption
+	writeMu sync.Mutex // protects write operations and SetWriteDeadline
 }
 
 func (t *websocketTransport) Send(ctx context.Context, e envelope) error {
@@ -61,21 +67,44 @@ func (t *websocketTransport) Send(ctx context.Context, e envelope) error {
 		return err
 	}
 
-	errChan := make(chan error)
+	// Lock to protect write operations and deadline setting
+	t.writeMu.Lock()
+	defer t.writeMu.Unlock()
+
+	// Set write deadline if context has one
+	deadline, hasDeadline := ctx.Deadline()
+	if hasDeadline {
+		if err := t.conn.SetWriteDeadline(deadline); err != nil {
+			return fmt.Errorf("ws transport: set write deadline: %w", err)
+		}
+		// Reset deadline after write
+		defer func() {
+			_ = t.conn.SetWriteDeadline(time.Time{})
+		}()
+	}
+
+	// Check if context is already cancelled before writing
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf(errWSTransportSend, ctx.Err())
+	default:
+	}
+
+	// Perform the write with a goroutine to allow cancellation
+	errChan := make(chan error, 1)
 	go func() {
 		errChan <- t.conn.WriteJSON(e)
 	}()
 
 	select {
 	case <-ctx.Done():
-		// Effectively fails all pending write operations before returning.
-		// Note that this makes the encoder to be in a permanent error state.
+		// Context cancelled during write - set immediate deadline to abort
 		_ = t.conn.SetWriteDeadline(time.Now())
-		<-errChan
-		return fmt.Errorf("ws transport: send: %w", ctx.Err())
+		<-errChan // wait for write to complete
+		return fmt.Errorf(errWSTransportSend, ctx.Err())
 	case err := <-errChan:
 		if err != nil {
-			return fmt.Errorf("ws transport: send: %w", err)
+			return fmt.Errorf(errWSTransportSend, err)
 		}
 		return nil
 	}

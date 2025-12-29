@@ -592,3 +592,87 @@ func TestSessionUnmarshalJSONFailed(t *testing.T) {
 	assert.Equal(t, SessionStateFailed, s.State)
 	assert.Equal(t, Reason{13, "The session authentication failed"}, *s.Reason)
 }
+
+func TestPlainAuthenticationSetPasswordAsBase64(t *testing.T) {
+	// Arrange
+	auth := &PlainAuthentication{}
+	plainPassword := "mySecretPassword123"
+
+	// Act
+	auth.SetPasswordAsBase64(plainPassword)
+
+	// Assert
+	assert.NotEmpty(t, auth.Password)
+	decoded, err := auth.GetPasswordFromBase64()
+	assert.NoError(t, err)
+	assert.Equal(t, plainPassword, decoded)
+}
+
+func TestPlainAuthenticationGetPasswordFromBase64(t *testing.T) {
+	// Arrange
+	auth := &PlainAuthentication{
+		Password: "bXlTZWNyZXRQYXNzd29yZDEyMw==", // base64 of "mySecretPassword123"
+	}
+
+	// Act
+	decoded, err := auth.GetPasswordFromBase64()
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, "mySecretPassword123", decoded)
+}
+
+func TestPlainAuthenticationGetPasswordFromBase64InvalidBase64(t *testing.T) {
+	// Arrange
+	auth := &PlainAuthentication{
+		Password: "not-valid-base64!!!",
+	}
+
+	// Act
+	_, err := auth.GetPasswordFromBase64()
+
+	// Assert
+	assert.Error(t, err)
+}
+
+func TestKeyAuthenticationSetKeyAsBase64(t *testing.T) {
+	// Arrange
+	auth := &KeyAuthentication{}
+	plainKey := "mySecretKey456"
+
+	// Act
+	auth.SetKeyAsBase64(plainKey)
+
+	// Assert
+	assert.NotEmpty(t, auth.Key)
+	decoded, err := auth.GetKeyFromBase64()
+	assert.NoError(t, err)
+	assert.Equal(t, plainKey, decoded)
+}
+
+func TestKeyAuthenticationGetKeyFromBase64(t *testing.T) {
+	// Arrange
+	auth := &KeyAuthentication{
+		Key: "bXlTZWNyZXRLZXk0NTY=", // base64 of "mySecretKey456"
+	}
+
+	// Act
+	decoded, err := auth.GetKeyFromBase64()
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, "mySecretKey456", decoded)
+}
+
+func TestKeyAuthenticationGetKeyFromBase64InvalidBase64(t *testing.T) {
+	// Arrange
+	auth := &KeyAuthentication{
+		Key: "not-valid-base64!!!",
+	}
+
+	// Act
+	_, err := auth.GetKeyFromBase64()
+
+	// Assert
+	assert.Error(t, err)
+}

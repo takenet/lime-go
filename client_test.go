@@ -3,12 +3,13 @@ package lime
 import (
 	"context"
 	"errors"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/goleak"
 	"log"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 )
 
 func TestClientNewClientMessage(t *testing.T) {
@@ -51,4 +52,46 @@ func TestClientNewClientMessage(t *testing.T) {
 	assert.Equal(t, msg, rcvMsg)
 	err = client.Close()
 	assert.NoError(t, err)
+}
+
+func TestNewClientBuilder(t *testing.T) {
+	// Act
+	builder := NewClientBuilder()
+
+	// Assert
+	assert.NotNil(t, builder)
+}
+
+func TestClientBuilderName(t *testing.T) {
+	// Arrange
+	builder := NewClientBuilder()
+
+	// Act
+	result := builder.Name("testuser")
+
+	// Assert
+	assert.Equal(t, builder, result) // should return self for chaining
+	assert.Equal(t, "testuser", builder.config.Node.Identity.Name)
+}
+
+func TestClientBuilderDomain(t *testing.T) {
+	// Arrange
+	builder := NewClientBuilder()
+
+	// Act
+	result := builder.Domain("example.com")
+
+	// Assert
+	assert.Equal(t, builder, result)
+	assert.Equal(t, "example.com", builder.config.Node.Identity.Domain)
+}
+
+func TestNewClientConfig(t *testing.T) {
+	// Act
+	config := NewClientConfig()
+
+	// Assert
+	assert.NotEmpty(t, config.Node.Identity.Name)
+	assert.NotNil(t, config.Authenticator)
+	assert.NotZero(t, config.ChannelBufferSize)
 }

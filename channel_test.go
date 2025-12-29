@@ -764,3 +764,49 @@ func TestChannelProcessCommandResponseWithAnotherId(t *testing.T) {
 		assert.Equal(t, respCmd, actualRespCmd)
 	}
 }
+
+func TestChannelID(t *testing.T) {
+	// Arrange
+	c := &channel{
+		sessionID: "test-session-id-123",
+	}
+
+	// Act
+	id := c.ID()
+
+	// Assert
+	assert.Equal(t, "test-session-id-123", id)
+}
+
+func TestChannelSendResponseCommand(t *testing.T) {
+	// Arrange
+	addr := InProcessAddr("test-response-cmd")
+
+	listener := NewInProcessTransportListener(addr)
+	ctx := context.Background()
+	err := listener.Listen(ctx, addr)
+	assert.NoError(t, err)
+	defer listener.Close()
+
+	client, _ := DialInProcess(addr, 10)
+	defer client.Close()
+
+	c := newChannel(client, 10)
+	c.state = SessionStateEstablished
+	c.sessionID = "test-session"
+
+	respCmd := &ResponseCommand{
+		Command: Command{
+			Envelope: Envelope{
+				ID: "response-1",
+			},
+		},
+		Status: CommandStatusSuccess,
+	}
+
+	// Act
+	err = c.SendResponseCommand(ctx, respCmd)
+
+	// Assert
+	assert.NoError(t, err)
+}
