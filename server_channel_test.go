@@ -121,7 +121,7 @@ func TestServerChannelFinishSession(t *testing.T) {
 		}
 		sessionChan <- s
 	})
-	
+
 	time.Sleep(5 * time.Millisecond)
 	err := c.FinishSession(ctx)
 
@@ -180,7 +180,7 @@ func TestServerChannelFailSession(t *testing.T) {
 		}
 		sessionChan <- s
 	})
-	
+
 	time.Sleep(5 * time.Millisecond)
 	err := c.FailSession(ctx, r)
 

@@ -786,10 +786,10 @@ func TestChannelSendResponseCommand(t *testing.T) {
 	ctx := context.Background()
 	err := listener.Listen(ctx, addr)
 	assert.NoError(t, err)
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	client, _ := DialInProcess(addr, 10)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	c := newChannel(client, 10)
 	c.state = SessionStateEstablished

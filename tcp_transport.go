@@ -421,7 +421,7 @@ func (c *ctxConn) Read(b []byte) (n int, err error) {
 
 		n, err = c.conn.Read(b)
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() && netErr.Temporary() {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
 			return 0, err
@@ -450,7 +450,7 @@ func (c *ctxConn) Write(b []byte) (n int, err error) {
 
 		n, err = c.conn.Write(b)
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() && netErr.Temporary() {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
 			return 0, err

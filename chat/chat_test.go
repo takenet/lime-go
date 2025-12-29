@@ -111,11 +111,11 @@ func TestAccountFullName(t *testing.T) {
 	account := &Account{
 		FullName: testFullName,
 	}
-	account.contact.Address = "123 Main St"
+	account.Address = "123 Main St"
 
 	// Assert
 	assert.Equal(t, testFullName, account.FullName)
-	assert.Equal(t, "123 Main St", account.contact.Address)
+	assert.Equal(t, "123 Main St", account.Address)
 }
 
 func TestContactIdentity(t *testing.T) {
@@ -127,11 +127,11 @@ func TestContactIdentity(t *testing.T) {
 	contact := &Contact{
 		Name: "User Name",
 	}
-	contact.contact.Identity = identity
+	contact.Identity = identity
 
 	// Assert
-	assert.Equal(t, "user", contact.contact.Identity.Name)
-	assert.Equal(t, testDomain, contact.contact.Identity.Domain)
+	assert.Equal(t, "user", contact.Identity.Name)
+	assert.Equal(t, testDomain, contact.Identity.Domain)
 }
 
 func TestPresenceStatus(t *testing.T) {
@@ -181,6 +181,6 @@ func TestDelegationEnvelope(t *testing.T) {
 	}
 
 	// Assert
-	assert.Equal(t, "target", delegation.Target.Identity.Name)
-	assert.Equal(t, testDomain, delegation.Target.Identity.Domain)
+	assert.Equal(t, "target", delegation.Target.Name)
+	assert.Equal(t, testDomain, delegation.Target.Domain)
 }

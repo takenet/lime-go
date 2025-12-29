@@ -22,8 +22,9 @@ import (
 )
 
 func createTCPListener(t testing.TB, addr net.Addr, transportChan chan Transport) TransportListener {
+	ctx := context.Background()
 	listener := NewTCPTransportListener(nil)
-	if err := listener.Listen(context.Background(), addr); err != nil {
+	if err := listener.Listen(ctx, addr); err != nil {
 		t.Fatal(err)
 		return nil
 	}
@@ -31,11 +32,15 @@ func createTCPListener(t testing.TB, addr net.Addr, transportChan chan Transport
 	if transportChan != nil {
 		go func() {
 			for {
-				t, err := listener.Accept(context.Background())
+				t, err := listener.Accept(ctx)
 				if err != nil {
 					break
 				}
-				transportChan <- t
+				select {
+				case <-ctx.Done():
+					return
+				case transportChan <- t:
+				}
 			}
 		}()
 	}
@@ -44,6 +49,7 @@ func createTCPListener(t testing.TB, addr net.Addr, transportChan chan Transport
 }
 
 func createTCPListenerTLS(t testing.TB, addr net.Addr, transportChan chan Transport) TransportListener {
+	ctx := context.Background()
 	config := &TCPConfig{TLSConfig: &tls.Config{
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return createCertificate("127.0.0.1")
@@ -51,7 +57,7 @@ func createTCPListenerTLS(t testing.TB, addr net.Addr, transportChan chan Transp
 	}}
 
 	listener := NewTCPTransportListener(config)
-	if err := listener.Listen(context.Background(), addr); err != nil {
+	if err := listener.Listen(ctx, addr); err != nil {
 		t.Fatal(err)
 		return nil
 	}
@@ -59,11 +65,15 @@ func createTCPListenerTLS(t testing.TB, addr net.Addr, transportChan chan Transp
 	if transportChan != nil {
 		go func() {
 			for {
-				t, err := listener.Accept(context.Background())
+				t, err := listener.Accept(ctx)
 				if err != nil {
 					break
 				}
-				transportChan <- t
+				select {
+				case <-ctx.Done():
+					return
+				case transportChan <- t:
+				}
 			}
 		}()
 	}

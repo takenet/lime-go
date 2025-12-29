@@ -9,6 +9,7 @@ GOVET=$(GO) vet
 GOFMT=gofmt
 GODOC=$(GO) doc
 MODULE=github.com/takenet/lime-go
+TEST_PACKAGES=$(shell $(GO) list ./... | grep -v '/examples/')
 
 # Default target
 help: ## Display this help message
@@ -33,19 +34,19 @@ run-ws-chat: ## Run the websocket chat server
 
 test: ## Run all tests with race detector
 	@echo "Running tests with race detector..."
-	$(GOTEST) $(GOFLAGS) -race -coverprofile=coverage.txt -covermode=atomic ./...
+	$(GOTEST) $(GOFLAGS) -race -coverprofile=coverage.txt -covermode=atomic $(TEST_PACKAGES)
 
 test-no-race: ## Run all tests without race detector
 	@echo "Running tests without race detector..."
-	$(GOTEST) $(GOFLAGS) -coverprofile=coverage.txt -covermode=atomic ./...
+	$(GOTEST) $(GOFLAGS) -coverprofile=coverage.txt -covermode=atomic $(TEST_PACKAGES)
 
 test-short: ## Run tests in short mode
 	@echo "Running short tests..."
-	$(GOTEST) $(GOFLAGS) -short ./...
+	$(GOTEST) $(GOFLAGS) -short $(TEST_PACKAGES)
 
 test-verbose: ## Run tests with verbose output
 	@echo "Running tests with verbose output..."
-	$(GOTEST) -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+	$(GOTEST) -v -race -coverprofile=coverage.txt -covermode=atomic $(TEST_PACKAGES)
 
 coverage: test ## Run tests and show coverage
 	@echo "Generating coverage report..."

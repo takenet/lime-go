@@ -24,20 +24,24 @@ func createWebsocketListener(ctx context.Context, t testing.TB, addr net.Addr, t
 		return nil
 	}
 
-	listenTransports(transportChan, listener)
+	listenTransports(ctx, transportChan, listener)
 
 	return listener
 }
 
-func listenTransports(transportChan chan Transport, listener TransportListener) {
+func listenTransports(ctx context.Context, transportChan chan Transport, listener TransportListener) {
 	if transportChan != nil {
 		go func() {
 			for {
-				t, err := listener.Accept(context.Background())
+				t, err := listener.Accept(ctx)
 				if err != nil {
 					break
 				}
-				transportChan <- t
+				select {
+				case <-ctx.Done():
+					return
+				case transportChan <- t:
+				}
 			}
 		}()
 	}
@@ -54,7 +58,7 @@ func createWebsocketListenerTLS(ctx context.Context, t testing.TB, addr net.Addr
 		return nil
 	}
 
-	listenTransports(transportChan, listener)
+	listenTransports(ctx, transportChan, listener)
 
 	return listener
 }

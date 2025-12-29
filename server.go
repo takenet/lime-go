@@ -27,6 +27,7 @@ type Server struct {
 	mu            sync.Mutex
 	transportChan chan Transport
 	shutdown      context.CancelFunc
+	wg            sync.WaitGroup
 }
 
 // NewServer creates a new instance of the Server type.
@@ -108,10 +109,13 @@ func (srv *Server) consumeTransports(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			srv.wg.Wait() // Wait for all handler goroutines to complete
 			return
 		case t := <-srv.transportChan:
 			c := NewServerChannel(t, srv.config.ChannelBufferSize, srv.config.Node, uuid.NewString())
+			srv.wg.Add(1)
 			go func() {
+				defer srv.wg.Done()
 				srv.handleChannel(ctx, c)
 			}()
 		}

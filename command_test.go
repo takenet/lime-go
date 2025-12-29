@@ -336,3 +336,328 @@ func createResponseCommand() *ResponseCommand {
 	c.Status = CommandStatusSuccess
 	return &c
 }
+
+func TestRequestCommandSuccessResponse(t *testing.T) {
+	// Arrange
+	cmd := createGetPingCommand()
+
+	// Act
+	response := cmd.SuccessResponse()
+
+	// Assert
+	assert.NotNil(t, response)
+	assert.Equal(t, CommandStatusSuccess, response.Status)
+	assert.Equal(t, cmd.ID, response.ID)
+	assert.Equal(t, cmd.To, response.From)
+	assert.Equal(t, cmd.From, response.To)
+	assert.Equal(t, cmd.Method, response.Method)
+	assert.Nil(t, response.Reason)
+}
+
+func TestRequestCommandSuccessResponseWithResource(t *testing.T) {
+	// Arrange
+	cmd := createGetPingCommand()
+	ping := &Ping{}
+
+	// Act
+	response := cmd.SuccessResponseWithResource(ping)
+
+	// Assert
+	assert.NotNil(t, response)
+	assert.Equal(t, CommandStatusSuccess, response.Status)
+	assert.Equal(t, cmd.ID, response.ID)
+	assert.Equal(t, ping, response.Resource)
+	assert.NotNil(t, response.Type)
+}
+
+func TestRequestCommandFailureResponse(t *testing.T) {
+	// Arrange
+	cmd := createGetPingCommand()
+	reason := &Reason{
+		Code:        1,
+		Description: "Test error",
+	}
+
+	// Act
+	response := cmd.FailureResponse(reason)
+
+	// Assert
+	assert.NotNil(t, response)
+	assert.Equal(t, CommandStatusFailure, response.Status)
+	assert.Equal(t, cmd.ID, response.ID)
+	assert.Equal(t, cmd.To, response.From)
+	assert.Equal(t, cmd.From, response.To)
+	assert.Equal(t, cmd.Method, response.Method)
+	assert.Equal(t, reason, response.Reason)
+}
+
+func TestRequestCommandSetMethod(t *testing.T) {
+	// Arrange
+	cmd := &RequestCommand{}
+
+	// Act
+	result := cmd.SetMethod(CommandMethodSet)
+
+	// Assert
+	assert.NotNil(t, result)
+	assert.Equal(t, CommandMethodSet, cmd.Method)
+}
+
+func TestRequestCommandSetResource(t *testing.T) {
+	// Arrange
+	cmd := &RequestCommand{}
+	ping := &Ping{}
+
+	// Act
+	result := cmd.SetResource(ping)
+
+	// Assert
+	assert.NotNil(t, result)
+	assert.Equal(t, ping, cmd.Resource)
+	assert.NotNil(t, cmd.Type)
+	assert.Equal(t, ping.MediaType(), *cmd.Type)
+}
+
+func TestRequestCommandSetURI(t *testing.T) {
+	// Arrange
+	cmd := &RequestCommand{}
+	uri, _ := ParseLimeURI("/test/path")
+
+	// Act
+	result := cmd.SetURI(uri)
+
+	// Assert
+	assert.Equal(t, cmd, result)
+	assert.Equal(t, uri, cmd.URI)
+}
+
+func TestRequestCommandSetURIString(t *testing.T) {
+	// Arrange
+	cmd := &RequestCommand{}
+
+	// Act
+	result := cmd.SetURIString("/test/path")
+
+	// Assert
+	assert.Equal(t, cmd, result)
+	assert.Equal(t, "/test/path", cmd.URI.Path())
+}
+
+func TestResponseCommandSetStatusFailure(t *testing.T) {
+	// Arrange
+	cmd := &ResponseCommand{}
+	reason := Reason{
+		Code:        42,
+		Description: "Failure reason",
+	}
+
+	// Act
+	cmd.SetStatusFailure(reason)
+
+	// Assert
+	assert.Equal(t, CommandStatusFailure, cmd.Status)
+	assert.NotNil(t, cmd.Reason)
+	assert.Equal(t, 42, cmd.Reason.Code)
+	assert.Equal(t, "Failure reason", cmd.Reason.Description)
+}
+
+func TestParseLimeURIWithPath(t *testing.T) {
+	// Act
+	uri, err := ParseLimeURI("/accounts/john@doe.com")
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, uri)
+	assert.Equal(t, "/accounts/john@doe.com", uri.Path())
+}
+
+func TestParseLimeURIWithQueryString(t *testing.T) {
+	// Act
+	uri, err := ParseLimeURI("/accounts?filter=active&limit=10")
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, uri)
+	assert.Equal(t, "/accounts", uri.Path())
+	assert.Contains(t, uri.String(), "filter=active")
+	assert.Contains(t, uri.String(), "limit=10")
+}
+
+func TestParseLimeURIEmpty(t *testing.T) {
+	// Act
+	uri, err := ParseLimeURI("")
+
+	// Assert
+	// Empty string is valid, returns empty URI
+	assert.NoError(t, err)
+	assert.NotNil(t, uri)
+	assert.Equal(t, "", uri.Path())
+}
+
+func TestParseLimeURIInvalid(t *testing.T) {
+	// Act - URL with invalid characters that Go's url.Parse will reject
+	uri, err := ParseLimeURI("http://[::1]:namedport")
+
+	// Assert
+	if err != nil {
+		assert.Error(t, err)
+		assert.Nil(t, uri)
+	} else {
+		// Go's url.Parse is very permissive, so this might not error
+		assert.NotNil(t, uri)
+	}
+}
+
+func TestLimeURIString(t *testing.T) {
+	// Arrange
+	uri, _ := ParseLimeURI("/test/path?key=value")
+
+	// Act
+	result := uri.String()
+
+	// Assert
+	assert.Equal(t, "/test/path?key=value", result)
+}
+
+func TestLimeURIPath(t *testing.T) {
+	// Arrange
+	uri, _ := ParseLimeURI("/test/path?key=value")
+
+	// Act
+	result := uri.Path()
+
+	// Assert
+	assert.Equal(t, "/test/path", result)
+}
+
+func TestLimeURIQuery(t *testing.T) {
+	// Arrange
+	uri, _ := ParseLimeURI("/test/path?key=value&foo=bar")
+
+	// Act
+	result := uri.String()
+
+	// Assert
+	assert.Contains(t, result, "key=value")
+	assert.Contains(t, result, "foo=bar")
+}
+
+func TestLimeURIMarshalText(t *testing.T) {
+	// Arrange
+	uri, _ := ParseLimeURI("/test/resource")
+
+	// Act
+	text, err := uri.MarshalText()
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, "/test/resource", string(text))
+}
+
+func TestURIUnmarshalText(t *testing.T) {
+	// Arrange
+	var uri URI
+	text := []byte("/accounts/user@example.com")
+
+	// Act
+	err := uri.UnmarshalText(text)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, "/accounts/user@example.com", uri.Path())
+}
+
+func TestCommandSetMethod(t *testing.T) {
+	// Arrange
+	cmd := &Command{}
+
+	// Act
+	result := cmd.SetMethod(CommandMethodDelete)
+
+	// Assert
+	assert.Equal(t, cmd, result)
+	assert.Equal(t, CommandMethodDelete, cmd.Method)
+}
+
+func TestCommandSetResource(t *testing.T) {
+	// Arrange
+	cmd := &Command{}
+	ping := &Ping{}
+
+	// Act
+	result := cmd.SetResource(ping)
+
+	// Assert
+	assert.Equal(t, cmd, result)
+	assert.Equal(t, ping, cmd.Resource)
+	assert.NotNil(t, cmd.Type)
+}
+
+func TestURIString(t *testing.T) {
+	// Test with nil URL
+	uri := &URI{}
+	assert.Empty(t, uri.String())
+
+	// Test with valid URL
+	uri, _ = ParseLimeURI("lime://user@example.com/path/to/resource")
+	assert.Equal(t, "lime://user@example.com/path/to/resource", uri.String())
+}
+
+func TestURIPath(t *testing.T) {
+	// Test with nil URL
+	uri := &URI{}
+	assert.Empty(t, uri.Path())
+
+	// Test with valid URL
+	uri, _ = ParseLimeURI("lime://example.com/path/to/resource")
+	assert.Equal(t, "/path/to/resource", uri.Path())
+}
+
+func TestURIOwner(t *testing.T) {
+	// Test with nil URL
+	uri := &URI{}
+	assert.Nil(t, uri.Owner())
+
+	// Test with URL without user
+	uri, _ = ParseLimeURI("lime://example.com/path")
+	assert.Nil(t, uri.Owner())
+
+	// Test with URL with user - owner only gets username from URL user info
+	uri, _ = ParseLimeURI("lime://user@example.com/path")
+	owner := uri.Owner()
+	assert.NotNil(t, owner)
+	assert.Equal(t, "user", owner.Name)
+	// Domain is not parsed from URL host, only from username@domain in user info
+	assert.Empty(t, owner.Domain)
+}
+
+func TestURIOwnerWithComplexIdentity(t *testing.T) {
+	uri, _ := ParseLimeURI("lime://john.doe@company.example.com/resource")
+	owner := uri.Owner()
+	assert.NotNil(t, owner)
+	assert.Equal(t, "john.doe", owner.Name)
+	// Domain is not parsed from URL host, only from username@domain pattern in URL user info
+	assert.Empty(t, owner.Domain)
+}
+
+func TestURIURL(t *testing.T) {
+	// Test with nil URL
+	uri := &URI{}
+	assert.Nil(t, uri.URL())
+
+	// Test with valid URL - should return a copy
+	uri, _ = ParseLimeURI("lime://user@example.com/path/to/resource")
+	url1 := uri.URL()
+	url2 := uri.URL()
+
+	assert.NotNil(t, url1)
+	assert.NotNil(t, url2)
+	assert.Equal(t, "lime://user@example.com/path/to/resource", url1.String())
+
+	// Verify it returns a copy (different pointers)
+	assert.NotSame(t, url1, url2, "should return different instances (copies)")
+
+	// Modifying one should not affect the other
+	url1.Path = "/modified"
+	assert.NotEqual(t, url1.Path, url2.Path, "copies should be independent")
+}

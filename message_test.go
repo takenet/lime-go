@@ -224,3 +224,41 @@ func TestMessageUnmarshalJSONApplicationUnknownJson(t *testing.T) {
 	}
 	assert.Equal(t, JsonDocument{"property1": "value1", "property2": 2.0, "property3": map[string]interface{}{"subproperty1": "subvalue1"}, "property4": false, "property5": 12.3}, *d)
 }
+
+func TestMessageNotification(t *testing.T) {
+	// Arrange
+	msg := createMessage()
+	msg.From = Node{Identity: Identity{Name: "sender", Domain: "example.com"}}
+
+	// Act
+	notification := msg.Notification(NotificationEventReceived)
+
+	// Assert
+	assert.NotNil(t, notification)
+	assert.Equal(t, msg.ID, notification.ID)
+	assert.Equal(t, msg.To, notification.From)
+	assert.Equal(t, msg.From, notification.To)
+	assert.Equal(t, NotificationEventReceived, notification.Event)
+	assert.Nil(t, notification.Reason)
+}
+
+func TestMessageFailedNotification(t *testing.T) {
+	// Arrange
+	msg := createMessage()
+	msg.From = Node{Identity: Identity{Name: "sender", Domain: "example.com"}}
+	reason := &Reason{
+		Code:        500,
+		Description: "Internal error",
+	}
+
+	// Act
+	notification := msg.FailedNotification(reason)
+
+	// Assert
+	assert.NotNil(t, notification)
+	assert.Equal(t, msg.ID, notification.ID)
+	assert.Equal(t, msg.To, notification.From)
+	assert.Equal(t, msg.From, notification.To)
+	assert.Equal(t, NotificationEventFailed, notification.Event)
+	assert.Equal(t, reason, notification.Reason)
+}

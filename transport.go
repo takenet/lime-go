@@ -33,6 +33,7 @@ type TransportListener interface {
 
 // TraceWriter Enable request tracing for network transports.
 type TraceWriter interface {
+	io.Closer
 	SendWriter() *io.Writer    // SendWriter returns the sendWriter for the transport send operations
 	ReceiveWriter() *io.Writer // ReceiveWriter returns the sendWriter for the transport receive operations
 }
@@ -40,8 +41,10 @@ type TraceWriter interface {
 // StdoutTraceWriter Implements a TraceWriter that uses the standard output for
 // writing send and received envelopes.
 type StdoutTraceWriter struct {
-	sendWriter    io.Writer
-	receiveWriter io.Writer
+	sendWriter    io.WriteCloser
+	receiveWriter io.WriteCloser
+	sendReader    io.ReadCloser
+	receiveReader io.ReadCloser
 }
 
 func NewStdoutTraceWriter() TraceWriter {
@@ -50,9 +53,11 @@ func NewStdoutTraceWriter() TraceWriter {
 	sendDecoder := json.NewDecoder(sendReader)
 	receiveDecoder := json.NewDecoder(receiveReader)
 
-	tw := StdoutTraceWriter{
+	tw := &StdoutTraceWriter{
 		sendWriter:    sendWriter,
 		receiveWriter: receiveWriter,
+		sendReader:    sendReader,
+		receiveReader: receiveReader,
 	}
 	trace := func(dec *json.Decoder, action string) {
 		for {
@@ -69,13 +74,30 @@ func NewStdoutTraceWriter() TraceWriter {
 	go trace(receiveDecoder, "receive")
 	go trace(sendDecoder, "send")
 
-	return &tw
+	return tw
 }
 
-func (t StdoutTraceWriter) SendWriter() *io.Writer {
-	return &t.sendWriter
+func (t *StdoutTraceWriter) SendWriter() *io.Writer {
+	w := io.Writer(t.sendWriter)
+	return &w
 }
 
-func (t StdoutTraceWriter) ReceiveWriter() *io.Writer {
-	return &t.receiveWriter
+func (t *StdoutTraceWriter) ReceiveWriter() *io.Writer {
+	w := io.Writer(t.receiveWriter)
+	return &w
+}
+
+func (t *StdoutTraceWriter) Close() error {
+	// Close writers first to signal goroutines to exit
+	if err := t.sendWriter.Close(); err != nil {
+		return err
+	}
+	if err := t.receiveWriter.Close(); err != nil {
+		return err
+	}
+	// Close readers to clean up resources
+	if err := t.sendReader.Close(); err != nil {
+		return err
+	}
+	return t.receiveReader.Close()
 }

@@ -151,3 +151,83 @@ func TestInProcessTransportReceiveSession(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, s, received)
 }
+
+func TestInProcessTransportCompression(t *testing.T) {
+	var addr InProcessAddr = "localhost"
+	listener := createInProcessListener(t, addr, nil)
+	defer silentClose(listener)
+	transport := createClientInProcessTransport(t, addr)
+	defer silentClose(transport)
+
+	// Test SupportedCompression
+	supported := transport.SupportedCompression()
+	assert.NotNil(t, supported)
+	assert.Contains(t, supported, SessionCompressionNone)
+
+	// Test Compression
+	compression := transport.Compression()
+	assert.Equal(t, SessionCompressionNone, compression)
+
+	// Test SetCompression - should return error as not supported
+	err := transport.SetCompression(context.Background(), SessionCompressionGzip)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not supported")
+}
+
+func TestInProcessTransportEncryption(t *testing.T) {
+	var addr InProcessAddr = "localhost"
+	listener := createInProcessListener(t, addr, nil)
+	defer silentClose(listener)
+	transport := createClientInProcessTransport(t, addr)
+	defer silentClose(transport)
+
+	// Test SupportedEncryption
+	supported := transport.SupportedEncryption()
+	assert.NotNil(t, supported)
+	assert.Contains(t, supported, SessionEncryptionNone)
+
+	// Test Encryption
+	encryption := transport.Encryption()
+	assert.Equal(t, SessionEncryptionNone, encryption)
+
+	// Test SetEncryption - should return error as not supported
+	err := transport.SetEncryption(context.Background(), SessionEncryptionTLS)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not supported")
+}
+
+func TestInProcessTransportLocalAddr(t *testing.T) {
+	var addr InProcessAddr = "test-local-addr"
+	listener := createInProcessListener(t, addr, nil)
+	defer silentClose(listener)
+	transport := createClientInProcessTransport(t, addr)
+	defer silentClose(transport)
+
+	localAddr := transport.LocalAddr()
+	assert.NotNil(t, localAddr)
+	// Local addr is auto-generated for client
+	assert.IsType(t, InProcessAddr(""), localAddr)
+}
+
+func TestInProcessTransportRemoteAddr(t *testing.T) {
+	var addr InProcessAddr = "test-remote-addr"
+	var transportChan = make(chan Transport, 1)
+	listener := createInProcessListener(t, addr, transportChan)
+	defer silentClose(listener)
+	client := createClientInProcessTransport(t, addr)
+	defer silentClose(client)
+	server := receiveTransport(t, transportChan)
+	defer silentClose(server)
+
+	// From client's perspective, remote is the server address
+	remoteAddr := client.RemoteAddr()
+	assert.NotNil(t, remoteAddr)
+	assert.Equal(t, addr, remoteAddr)
+}
+
+func TestInProcessAddrNetwork(t *testing.T) {
+	addr := InProcessAddr("test-addr")
+
+	network := addr.Network()
+	assert.Equal(t, "in.process", network)
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 )
 
 type inProcessTransport struct {
@@ -187,7 +188,22 @@ func (l *inProcessTransportListener) newClient(addr InProcessAddr, bufferSize in
 	// Create transport pair
 	client, server := newInProcessTransportPair(addr, bufferSize)
 	go func() {
-		l.transports <- server
+		// Use a timeout to prevent goroutine leak if listener is closed
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		select {
+		case <-ctx.Done():
+			// Timeout or context cancelled, close the server transport
+			_ = server.Close()
+			return
+		case <-l.done:
+			// Listener closed, close the server transport
+			_ = server.Close()
+			return
+		case l.transports <- server:
+			// Successfully delivered
+		}
 	}()
 	return client
 }
