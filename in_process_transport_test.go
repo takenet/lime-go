@@ -2,10 +2,11 @@ package lime
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/goleak"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 )
 
 func createInProcessListener(t *testing.T, addr InProcessAddr, transportChan chan Transport) TransportListener {
@@ -39,7 +40,7 @@ func createClientInProcessTransport(t *testing.T, addr InProcessAddr) Transport 
 	return client
 }
 
-func TestInProcessTransport_Dial_WhenListening(t *testing.T) {
+func TestInProcessTransportDialWhenListening(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
@@ -52,7 +53,7 @@ func TestInProcessTransport_Dial_WhenListening(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestInProcessTransport_Dial_WhenNotListening(t *testing.T) {
+func TestInProcessTransportDialWhenNotListening(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 
@@ -64,7 +65,7 @@ func TestInProcessTransport_Dial_WhenNotListening(t *testing.T) {
 	assert.Contains(t, err.Error(), "refused")
 }
 
-func TestInProcessTransport_Dial_AfterListenerClosed(t *testing.T) {
+func TestInProcessTransportDialAfterListenerClosed(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
@@ -80,7 +81,7 @@ func TestInProcessTransport_Dial_AfterListenerClosed(t *testing.T) {
 	assert.Contains(t, err.Error(), "refused")
 }
 
-func TestInProcessTransport_Dial_OtherAddress(t *testing.T) {
+func TestInProcessTransportDialOtherAddress(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
@@ -95,7 +96,7 @@ func TestInProcessTransport_Dial_OtherAddress(t *testing.T) {
 	assert.Contains(t, err.Error(), "refused")
 }
 
-func TestInProcessTransport_Close_WhenOpen(t *testing.T) {
+func TestInProcessTransportCloseWhenOpen(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
@@ -109,7 +110,7 @@ func TestInProcessTransport_Close_WhenOpen(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestInProcessTransport_Send_Session(t *testing.T) {
+func TestInProcessTransportSendSession(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	var addr InProcessAddr = "localhost"
@@ -125,7 +126,7 @@ func TestInProcessTransport_Send_Session(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestInProcessTransport_Receive_Session(t *testing.T) {
+func TestInProcessTransportReceiveSession(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	var addr InProcessAddr = "localhost"

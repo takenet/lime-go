@@ -4,11 +4,17 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/goleak"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
+)
+
+const (
+	wsURLFormat  = "ws://%s"
+	wssURLFormat = "wss://%s"
 )
 
 func createWebsocketListener(ctx context.Context, t testing.TB, addr net.Addr, transportChan chan Transport) TransportListener {
@@ -77,7 +83,7 @@ func createLocalhostWSAddr() net.Addr {
 	}
 }
 
-func TestWebsocketTransportListener_Accept_WhenContextDeadline(t *testing.T) {
+func TestWebsocketTransportListenerAcceptWhenContextDeadline(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
@@ -95,7 +101,7 @@ func TestWebsocketTransportListener_Accept_WhenContextDeadline(t *testing.T) {
 	assert.Equal(t, "ws listener: context deadline exceeded", err.Error())
 }
 
-func TestWebsocketTransportListener_Accept_WhenClosed(t *testing.T) {
+func TestWebsocketTransportListenerAcceptWhenClosed(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -117,13 +123,13 @@ func TestWebsocketTransportListener_Accept_WhenClosed(t *testing.T) {
 	assert.Equal(t, "ws listener closed", err.Error())
 }
 
-func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
+func TestWebsocketTransportDialWhenListening(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createLocalhostWSAddr()
-	url := fmt.Sprintf("ws://%s", addr)
+	url := fmt.Sprintf(wsURLFormat, addr)
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
 
@@ -137,13 +143,13 @@ func TestWebsocketTransport_Dial_WhenListening(t *testing.T) {
 	assert.True(t, client.Connected())
 }
 
-func TestWebsocketTransport_Dial_WhenNotListening(t *testing.T) {
+func TestWebsocketTransportDialWhenNotListening(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createLocalhostWSAddr()
-	url := fmt.Sprintf("ws://%s", addr)
+	url := fmt.Sprintf(wsURLFormat, addr)
 
 	// Act
 	client, err := DialWebsocket(ctx, url, nil, nil)
@@ -154,13 +160,13 @@ func TestWebsocketTransport_Dial_WhenNotListening(t *testing.T) {
 	assert.Nil(t, client)
 }
 
-func TestWebsocketTransport_Dial_AfterListenerClosed(t *testing.T) {
+func TestWebsocketTransportDialAfterListenerClosed(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	addr := createLocalhostWSAddr()
-	url := fmt.Sprintf("ws://%s", addr)
+	url := fmt.Sprintf(wsURLFormat, addr)
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	if err := listener.Close(); err != nil {
 		t.Fatal(err)
@@ -175,7 +181,7 @@ func TestWebsocketTransport_Dial_AfterListenerClosed(t *testing.T) {
 	assert.Nil(t, client)
 }
 
-func TestWebsocketTransport_Close_WhenOpen(t *testing.T) {
+func TestWebsocketTransportCloseWhenOpen(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -183,7 +189,7 @@ func TestWebsocketTransport_Close_WhenOpen(t *testing.T) {
 	addr := createLocalhostWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
-	url := fmt.Sprintf("ws://%s", addr)
+	url := fmt.Sprintf(wsURLFormat, addr)
 	client := createClientWebsocketTransport(ctx, t, url)
 
 	// Act
@@ -193,7 +199,7 @@ func TestWebsocketTransport_Close_WhenOpen(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestWebsocketTransport_Close_WhenAlreadyClosed(t *testing.T) {
+func TestWebsocketTransportCloseWhenAlreadyClosed(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -201,7 +207,7 @@ func TestWebsocketTransport_Close_WhenAlreadyClosed(t *testing.T) {
 	addr := createLocalhostWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
-	url := fmt.Sprintf("ws://%s", addr)
+	url := fmt.Sprintf(wsURLFormat, addr)
 	client := createClientWebsocketTransport(ctx, t, url)
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
@@ -215,7 +221,7 @@ func TestWebsocketTransport_Close_WhenAlreadyClosed(t *testing.T) {
 	assert.Equal(t, "transport is not open", err.Error())
 }
 
-func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
+func TestWebsocketTransportSetEncryptionNone(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -223,7 +229,7 @@ func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
 	addr := createLocalhostWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
-	url := fmt.Sprintf("ws://%s", addr)
+	url := fmt.Sprintf(wsURLFormat, addr)
 	client := createClientWebsocketTransport(ctx, t, url)
 
 	// Act
@@ -234,7 +240,7 @@ func TestWebsocketTransport_SetEncryption_None(t *testing.T) {
 	assert.Equal(t, SessionEncryptionNone, client.Encryption())
 }
 
-func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
+func TestWebsocketTransportSetEncryptionTLS(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -242,7 +248,7 @@ func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
 	addr := createLocalhostWSAddr()
 	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
 	defer silentClose(listener)
-	url := fmt.Sprintf("wss://%s", addr)
+	url := fmt.Sprintf(wssURLFormat, addr)
 	client := createClientWebsocketTransportTLS(ctx, t, url)
 
 	// Act
@@ -253,7 +259,7 @@ func TestWebsocketTransport_SetEncryption_TLS(t *testing.T) {
 	assert.Equal(t, SessionEncryptionTLS, client.Encryption())
 }
 
-func TestWebsocketTransport_Send_Session(t *testing.T) {
+func TestWebsocketTransportSendSession(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -261,7 +267,7 @@ func TestWebsocketTransport_Send_Session(t *testing.T) {
 	addr := createLocalhostWSAddr()
 	listener := createWebsocketListener(ctx, t, addr, nil)
 	defer silentClose(listener)
-	url := fmt.Sprintf("ws://%s", addr)
+	url := fmt.Sprintf(wsURLFormat, addr)
 	client := createClientWebsocketTransport(ctx, t, url)
 	s := createSession()
 
@@ -272,7 +278,7 @@ func TestWebsocketTransport_Send_Session(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestWebsocketTransport_Send_SessionTLS(t *testing.T) {
+func TestWebsocketTransportSendSessionTLS(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -280,7 +286,7 @@ func TestWebsocketTransport_Send_SessionTLS(t *testing.T) {
 	addr := createLocalhostWSAddr()
 	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
 	defer silentClose(listener)
-	url := fmt.Sprintf("wss://%s", addr)
+	url := fmt.Sprintf(wssURLFormat, addr)
 	client := createClientWebsocketTransportTLS(ctx, t, url)
 	s := createSession()
 
@@ -291,7 +297,7 @@ func TestWebsocketTransport_Send_SessionTLS(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestWebsocketTransport_Send_Deadline(t *testing.T) {
+func TestWebsocketTransportSendDeadline(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -299,7 +305,7 @@ func TestWebsocketTransport_Send_Deadline(t *testing.T) {
 	addr := createLocalhostWSAddr()
 	listener := createWebsocketListenerTLS(ctx, t, addr, nil)
 	defer silentClose(listener)
-	url := fmt.Sprintf("wss://%s", addr)
+	url := fmt.Sprintf(wssURLFormat, addr)
 	client := createClientWebsocketTransportTLS(ctx, t, url)
 	s := createSession()
 	ctx, cancel = context.WithDeadline(context.Background(), time.Now())
@@ -313,7 +319,7 @@ func TestWebsocketTransport_Send_Deadline(t *testing.T) {
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
-func TestWebsocketTransport_Receive_Session(t *testing.T) {
+func TestWebsocketTransportReceiveSession(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -322,7 +328,7 @@ func TestWebsocketTransport_Receive_Session(t *testing.T) {
 	var transportChan = make(chan Transport, 1)
 	listener := createWebsocketListener(ctx, t, addr, transportChan)
 	defer silentClose(listener)
-	url := fmt.Sprintf("ws://%s", addr)
+	url := fmt.Sprintf(wsURLFormat, addr)
 	client := createClientWebsocketTransport(ctx, t, url)
 	server := receiveTransport(t, transportChan)
 	s := createSession()
@@ -340,7 +346,7 @@ func TestWebsocketTransport_Receive_Session(t *testing.T) {
 	assert.Equal(t, s, received)
 }
 
-func TestWebsocketTransport_Receive_SessionTLS(t *testing.T) {
+func TestWebsocketTransportReceiveSessionTLS(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -349,7 +355,7 @@ func TestWebsocketTransport_Receive_SessionTLS(t *testing.T) {
 	var transportChan = make(chan Transport, 1)
 	listener := createWebsocketListenerTLS(ctx, t, addr, transportChan)
 	defer silentClose(listener)
-	url := fmt.Sprintf("wss://%s", addr)
+	url := fmt.Sprintf(wssURLFormat, addr)
 	client := createClientWebsocketTransportTLS(ctx, t, url)
 	server := receiveTransport(t, transportChan)
 	s := createSession()
@@ -367,7 +373,7 @@ func TestWebsocketTransport_Receive_SessionTLS(t *testing.T) {
 	assert.Equal(t, s, received)
 }
 
-func TestWebsocketTransport_Receive_Deadline(t *testing.T) {
+func TestWebsocketTransportReceiveDeadline(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -376,7 +382,7 @@ func TestWebsocketTransport_Receive_Deadline(t *testing.T) {
 	var transportChan = make(chan Transport, 1)
 	listener := createWebsocketListenerTLS(ctx, t, addr, transportChan)
 	defer silentClose(listener)
-	url := fmt.Sprintf("wss://%s", addr)
+	url := fmt.Sprintf(wssURLFormat, addr)
 	client := createClientWebsocketTransportTLS(ctx, t, url)
 	defer silentClose(client)
 	server := receiveTransport(t, transportChan)
@@ -392,7 +398,7 @@ func TestWebsocketTransport_Receive_Deadline(t *testing.T) {
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
-func BenchmarkWebsocketTransport_Send_Message(b *testing.B) {
+func BenchmarkWebsocketTransportSendMessage(b *testing.B) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -400,7 +406,7 @@ func BenchmarkWebsocketTransport_Send_Message(b *testing.B) {
 	var transportChan = make(chan Transport)
 	listener := createWebsocketListener(ctx, b, addr, transportChan)
 	defer silentClose(listener)
-	url := fmt.Sprintf("ws://%s", addr)
+	url := fmt.Sprintf(wsURLFormat, addr)
 	client := createClientWebsocketTransport(ctx, b, url)
 	server := receiveTransport(b, transportChan)
 	messages := make([]*Message, b.N)
@@ -435,7 +441,7 @@ func BenchmarkWebsocketTransport_Send_Message(b *testing.B) {
 	}
 }
 
-func BenchmarkWebsocketTransport_Send_MessageTLS(b *testing.B) {
+func BenchmarkWebsocketTransportSendMessageTLS(b *testing.B) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -443,7 +449,7 @@ func BenchmarkWebsocketTransport_Send_MessageTLS(b *testing.B) {
 	var transportChan = make(chan Transport)
 	listener := createWebsocketListenerTLS(ctx, b, addr, transportChan)
 	defer silentClose(listener)
-	url := fmt.Sprintf("wss://%s", addr)
+	url := fmt.Sprintf(wssURLFormat, addr)
 	client := createClientWebsocketTransportTLS(ctx, b, url)
 	server := receiveTransport(b, transportChan)
 	messages := make([]*Message, b.N)

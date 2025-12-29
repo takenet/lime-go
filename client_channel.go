@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+const errEstablishSession = "establish session: %w"
+
 // ClientChannel implements the client-side communication channel in a Lime session.
 type ClientChannel struct {
 	*channel
@@ -143,6 +145,7 @@ type EncryptionSelector func(options []SessionEncryption) SessionEncryption
 var NoneEncryptionSelector EncryptionSelector = func(options []SessionEncryption) SessionEncryption {
 	return SessionEncryptionNone
 }
+
 var TLSEncryptionSelector EncryptionSelector = func(options []SessionEncryption) SessionEncryption {
 	return SessionEncryptionTLS
 }
@@ -155,6 +158,86 @@ var GuestAuthenticator Authenticator = func(schemes []AuthenticationScheme, roun
 
 var TransportAuthenticator Authenticator = func(schemes []AuthenticationScheme, roundTrip Authentication) Authentication {
 	return &TransportAuthentication{}
+}
+
+// applyTransportSettings applies compression and encryption settings to the transport.
+func (c *ClientChannel) applyTransportSettings(ctx context.Context, ses *Session) error {
+	if ses.Compression != "" && ses.Compression != c.transport.Compression() {
+		if err := c.transport.SetCompression(ctx, ses.Compression); err != nil {
+			return fmt.Errorf("set compression: %w", err)
+		}
+	}
+	if ses.Encryption != "" && ses.Encryption != c.transport.Encryption() {
+		if err := c.transport.SetEncryption(ctx, ses.Encryption); err != nil {
+			return fmt.Errorf("set encryption: %w", err)
+		}
+	}
+	return nil
+}
+
+// handleSessionNegotiation performs the session negotiation phase.
+func (c *ClientChannel) handleSessionNegotiation(
+	ctx context.Context,
+	ses *Session,
+	compSelector CompressionSelector,
+	encryptSelector EncryptionSelector,
+) (*Session, error) {
+	if compSelector == nil {
+		panic("nil compression selector")
+	}
+	if encryptSelector == nil {
+		panic("nil encrypt selector")
+	}
+
+	// Select options
+	ses, err := c.negotiateSession(
+		ctx,
+		compSelector(ses.CompressionOptions),
+		encryptSelector(ses.EncryptionOptions))
+	if err != nil {
+		return nil, err
+	}
+
+	if ses.State == SessionStateNegotiating {
+		if err := c.applyTransportSettings(ctx, ses); err != nil {
+			return nil, err
+		}
+	}
+
+	// Await for authentication options
+	ses, err = c.receiveSessionFromServer(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return ses, nil
+}
+
+// handleSessionAuthentication performs the session authentication phase.
+func (c *ClientChannel) handleSessionAuthentication(
+	ctx context.Context,
+	ses *Session,
+	identity Identity,
+	authenticator Authenticator,
+	instance string,
+) (*Session, error) {
+	var roundTrip Authentication
+
+	for ses.State == SessionStateAuthenticating {
+		var err error
+		ses, err = c.authenticateSession(
+			ctx,
+			identity,
+			authenticator(ses.SchemeOptions, roundTrip),
+			instance,
+		)
+		if err != nil {
+			return nil, err
+		}
+		roundTrip = ses.Authentication
+	}
+
+	return ses, nil
 }
 
 // EstablishSession performs the client session negotiation and authentication handshake.
@@ -176,64 +259,21 @@ func (c *ClientChannel) EstablishSession(
 
 	ses, err := c.startNewSession(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("establish session: %w", err)
+		return nil, fmt.Errorf(errEstablishSession, err)
 	}
 
 	// Session negotiation
 	if ses.State == SessionStateNegotiating {
-		if compSelector == nil {
-			panic("nil compression selector")
-		}
-
-		if encryptSelector == nil {
-			panic("nil encrypt selector")
-		}
-
-		// Select options
-		ses, err = c.negotiateSession(
-			ctx,
-			compSelector(ses.CompressionOptions),
-			encryptSelector(ses.EncryptionOptions))
+		ses, err = c.handleSessionNegotiation(ctx, ses, compSelector, encryptSelector)
 		if err != nil {
-			return nil, fmt.Errorf("establish session: %w", err)
-		}
-
-		if ses.State == SessionStateNegotiating {
-			if ses.Compression != "" && ses.Compression != c.transport.Compression() {
-				err = c.transport.SetCompression(ctx, ses.Compression)
-				if err != nil {
-					return nil, fmt.Errorf("establish session: set compression: %w", err)
-				}
-			}
-			if ses.Encryption != "" && ses.Encryption != c.transport.Encryption() {
-				err = c.transport.SetEncryption(ctx, ses.Encryption)
-				if err != nil {
-					return nil, fmt.Errorf("establish session: set encryption: %w", err)
-				}
-			}
-		}
-
-		// Await for authentication options
-		ses, err = c.receiveSessionFromServer(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("establish session: %w", err)
+			return nil, fmt.Errorf(errEstablishSession, err)
 		}
 	}
 
 	// Session authentication
-	var roundTrip Authentication
-
-	for ses.State == SessionStateAuthenticating {
-		ses, err = c.authenticateSession(
-			ctx,
-			identity,
-			authenticator(ses.SchemeOptions, roundTrip),
-			instance,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("establish session: %w", err)
-		}
-		roundTrip = ses.Authentication
+	ses, err = c.handleSessionAuthentication(ctx, ses, identity, authenticator, instance)
+	if err != nil {
+		return nil, fmt.Errorf(errEstablishSession, err)
 	}
 
 	return ses, nil

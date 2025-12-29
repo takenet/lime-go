@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/takenet/lime-go"
-	"go.uber.org/multierr"
 	"log"
 	"math/rand"
 	"net"
@@ -14,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/takenet/lime-go"
+	"go.uber.org/multierr"
 )
 
 var channels = make(map[string]*lime.ServerChannel)
@@ -72,7 +73,7 @@ func main() {
 		EnableGuestAuthentication().
 		Build()
 
-	sig := make(chan os.Signal)
+	sig := make(chan os.Signal, 1)
 
 	go func() {
 		if err := server.ListenAndServe(); err != lime.ErrServerClosed {

@@ -3,13 +3,16 @@ package lime
 import (
 	"context"
 	"errors"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/goleak"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 )
 
-func TestChannel_Established_WhenEstablished(t *testing.T) {
+const unexpectedEnvelopeTypeError = "unexpected envelope type"
+
+func TestChannelEstablishedWhenEstablished(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -24,7 +27,7 @@ func TestChannel_Established_WhenEstablished(t *testing.T) {
 	assert.True(t, established)
 }
 
-func TestChannel_Established_WhenNew(t *testing.T) {
+func TestChannelEstablishedWhenNew(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -38,7 +41,7 @@ func TestChannel_Established_WhenNew(t *testing.T) {
 	assert.False(t, established)
 }
 
-func TestChannel_Established_WhenTransportClosed(t *testing.T) {
+func TestChannelEstablishedWhenTransportClosed(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -54,7 +57,7 @@ func TestChannel_Established_WhenTransportClosed(t *testing.T) {
 	assert.False(t, established)
 }
 
-func TestChannel_SendMessage_WhenEstablished(t *testing.T) {
+func TestChannelSendMessageWhenEstablished(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -75,7 +78,7 @@ func TestChannel_SendMessage_WhenEstablished(t *testing.T) {
 	assert.Equal(t, m, actual)
 }
 
-func TestChannel_SendMessage_Batch(t *testing.T) {
+func TestChannelSendMessageBatch(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	count := 100
@@ -86,7 +89,7 @@ func TestChannel_SendMessage_Batch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	messages := make([]*Message, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		messages[i] = createMessage()
 	}
 	var actuals []*Message
@@ -95,7 +98,7 @@ func TestChannel_SendMessage_Batch(t *testing.T) {
 
 	// Act
 	go func() {
-		for i := 0; i < count; i++ {
+		for range count {
 			e, err := server.Receive(ctx)
 			if err != nil {
 				errchan <- err
@@ -103,7 +106,7 @@ func TestChannel_SendMessage_Batch(t *testing.T) {
 			}
 			m, ok := e.(*Message)
 			if !ok {
-				errchan <- errors.New("unexpected envelope type")
+				errchan <- errors.New(unexpectedEnvelopeTypeError)
 				return
 			}
 			actuals = append(actuals, m)
@@ -125,7 +128,7 @@ func TestChannel_SendMessage_Batch(t *testing.T) {
 	assert.Equal(t, messages, actuals)
 }
 
-func BenchmarkChannel_SendMessage(b *testing.B) {
+func BenchmarkChannelSendMessage(b *testing.B) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 0)
 	c := newChannel(client, 0)
@@ -134,7 +137,7 @@ func BenchmarkChannel_SendMessage(b *testing.B) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	messages := make([]*Message, b.N)
-	for i := 0; i < len(messages); i++ {
+	for i := range messages {
 		messages[i] = createMessage()
 	}
 	errChan := make(chan error)
@@ -165,7 +168,7 @@ func BenchmarkChannel_SendMessage(b *testing.B) {
 	}
 }
 
-func TestChannel_SendMessage_NilMessage(t *testing.T) {
+func TestChannelSendMessageNilMessage(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -182,7 +185,7 @@ func TestChannel_SendMessage_NilMessage(t *testing.T) {
 	}, "send message: envelope cannot be nil")
 }
 
-func TestChannel_SendMessage_WhenNew(t *testing.T) {
+func TestChannelSendMessageWhenNew(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -200,7 +203,7 @@ func TestChannel_SendMessage_WhenNew(t *testing.T) {
 	assert.Equal(t, "send message: cannot do in the new state", err.Error())
 }
 
-func TestChannel_ReceiveMessage_WhenEstablished(t *testing.T) {
+func TestChannelReceiveMessageWhenEstablished(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -223,11 +226,11 @@ func TestChannel_ReceiveMessage_WhenEstablished(t *testing.T) {
 	}
 }
 
-func TestChannel_ReceiveMessage_WhenFinishedState(t *testing.T) {
+func TestChannelReceiveMessageWhenFinishedState(t *testing.T) {
 	receiveMessageWithState(t, SessionStateFinished)
 }
 
-func TestChannel_ReceiveMessage_WhenFailedState(t *testing.T) {
+func TestChannelReceiveMessageWhenFailedState(t *testing.T) {
 	receiveMessageWithState(t, SessionStateFailed)
 }
 
@@ -258,7 +261,7 @@ func receiveMessageWithState(t *testing.T, state SessionState) {
 	}
 }
 
-func TestChannel_SendNotification_WhenEstablished(t *testing.T) {
+func TestChannelSendNotificationWhenEstablished(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -279,7 +282,7 @@ func TestChannel_SendNotification_WhenEstablished(t *testing.T) {
 	assert.Equal(t, n, actual)
 }
 
-func TestChannel_SendNotification_Batch(t *testing.T) {
+func TestChannelSendNotificationBatch(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	count := 100
@@ -290,7 +293,7 @@ func TestChannel_SendNotification_Batch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	notifications := make([]*Notification, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		notifications[i] = createNotification()
 	}
 	var actuals []*Notification
@@ -307,7 +310,7 @@ func TestChannel_SendNotification_Batch(t *testing.T) {
 			}
 			n, ok := e.(*Notification)
 			if !ok {
-				errchan <- errors.New("unexpected envelope type")
+				errchan <- errors.New(unexpectedEnvelopeTypeError)
 				return
 			}
 			actuals = append(actuals, n)
@@ -329,7 +332,7 @@ func TestChannel_SendNotification_Batch(t *testing.T) {
 	assert.Equal(t, notifications, actuals)
 }
 
-func BenchmarkChannel_SendNotification(b *testing.B) {
+func BenchmarkChannelSendNotification(b *testing.B) {
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -338,7 +341,7 @@ func BenchmarkChannel_SendNotification(b *testing.B) {
 	defer silentClose(c)
 	c.setState(SessionStateEstablished)
 	notifications := make([]*Notification, b.N)
-	for i := 0; i < len(notifications); i++ {
+	for i := range notifications {
 		notifications[i] = createNotification()
 	}
 	errchan := make(chan error)
@@ -369,7 +372,7 @@ func BenchmarkChannel_SendNotification(b *testing.B) {
 	}
 }
 
-func TestChannel_SendNotification_NilNotification(t *testing.T) {
+func TestChannelSendNotificationNilNotification(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -386,7 +389,7 @@ func TestChannel_SendNotification_NilNotification(t *testing.T) {
 	}, "send notification: envelope cannot be nil")
 }
 
-func TestChannel_SendNotification_WhenNew(t *testing.T) {
+func TestChannelSendNotificationWhenNew(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -404,7 +407,7 @@ func TestChannel_SendNotification_WhenNew(t *testing.T) {
 	assert.Equal(t, "send notification: cannot do in the new state", err.Error())
 }
 
-func TestChannel_ReceiveNotification_WhenEstablished(t *testing.T) {
+func TestChannelReceiveNotificationWhenEstablished(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -427,12 +430,12 @@ func TestChannel_ReceiveNotification_WhenEstablished(t *testing.T) {
 	}
 }
 
-func TestChannel_ReceiveNotification_WhenFinishedState(t *testing.T) {
+func TestChannelReceiveNotificationWhenFinishedState(t *testing.T) {
 	receiveNotificationWithState(t, SessionStateFinished)
 	defer goleak.VerifyNone(t)
 }
 
-func TestChannel_ReceiveNotification_WhenFailedState(t *testing.T) {
+func TestChannelReceiveNotificationWhenFailedState(t *testing.T) {
 	receiveNotificationWithState(t, SessionStateFailed)
 	defer goleak.VerifyNone(t)
 }
@@ -463,7 +466,7 @@ func receiveNotificationWithState(t *testing.T, state SessionState) {
 	}
 }
 
-func TestChannel_SendRequestCommand_WhenEstablished(t *testing.T) {
+func TestChannelSendRequestCommandWhenEstablished(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -484,7 +487,7 @@ func TestChannel_SendRequestCommand_WhenEstablished(t *testing.T) {
 	assert.Equal(t, cmd, actual)
 }
 
-func TestChannel_SendRequestCommand_Batch(t *testing.T) {
+func TestChannelSendRequestCommandBatch(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	count := 100
@@ -495,7 +498,7 @@ func TestChannel_SendRequestCommand_Batch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	commands := make([]*RequestCommand, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		commands[i] = createGetPingCommand()
 	}
 	var actuals []*RequestCommand
@@ -504,7 +507,7 @@ func TestChannel_SendRequestCommand_Batch(t *testing.T) {
 
 	// Act
 	go func() {
-		for i := 0; i < count; i++ {
+		for range count {
 			e, err := server.Receive(ctx)
 			if err != nil {
 				errchan <- err
@@ -512,7 +515,7 @@ func TestChannel_SendRequestCommand_Batch(t *testing.T) {
 			}
 			cmd, ok := e.(*RequestCommand)
 			if !ok {
-				errchan <- errors.New("unexpected envelope type")
+				errchan <- errors.New(unexpectedEnvelopeTypeError)
 				return
 			}
 			actuals = append(actuals, cmd)
@@ -536,7 +539,7 @@ func TestChannel_SendRequestCommand_Batch(t *testing.T) {
 	assert.Equal(t, commands, actuals)
 }
 
-func BenchmarkChannel_SendRequestCommand(b *testing.B) {
+func BenchmarkChannelSendRequestCommand(b *testing.B) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
 	c := newChannel(client, 1)
@@ -545,7 +548,7 @@ func BenchmarkChannel_SendRequestCommand(b *testing.B) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	commands := make([]*RequestCommand, b.N)
-	for i := 0; i < len(commands); i++ {
+	for i := range commands {
 		commands[i] = createGetPingCommand()
 	}
 	errchan := make(chan error)
@@ -576,7 +579,7 @@ func BenchmarkChannel_SendRequestCommand(b *testing.B) {
 	}
 }
 
-func TestChannel_SendRequestCommand_NilCommand(t *testing.T) {
+func TestChannelSendRequestCommandNilCommand(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -593,7 +596,7 @@ func TestChannel_SendRequestCommand_NilCommand(t *testing.T) {
 	}, "send request command: envelope cannot be nil")
 }
 
-func TestChannel_SendCommand_WhenNew(t *testing.T) {
+func TestChannelSendCommandWhenNew(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -611,7 +614,7 @@ func TestChannel_SendCommand_WhenNew(t *testing.T) {
 	assert.Equal(t, "send request command: cannot do in the new state", err.Error())
 }
 
-func TestChannel_ReceiveCommand_WhenEstablished(t *testing.T) {
+func TestChannelReceiveCommandWhenEstablished(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -634,12 +637,12 @@ func TestChannel_ReceiveCommand_WhenEstablished(t *testing.T) {
 	}
 }
 
-func TestChannel_ReceiveCommand_WhenFinishedState(t *testing.T) {
+func TestChannelReceiveCommandWhenFinishedState(t *testing.T) {
 	receiveCommandWithState(t, SessionStateFinished)
 	defer goleak.VerifyNone(t)
 }
 
-func TestChannel_ReceiveCommand_WhenFailedState(t *testing.T) {
+func TestChannelReceiveCommandWhenFailedState(t *testing.T) {
 	receiveCommandWithState(t, SessionStateFailed)
 	defer goleak.VerifyNone(t)
 }
@@ -670,7 +673,7 @@ func receiveCommandWithState(t *testing.T, state SessionState) {
 	}
 }
 
-func TestChannel_ProcessCommand(t *testing.T) {
+func TestChannelProcessCommand(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -700,7 +703,7 @@ func TestChannel_ProcessCommand(t *testing.T) {
 	assert.Equal(t, respCmd, actual)
 }
 
-func TestChannel_ProcessCommand_WhenContextCanceled(t *testing.T) {
+func TestChannelProcessCommandWhenContextCanceled(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, _ := newInProcessTransportPair("localhost", 1)
@@ -720,7 +723,7 @@ func TestChannel_ProcessCommand_WhenContextCanceled(t *testing.T) {
 	assert.Nil(t, actual)
 }
 
-func TestChannel_ProcessCommand_ResponseWithAnotherId(t *testing.T) {
+func TestChannelProcessCommandResponseWithAnotherId(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)

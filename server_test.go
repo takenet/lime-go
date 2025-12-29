@@ -32,7 +32,7 @@ func createBoundWSTransportListener(addr net.Addr) BoundListener {
 	}
 }
 
-func TestServer_ListenAndServe_WithMultipleListeners(t *testing.T) {
+func TestServerListenAndServeWithMultipleListeners(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -79,7 +79,7 @@ func TestServer_ListenAndServe_WithMultipleListeners(t *testing.T) {
 	assert.Error(t, eg.Wait(), ErrServerClosed)
 }
 
-func TestServer_ListenAndServe_EstablishSession(t *testing.T) {
+func TestServerListenAndServeEstablishSession(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -127,7 +127,7 @@ func TestServer_ListenAndServe_EstablishSession(t *testing.T) {
 	assert.Equal(t, SessionStateEstablished, ses.State)
 }
 
-func TestServer_ListenAndServe_ReceiveMessage(t *testing.T) {
+func TestServerListenAndServeReceiveMessage(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
@@ -192,7 +192,7 @@ func TestServer_ListenAndServe_ReceiveMessage(t *testing.T) {
 	}
 }
 
-func TestServerBuilder_Build(t *testing.T) {
+func TestServerBuilderBuild(t *testing.T) {
 	// Arrange
 	//builder := NewServerBuilder().
 

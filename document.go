@@ -31,7 +31,7 @@ type Document interface {
 }
 
 // JsonDocument represents a generic JSON document.
-type JsonDocument map[string]interface{}
+type JsonDocument map[string]any
 
 func (d *JsonDocument) MediaType() MediaType {
 	return MediaTypeApplicationJson()

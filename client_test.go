@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestClient_NewClient_Message(t *testing.T) {
+func TestClientNewClientMessage(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)

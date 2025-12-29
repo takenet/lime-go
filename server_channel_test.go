@@ -4,16 +4,30 @@ import (
 	"context"
 	"errors"
 	"github.com/stretchr/testify/assert"
+	"sync"
 	"testing"
 	"time"
 )
 
-func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
+// Wrapper to simulate Go 1.25 sync.WaitGroup.Go feature
+type WaitGroup struct {
+	sync.WaitGroup
+}
+
+func (wg *WaitGroup) Go(f func()) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		f()
+	}()
+}
+
+func TestServerChannelEstablishSessionWhenGuest(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
-	sessionID := "52e59849-19a8-4b2d-86b7-3fa563cdb616"
+	sessionID := testSessionID
 	serverNode := Node{
-		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "postmaster", Domain: testDomain},
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
@@ -21,12 +35,14 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
-		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "golang", Domain: testDomain},
 		Instance: "home",
 	}
+	var wg WaitGroup
 
 	// Act
-	go func() {
+	// Use sync.WaitGroup.Go (1.25) pattern
+	wg.Go(func() {
 		err := client.Send(ctx, &Session{
 			State: SessionStateNew,
 		})
@@ -48,7 +64,8 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 			Scheme:         AuthenticationSchemeGuest,
 			Authentication: &GuestAuthentication{},
 		})
-	}()
+	})
+
 	err := c.EstablishSession(
 		ctx,
 		[]SessionCompression{SessionCompressionNone},
@@ -62,6 +79,8 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 		},
 	)
 
+	wg.Wait() // Ensure goroutine finishes (though EstablishSession is the main blocker usually)
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, serverNode, c.LocalNode())
@@ -71,12 +90,12 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 	assert.True(t, c.transport.Connected())
 }
 
-func TestServerChannel_FinishSession(t *testing.T) {
+func TestServerChannelFinishSession(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
-	sessionID := "52e59849-19a8-4b2d-86b7-3fa563cdb616"
+	sessionID := testSessionID
 	serverNode := Node{
-		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "postmaster", Domain: testDomain},
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
@@ -86,9 +105,10 @@ func TestServerChannel_FinishSession(t *testing.T) {
 	c.setState(SessionStateEstablished)
 	sessionChan := make(chan *Session)
 	errChan := make(chan error)
+	var wg WaitGroup
 
 	// Act
-	go func() {
+	wg.Go(func() {
 		e, err := client.Receive(ctx)
 		if err != nil {
 			errChan <- err
@@ -100,7 +120,8 @@ func TestServerChannel_FinishSession(t *testing.T) {
 			return
 		}
 		sessionChan <- s
-	}()
+	})
+	
 	time.Sleep(5 * time.Millisecond)
 	err := c.FinishSession(ctx)
 
@@ -121,14 +142,15 @@ func TestServerChannel_FinishSession(t *testing.T) {
 	assert.Equal(t, sessionID, s.ID)
 	assert.Equal(t, serverNode, s.From)
 	assert.Equal(t, SessionStateFinished, s.State)
+	wg.Wait()
 }
 
-func TestServerChannel_FailSession(t *testing.T) {
+func TestServerChannelFailSession(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
-	sessionID := "52e59849-19a8-4b2d-86b7-3fa563cdb616"
+	sessionID := testSessionID
 	serverNode := Node{
-		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "postmaster", Domain: testDomain},
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
@@ -142,9 +164,10 @@ func TestServerChannel_FailSession(t *testing.T) {
 	}
 	sessionChan := make(chan *Session)
 	errChan := make(chan error)
+	var wg WaitGroup
 
 	// Act
-	go func() {
+	wg.Go(func() {
 		e, err := client.Receive(ctx)
 		if err != nil {
 			errChan <- err
@@ -156,7 +179,8 @@ func TestServerChannel_FailSession(t *testing.T) {
 			return
 		}
 		sessionChan <- s
-	}()
+	})
+	
 	time.Sleep(5 * time.Millisecond)
 	err := c.FailSession(ctx, r)
 
@@ -178,4 +202,5 @@ func TestServerChannel_FailSession(t *testing.T) {
 	assert.Equal(t, serverNode, s.From)
 	assert.Equal(t, SessionStateFailed, s.State)
 	assert.Equal(t, r, s.Reason)
+	wg.Wait()
 }
