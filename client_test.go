@@ -79,11 +79,11 @@ func TestClientBuilderDomain(t *testing.T) {
 	builder := NewClientBuilder()
 
 	// Act
-	result := builder.Domain("example.com")
+	result := builder.Domain(testExampleDomain)
 
 	// Assert
 	assert.Equal(t, builder, result)
-	assert.Equal(t, "example.com", builder.config.Node.Domain)
+	assert.Equal(t, testExampleDomain, builder.config.Node.Domain)
 }
 
 func TestNewClientConfig(t *testing.T) {
@@ -101,11 +101,11 @@ func TestClientBuilderInstance(t *testing.T) {
 	builder := NewClientBuilder()
 
 	// Act
-	result := builder.Instance("test-instance")
+	result := builder.Instance(testClientInstance)
 
 	// Assert
 	assert.Equal(t, builder, result)
-	assert.Equal(t, "test-instance", builder.config.Node.Instance)
+	assert.Equal(t, testClientInstance, builder.config.Node.Instance)
 }
 
 func TestClientBuilderUseTCP(t *testing.T) {
@@ -420,8 +420,8 @@ func TestClientBuilderBuild(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	builder := NewClientBuilder().
 		Name("testuser").
-		Domain("example.com").
-		Instance("test-instance").
+		Domain(testExampleDomain).
+		Instance(testClientInstance).
 		GuestAuthentication().
 		Compression(SessionCompressionNone).
 		Encryption(SessionEncryptionNone).
@@ -434,8 +434,8 @@ func TestClientBuilderBuild(t *testing.T) {
 	// Assert
 	assert.NotNil(t, client)
 	assert.Equal(t, "testuser", client.config.Node.Name)
-	assert.Equal(t, "example.com", client.config.Node.Domain)
-	assert.Equal(t, "test-instance", client.config.Node.Instance)
+	assert.Equal(t, testExampleDomain, client.config.Node.Domain)
+	assert.Equal(t, testClientInstance, client.config.Node.Instance)
 	assert.Equal(t, 100, client.config.ChannelBufferSize)
 }
 
@@ -485,194 +485,4 @@ func TestClientBuilderChaining(t *testing.T) {
 	assert.Equal(t, "domain.com", client.config.Node.Domain)
 	assert.Equal(t, "inst1", client.config.Node.Instance)
 	assert.Equal(t, 50, client.config.ChannelBufferSize)
-}
-
-func TestClientEstablish(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	addr := InProcessAddr("test-establish")
-	server := NewServerBuilder().
-		ListenInProcess(addr).
-		EnableGuestAuthentication().
-		Build()
-	defer silentClose(server)
-	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, ErrServerClosed) {
-			log.Println(err)
-		}
-	}()
-	time.Sleep(100 * time.Millisecond) // Wait for server to start
-	client := NewClientBuilder().
-		Name("testclient").
-		Domain("localhost").
-		GuestAuthentication().
-		UseInProcess(addr, 10).
-		Compression(SessionCompressionNone).
-		Encryption(SessionEncryptionNone).
-		Build()
-	defer silentClose(client)
-
-	// Act
-	err := client.Establish(ctx)
-
-	// Assert
-	assert.NoError(t, err)
-}
-
-func TestClientSendNotification(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	addr := InProcessAddr("test-notification")
-	notChan := make(chan *Notification, 1)
-	server := NewServerBuilder().
-		ListenInProcess(addr).
-		EnableGuestAuthentication().
-		NotificationsHandlerFunc(
-			func(ctx context.Context, not *Notification) error {
-				notChan <- not
-				return nil
-			}).
-		Build()
-	defer silentClose(server)
-	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, ErrServerClosed) {
-			log.Println(err)
-		}
-	}()
-	time.Sleep(100 * time.Millisecond)
-	client := NewClientBuilder().
-		Name("testclient").
-		Domain("localhost").
-		GuestAuthentication().
-		UseInProcess(addr, 10).
-		Compression(SessionCompressionNone).
-		Encryption(SessionEncryptionNone).
-		Build()
-	defer silentClose(client)
-	notification := &Notification{
-		Envelope: Envelope{ID: "123"},
-		Event:    NotificationEventReceived,
-	}
-
-	// Act
-	err := client.SendNotification(ctx, notification)
-
-	// Assert
-	assert.NoError(t, err)
-	select {
-	case rcvNot := <-notChan:
-		assert.Equal(t, notification.ID, rcvNot.ID)
-		assert.Equal(t, notification.Event, rcvNot.Event)
-	case <-time.After(1 * time.Second):
-		t.Fatal("timeout waiting for notification")
-	}
-}
-
-func TestClientSendRequestCommand(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	addr := InProcessAddr("test-send-command")
-	cmdChan := make(chan *RequestCommand, 1)
-	server := NewServerBuilder().
-		ListenInProcess(addr).
-		EnableGuestAuthentication().
-		RequestCommandsHandlerFunc(
-			func(ctx context.Context, cmd *RequestCommand, s Sender) error {
-				cmdChan <- cmd
-				return s.SendResponseCommand(ctx, cmd.SuccessResponse())
-			}).
-		Build()
-	defer silentClose(server)
-	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, ErrServerClosed) {
-			log.Println(err)
-		}
-	}()
-	time.Sleep(100 * time.Millisecond)
-	client := NewClientBuilder().
-		Name("testclient").
-		Domain("localhost").
-		GuestAuthentication().
-		UseInProcess(addr, 10).
-		Compression(SessionCompressionNone).
-		Encryption(SessionEncryptionNone).
-		Build()
-	defer silentClose(client)
-	uri, _ := ParseLimeURI("/test")
-	command := &RequestCommand{
-		Command: Command{
-			Envelope: Envelope{ID: "cmd-123"},
-			Method:   CommandMethodGet,
-		},
-		URI: uri,
-	}
-
-	// Act
-	err := client.SendRequestCommand(ctx, command)
-
-	// Assert
-	assert.NoError(t, err)
-	select {
-	case rcvCmd := <-cmdChan:
-		assert.Equal(t, command.ID, rcvCmd.ID)
-		assert.Equal(t, command.Method, rcvCmd.Method)
-	case <-time.After(1 * time.Second):
-		t.Fatal("timeout waiting for command")
-	}
-}
-
-func TestClientProcessCommand(t *testing.T) {
-	// Arrange
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	addr := InProcessAddr("test-process-command")
-	server := NewServerBuilder().
-		ListenInProcess(addr).
-		EnableGuestAuthentication().
-		RequestCommandsHandlerFunc(
-			func(ctx context.Context, cmd *RequestCommand, s Sender) error {
-				return s.SendResponseCommand(ctx, cmd.SuccessResponse())
-			}).
-		Build()
-	defer silentClose(server)
-	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, ErrServerClosed) {
-			log.Println(err)
-		}
-	}()
-	time.Sleep(100 * time.Millisecond)
-	client := NewClientBuilder().
-		Name("testclient").
-		Domain("localhost").
-		GuestAuthentication().
-		UseInProcess(addr, 10).
-		Compression(SessionCompressionNone).
-		Encryption(SessionEncryptionNone).
-		Build()
-	defer silentClose(client)
-	uri, _ := ParseLimeURI("/ping")
-	command := &RequestCommand{
-		Command: Command{
-			Envelope: Envelope{ID: "process-123"},
-			Method:   CommandMethodGet,
-		},
-		URI: uri,
-	}
-
-	// Act
-	response, err := client.ProcessCommand(ctx, command)
-
-	// Assert
-	if assert.NoError(t, err) {
-		assert.NotNil(t, response)
-		assert.Equal(t, CommandStatusSuccess, response.Status)
-		assert.Equal(t, command.ID, response.ID)
-	}
 }

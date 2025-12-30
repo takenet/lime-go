@@ -121,6 +121,10 @@ func (cmd *RequestCommand) SuccessResponse() *ResponseCommand {
 func (cmd *RequestCommand) SuccessResponseWithResource(resource Document) *ResponseCommand {
 	respCmd := cmd.SuccessResponse()
 	respCmd.Resource = resource
+	if resource != nil {
+		mediaType := resource.MediaType()
+		respCmd.Type = &mediaType
+	}
 	return respCmd
 }
 

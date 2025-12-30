@@ -3,24 +3,12 @@ package lime
 import (
 	"context"
 	"errors"
-	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
-
-// Wrapper to simulate Go 1.25 sync.WaitGroup.Go feature
-type WaitGroup struct {
-	sync.WaitGroup
-}
-
-func (wg *WaitGroup) Go(f func()) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		f()
-	}()
-}
 
 func TestServerChannelEstablishSessionWhenGuest(t *testing.T) {
 	// Arrange
@@ -38,10 +26,9 @@ func TestServerChannelEstablishSessionWhenGuest(t *testing.T) {
 		Identity: Identity{Name: "golang", Domain: testDomain},
 		Instance: "home",
 	}
-	var wg WaitGroup
+	var wg sync.WaitGroup
 
 	// Act
-	// Use sync.WaitGroup.Go (1.25) pattern
 	wg.Go(func() {
 		err := client.Send(ctx, &Session{
 			State: SessionStateNew,
@@ -105,7 +92,7 @@ func TestServerChannelFinishSession(t *testing.T) {
 	c.setState(SessionStateEstablished)
 	sessionChan := make(chan *Session)
 	errChan := make(chan error)
-	var wg WaitGroup
+	var wg sync.WaitGroup
 
 	// Act
 	wg.Go(func() {
@@ -164,7 +151,7 @@ func TestServerChannelFailSession(t *testing.T) {
 	}
 	sessionChan := make(chan *Session)
 	errChan := make(chan error)
-	var wg WaitGroup
+	var wg sync.WaitGroup
 
 	// Act
 	wg.Go(func() {

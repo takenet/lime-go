@@ -79,7 +79,9 @@ func (t *websocketTransport) Send(ctx context.Context, e envelope) error {
 		}
 		// Reset deadline after write
 		defer func() {
-			_ = t.conn.SetWriteDeadline(time.Time{})
+			if err := t.conn.SetWriteDeadline(time.Time{}); err != nil {
+				log.Printf("ws transport: failed to clear write deadline: %v", err)
+			}
 		}()
 	}
 
@@ -91,6 +93,10 @@ func (t *websocketTransport) Send(ctx context.Context, e envelope) error {
 	}
 
 	// Perform the write with a goroutine to allow cancellation
+	// Use a buffered channel of size 1 so the write goroutine can always send
+	// its result without blocking, even if the context is canceled and the
+	// receiving goroutine stops waiting on errChan. This avoids leaking the
+	// write goroutine.
 	errChan := make(chan error, 1)
 	go func() {
 		errChan <- t.conn.WriteJSON(e)
@@ -99,7 +105,9 @@ func (t *websocketTransport) Send(ctx context.Context, e envelope) error {
 	select {
 	case <-ctx.Done():
 		// Context cancelled during write - set immediate deadline to abort
-		_ = t.conn.SetWriteDeadline(time.Now())
+		if err := t.conn.SetWriteDeadline(time.Now()); err != nil {
+			log.Printf("ws transport: failed to set immediate write deadline: %v", err)
+		}
 		<-errChan // wait for write to complete
 		return fmt.Errorf(errWSTransportSend, ctx.Err())
 	case err := <-errChan:

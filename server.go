@@ -109,7 +109,23 @@ func (srv *Server) consumeTransports(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			srv.wg.Wait() // Wait for all handler goroutines to complete
+			// Wait for all handler goroutines with timeout
+			done := make(chan struct{})
+			go func() {
+				srv.wg.Wait()
+				close(done)
+			}()
+
+			if srv.config.ShutdownTimeout > 0 {
+				select {
+				case <-done:
+					// All handlers completed gracefully
+				case <-time.After(srv.config.ShutdownTimeout):
+					log.Printf("server: shutdown timeout (%v) exceeded, forcing exit", srv.config.ShutdownTimeout)
+				}
+			} else {
+				<-done
+			}
 			return
 		case t := <-srv.transportChan:
 			c := NewServerChannel(t, srv.config.ChannelBufferSize, srv.config.Node, uuid.NewString())
@@ -194,6 +210,7 @@ type ServerConfig struct {
 	SchemeOpts        []AuthenticationScheme // SchemeOpts defines the authentication schemes that should be presented to the clients during session establishment.
 	Backlog           int                    // Backlog defines the size of the listener's pending connections queue.
 	ChannelBufferSize int                    // ChannelBufferSize determines the internal envelope buffer size for the channels.
+	ShutdownTimeout   time.Duration          // ShutdownTimeout defines the maximum time to wait for active handlers to complete during shutdown. Zero means no timeout.
 
 	// Authenticate is called for authenticating a client session.
 	// It should return an AuthenticationResult instance with DomainRole different of DomainRoleUnknown for a successful authentication.
@@ -231,6 +248,7 @@ func NewServerConfig() *ServerConfig {
 		SchemeOpts:        []AuthenticationScheme{AuthenticationSchemeTransport},
 		Backlog:           runtime.NumCPU() * 8,
 		ChannelBufferSize: runtime.NumCPU() * 32,
+		ShutdownTimeout:   30 * time.Second,
 		Authenticate: func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
 			return MemberAuthenticationResult(), nil
 		},

@@ -174,7 +174,7 @@ const (
 )
 
 const (
-	errInvalidSessionID = "Invalid session id"
+	errInvalidSessionID = "Invalid session ID"
 )
 
 // AuthenticationResult represents the result of a session authentication.

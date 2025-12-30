@@ -125,7 +125,6 @@ func TestContactIdentity(t *testing.T) {
 		Domain: testDomain,
 	}
 	contact := &Contact{
-		Name: "User Name",
 	}
 	contact.Identity = identity
 

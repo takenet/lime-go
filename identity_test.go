@@ -9,12 +9,12 @@ import (
 func TestIdentityMarshalText(t *testing.T) {
 	identity := Identity{
 		Name:   "user",
-		Domain: "example.com",
+		Domain: testExampleDomain,
 	}
 
 	text, err := identity.MarshalText()
 	assert.NoError(t, err)
-	assert.Equal(t, []byte("user@example.com"), text)
+	assert.Equal(t, []byte("user@"+testExampleDomain), text)
 }
 
 func TestIdentityMarshalTextWithoutDomain(t *testing.T) {

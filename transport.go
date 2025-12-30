@@ -89,15 +89,22 @@ func (t *StdoutTraceWriter) ReceiveWriter() *io.Writer {
 
 func (t *StdoutTraceWriter) Close() error {
 	// Close writers first to signal goroutines to exit
+	// Accumulate errors to ensure all resources are closed
+	var firstErr error
+
 	if err := t.sendWriter.Close(); err != nil {
-		return err
+		firstErr = err
 	}
-	if err := t.receiveWriter.Close(); err != nil {
-		return err
+	if err := t.receiveWriter.Close(); err != nil && firstErr == nil {
+		firstErr = err
 	}
 	// Close readers to clean up resources
-	if err := t.sendReader.Close(); err != nil {
-		return err
+	if err := t.sendReader.Close(); err != nil && firstErr == nil {
+		firstErr = err
 	}
-	return t.receiveReader.Close()
+	if err := t.receiveReader.Close(); err != nil && firstErr == nil {
+		firstErr = err
+	}
+
+	return firstErr
 }

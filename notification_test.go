@@ -45,8 +45,8 @@ func TestNotificationMarshalJSON(t *testing.T) {
 	not := &Notification{
 		Envelope: Envelope{
 			ID:   "test-id-123",
-			From: Node{Identity: Identity{Name: "sender", Domain: "example.com"}},
-			To:   Node{Identity: Identity{Name: "receiver", Domain: "example.com"}},
+			From: Node{Identity: Identity{Name: "sender", Domain: testExampleDomain}},
+			To:   Node{Identity: Identity{Name: "receiver", Domain: testExampleDomain}},
 		},
 		Event: NotificationEventReceived,
 	}

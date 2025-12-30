@@ -33,7 +33,7 @@ func TestContextSessionIDNotFound(t *testing.T) {
 func TestContextSessionRemoteNode(t *testing.T) {
 	ctx := context.Background()
 	remoteNode := Node{
-		Identity: Identity{Name: "remote", Domain: "example.com"},
+		Identity: Identity{Name: "remote", Domain: testExampleDomain},
 		Instance: "home",
 	}
 	ctx = context.WithValue(ctx, contextKeySessionRemoteNode, remoteNode)
@@ -54,7 +54,7 @@ func TestContextSessionRemoteNodeNotFound(t *testing.T) {
 func TestContextSessionLocalNode(t *testing.T) {
 	ctx := context.Background()
 	localNode := Node{
-		Identity: Identity{Name: "local", Domain: "example.com"},
+		Identity: Identity{Name: "local", Domain: testExampleDomain},
 		Instance: "work",
 	}
 	ctx = context.WithValue(ctx, contextKeySessionLocalNode, localNode)
@@ -78,10 +78,10 @@ func TestSessionContext(t *testing.T) {
 	ch := &channel{
 		sessionID: "test-session",
 		remoteNode: Node{
-			Identity: Identity{Name: "remote", Domain: "example.com"},
+			Identity: Identity{Name: "remote", Domain: testExampleDomain},
 		},
 		localNode: Node{
-			Identity: Identity{Name: "local", Domain: "example.com"},
+			Identity: Identity{Name: "local", Domain: testExampleDomain},
 		},
 	}
 

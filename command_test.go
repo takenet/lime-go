@@ -421,7 +421,7 @@ func TestRequestCommandSetResource(t *testing.T) {
 func TestRequestCommandSetURI(t *testing.T) {
 	// Arrange
 	cmd := &RequestCommand{}
-	uri, _ := ParseLimeURI("/test/path")
+	uri, _ := ParseLimeURI(testURIPath)
 
 	// Act
 	result := cmd.SetURI(uri)
@@ -436,11 +436,11 @@ func TestRequestCommandSetURIString(t *testing.T) {
 	cmd := &RequestCommand{}
 
 	// Act
-	result := cmd.SetURIString("/test/path")
+	result := cmd.SetURIString(testURIPath)
 
 	// Assert
 	assert.Equal(t, cmd, result)
-	assert.Equal(t, "/test/path", cmd.URI.Path())
+	assert.Equal(t, testURIPath, cmd.URI.Path())
 }
 
 func TestResponseCommandSetStatusFailure(t *testing.T) {
@@ -510,24 +510,24 @@ func TestParseLimeURIInvalid(t *testing.T) {
 
 func TestLimeURIString(t *testing.T) {
 	// Arrange
-	uri, _ := ParseLimeURI("/test/path?key=value")
+	uri, _ := ParseLimeURI(testURIPathWithQuery)
 
 	// Act
 	result := uri.String()
 
 	// Assert
-	assert.Equal(t, "/test/path?key=value", result)
+	assert.Equal(t, testURIPathWithQuery, result)
 }
 
 func TestLimeURIPath(t *testing.T) {
 	// Arrange
-	uri, _ := ParseLimeURI("/test/path?key=value")
+	uri, _ := ParseLimeURI(testURIPathWithQuery)
 
 	// Act
 	result := uri.Path()
 
 	// Assert
-	assert.Equal(t, "/test/path", result)
+	assert.Equal(t, testURIPath, result)
 }
 
 func TestLimeURIQuery(t *testing.T) {
@@ -599,8 +599,8 @@ func TestURIString(t *testing.T) {
 	assert.Empty(t, uri.String())
 
 	// Test with valid URL
-	uri, _ = ParseLimeURI("lime://user@example.com/path/to/resource")
-	assert.Equal(t, "lime://user@example.com/path/to/resource", uri.String())
+	uri, _ = ParseLimeURI(testURIFull)
+	assert.Equal(t, testURIFull, uri.String())
 }
 
 func TestURIPath(t *testing.T) {
@@ -646,13 +646,13 @@ func TestURIURL(t *testing.T) {
 	assert.Nil(t, uri.URL())
 
 	// Test with valid URL - should return a copy
-	uri, _ = ParseLimeURI("lime://user@example.com/path/to/resource")
+	uri, _ = ParseLimeURI(testURIFull)
 	url1 := uri.URL()
 	url2 := uri.URL()
 
 	assert.NotNil(t, url1)
 	assert.NotNil(t, url2)
-	assert.Equal(t, "lime://user@example.com/path/to/resource", url1.String())
+	assert.Equal(t, testURIFull, url1.String())
 
 	// Verify it returns a copy (different pointers)
 	assert.NotSame(t, url1, url2, "should return different instances (copies)")

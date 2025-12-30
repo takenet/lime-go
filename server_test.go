@@ -223,11 +223,11 @@ func TestServerBuilderDomain(t *testing.T) {
 	builder := NewServerBuilder()
 
 	// Act
-	result := builder.Domain("example.com")
+	result := builder.Domain(testExampleDomain)
 
 	// Assert
 	assert.Equal(t, builder, result)
-	assert.Equal(t, "example.com", builder.config.Node.Domain)
+	assert.Equal(t, testExampleDomain, builder.config.Node.Domain)
 }
 
 func TestServerBuilderInstance(t *testing.T) {
@@ -551,7 +551,9 @@ func TestServerBuilderRegister(t *testing.T) {
 func TestServerBuilderEstablished(t *testing.T) {
 	// Arrange
 	builder := NewServerBuilder()
-	establishedFunc := func(sessionID string, c *ServerChannel) {}
+	establishedFunc := func(sessionID string, c *ServerChannel) {
+		// Empty function used to verify handler registration and invocation
+	}
 
 	// Act
 	result := builder.Established(establishedFunc)
@@ -564,7 +566,9 @@ func TestServerBuilderEstablished(t *testing.T) {
 func TestServerBuilderFinished(t *testing.T) {
 	// Arrange
 	builder := NewServerBuilder()
-	finishedFunc := func(sessionID string) {}
+	finishedFunc := func(sessionID string) {
+		// Empty function used to verify handler registration and invocation
+	}
 
 	// Act
 	result := builder.Finished(finishedFunc)
@@ -579,7 +583,7 @@ func TestServerBuilderBuildWithAllOptions(t *testing.T) {
 	addr := InProcessAddr("test-server-full")
 	builder := NewServerBuilder().
 		Name("myserver").
-		Domain("example.com").
+		Domain(testExampleDomain).
 		Instance("inst-1").
 		ListenInProcess(addr).
 		EnableGuestAuthentication().
@@ -595,7 +599,7 @@ func TestServerBuilderBuildWithAllOptions(t *testing.T) {
 	// Assert
 	assert.NotNil(t, server)
 	assert.Equal(t, "myserver", server.config.Node.Name)
-	assert.Equal(t, "example.com", server.config.Node.Domain)
+	assert.Equal(t, testExampleDomain, server.config.Node.Domain)
 	assert.Equal(t, "inst-1", server.config.Node.Instance)
 	assert.Equal(t, 128, server.config.ChannelBufferSize)
 	assert.Len(t, server.listeners, 1)
@@ -656,15 +660,15 @@ func TestServerBuilderChaining(t *testing.T) {
 func TestAuthenticatePlainWithPassword(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	identity := Identity{Name: "user", Domain: "example.com"}
+	identity := Identity{Name: "user", Domain: testExampleDomain}
 	plainAuth := func(ctx context.Context, identity Identity, password string) (*AuthenticationResult, error) {
-		if password == "correct-password" {
+		if password == testPasswordPlainText {
 			return MemberAuthenticationResult(), nil
 		}
 		return UnknownAuthenticationResult(), nil
 	}
 	plainAuthentication := &PlainAuthentication{}
-	plainAuthentication.SetPasswordAsBase64("correct-password")
+	plainAuthentication.SetPasswordAsBase64(testPasswordPlainText)
 
 	// Act
 	result, err := authenticatePlain(ctx, identity, plainAuthentication, plainAuth)
@@ -678,9 +682,9 @@ func TestAuthenticatePlainWithPassword(t *testing.T) {
 func TestAuthenticatePlainWithWrongPassword(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	identity := Identity{Name: "user", Domain: "example.com"}
+	identity := Identity{Name: "user", Domain: testExampleDomain}
 	plainAuth := func(ctx context.Context, identity Identity, password string) (*AuthenticationResult, error) {
-		if password == "correct-password" {
+		if password == testPasswordPlainText {
 			return MemberAuthenticationResult(), nil
 		}
 		return UnknownAuthenticationResult(), nil
@@ -700,7 +704,7 @@ func TestAuthenticatePlainWithWrongPassword(t *testing.T) {
 func TestAuthenticatePlainWithNilAuthenticator(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	identity := Identity{Name: "user", Domain: "example.com"}
+	identity := Identity{Name: "user", Domain: testExampleDomain}
 	plainAuthentication := &PlainAuthentication{}
 	plainAuthentication.SetPasswordAsBase64("password")
 
@@ -716,15 +720,15 @@ func TestAuthenticatePlainWithNilAuthenticator(t *testing.T) {
 func TestAuthenticateKeyWithValidKey(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	identity := Identity{Name: "user", Domain: "example.com"}
+	identity := Identity{Name: "user", Domain: testExampleDomain}
 	keyAuth := func(ctx context.Context, identity Identity, key string) (*AuthenticationResult, error) {
-		if key == "valid-key-123" {
+		if key == testKey {
 			return MemberAuthenticationResult(), nil
 		}
 		return UnknownAuthenticationResult(), nil
 	}
 	keyAuthentication := &KeyAuthentication{}
-	keyAuthentication.SetKeyAsBase64("valid-key-123")
+	keyAuthentication.SetKeyAsBase64(testKey)
 
 	// Act
 	result, err := authenticateKey(ctx, identity, keyAuthentication, keyAuth)
@@ -738,9 +742,9 @@ func TestAuthenticateKeyWithValidKey(t *testing.T) {
 func TestAuthenticateKeyWithInvalidKey(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	identity := Identity{Name: "user", Domain: "example.com"}
+	identity := Identity{Name: "user", Domain: testExampleDomain}
 	keyAuth := func(ctx context.Context, identity Identity, key string) (*AuthenticationResult, error) {
-		if key == "valid-key-123" {
+		if key == testKey {
 			return MemberAuthenticationResult(), nil
 		}
 		return UnknownAuthenticationResult(), nil
@@ -760,7 +764,7 @@ func TestAuthenticateKeyWithInvalidKey(t *testing.T) {
 func TestAuthenticateKeyWithNilAuthenticator(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	identity := Identity{Name: "user", Domain: "example.com"}
+	identity := Identity{Name: "user", Domain: testExampleDomain}
 	keyAuthentication := &KeyAuthentication{}
 	keyAuthentication.SetKeyAsBase64("key")
 
@@ -776,16 +780,16 @@ func TestAuthenticateKeyWithNilAuthenticator(t *testing.T) {
 func TestAuthenticateExternalWithValidToken(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	identity := Identity{Name: "user", Domain: "example.com"}
+	identity := Identity{Name: "user", Domain: testExampleDomain}
 	externalAuth := func(ctx context.Context, identity Identity, token string, issuer string) (*AuthenticationResult, error) {
-		if token == "valid-token" && issuer == "trusted-issuer" {
+		if token == testToken && issuer == testTrustedIssuer {
 			return MemberAuthenticationResult(), nil
 		}
 		return UnknownAuthenticationResult(), nil
 	}
 	externalAuthentication := &ExternalAuthentication{
-		Token:  "valid-token",
-		Issuer: "trusted-issuer",
+		Token:  testToken,
+		Issuer: testTrustedIssuer,
 	}
 
 	// Act
@@ -800,16 +804,16 @@ func TestAuthenticateExternalWithValidToken(t *testing.T) {
 func TestAuthenticateExternalWithInvalidToken(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	identity := Identity{Name: "user", Domain: "example.com"}
+	identity := Identity{Name: "user", Domain: testExampleDomain}
 	externalAuth := func(ctx context.Context, identity Identity, token string, issuer string) (*AuthenticationResult, error) {
-		if token == "valid-token" && issuer == "trusted-issuer" {
+		if token == testToken && issuer == testTrustedIssuer {
 			return MemberAuthenticationResult(), nil
 		}
 		return UnknownAuthenticationResult(), nil
 	}
 	externalAuthentication := &ExternalAuthentication{
 		Token:  "invalid-token",
-		Issuer: "trusted-issuer",
+		Issuer: testTrustedIssuer,
 	}
 
 	// Act
@@ -824,7 +828,7 @@ func TestAuthenticateExternalWithInvalidToken(t *testing.T) {
 func TestAuthenticateExternalWithNilAuthenticator(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	identity := Identity{Name: "user", Domain: "example.com"}
+	identity := Identity{Name: "user", Domain: testExampleDomain}
 	externalAuthentication := &ExternalAuthentication{
 		Token:  "token",
 		Issuer: "issuer",
@@ -842,7 +846,7 @@ func TestAuthenticateExternalWithNilAuthenticator(t *testing.T) {
 func TestBuildAuthenticateWithAllSchemes(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	identity := Identity{Name: "user", Domain: "example.com"}
+	identity := Identity{Name: "user", Domain: testExampleDomain}
 	plainAuth := func(ctx context.Context, identity Identity, password string) (*AuthenticationResult, error) {
 		return MemberAuthenticationResult(), nil
 	}
@@ -855,7 +859,7 @@ func TestBuildAuthenticateWithAllSchemes(t *testing.T) {
 	authenticate := buildAuthenticate(plainAuth, keyAuth, externalAuth)
 
 	// Test Guest authentication - requires UUID format identity
-	guestIdentity := Identity{Name: "550e8400-e29b-41d4-a716-446655440000", Domain: "example.com"}
+	guestIdentity := Identity{Name: "550e8400-e29b-41d4-a716-446655440000", Domain: testExampleDomain}
 	guestAuth := &GuestAuthentication{}
 	result, err := authenticate(ctx, guestIdentity, guestAuth)
 	assert.NoError(t, err)

@@ -10,14 +10,14 @@ func TestEnvelopeSetID(t *testing.T) {
 	env := &Envelope{}
 	result := env.SetID("test-id-123")
 	assert.Equal(t, "test-id-123", env.ID)
-	assert.Equal(t, env, result, "should return self for method chaining")
+	assert.Equal(t, env, result, chainMsg)
 }
 
 func TestEnvelopeSetNewEnvelopeID(t *testing.T) {
 	env := &Envelope{}
 	result := env.SetNewEnvelopeID()
 	assert.NotEmpty(t, env.ID, "should generate a new ID")
-	assert.Equal(t, env, result, "should return self for method chaining")
+	assert.Equal(t, env, result, chainMsg)
 }
 
 func TestEnvelopeSetFrom(t *testing.T) {
@@ -28,7 +28,7 @@ func TestEnvelopeSetFrom(t *testing.T) {
 	}
 	result := env.SetFrom(from)
 	assert.Equal(t, from, env.From)
-	assert.Equal(t, env, result, "should return self for method chaining")
+	assert.Equal(t, env, result, chainMsg)
 }
 
 func TestEnvelopeSetFromString(t *testing.T) {
@@ -37,7 +37,7 @@ func TestEnvelopeSetFromString(t *testing.T) {
 	assert.Equal(t, "user", env.From.Identity.Name)
 	assert.Equal(t, "example.com", env.From.Identity.Domain)
 	assert.Equal(t, "home", env.From.Instance)
-	assert.Equal(t, env, result, "should return self for method chaining")
+	assert.Equal(t, env, result, chainMsg)
 }
 
 func TestEnvelopeSetTo(t *testing.T) {
@@ -48,7 +48,7 @@ func TestEnvelopeSetTo(t *testing.T) {
 	}
 	result := env.SetTo(to)
 	assert.Equal(t, to, env.To)
-	assert.Equal(t, env, result, "should return self for method chaining")
+	assert.Equal(t, env, result, chainMsg)
 }
 
 func TestEnvelopeSetToString(t *testing.T) {
@@ -57,7 +57,7 @@ func TestEnvelopeSetToString(t *testing.T) {
 	assert.Equal(t, "receiver", env.To.Identity.Name)
 	assert.Equal(t, "domain.com", env.To.Identity.Domain)
 	assert.Equal(t, "work", env.To.Instance)
-	assert.Equal(t, env, result, "should return self for method chaining")
+	assert.Equal(t, env, result, chainMsg)
 }
 
 func TestEnvelopeSetPP(t *testing.T) {
@@ -68,7 +68,7 @@ func TestEnvelopeSetPP(t *testing.T) {
 	}
 	result := env.SetPP(pp)
 	assert.Equal(t, pp, env.PP)
-	assert.Equal(t, env, result, "should return self for method chaining")
+	assert.Equal(t, env, result, chainMsg)
 }
 
 func TestEnvelopeSetPPString(t *testing.T) {
@@ -77,14 +77,14 @@ func TestEnvelopeSetPPString(t *testing.T) {
 	assert.Equal(t, "delegate", env.PP.Identity.Name)
 	assert.Equal(t, "proxy.com", env.PP.Identity.Domain)
 	assert.Equal(t, "instance1", env.PP.Instance)
-	assert.Equal(t, env, result, "should return self for method chaining")
+	assert.Equal(t, env, result, chainMsg)
 }
 
 func TestEnvelopeSetMetadataKeyValue(t *testing.T) {
 	env := &Envelope{}
 	result := env.SetMetadataKeyValue("key1", "value1")
 	assert.Equal(t, "value1", env.Metadata["key1"])
-	assert.Equal(t, env, result, "should return self for method chaining")
+	assert.Equal(t, env, result, chainMsg)
 
 	// Test adding more metadata
 	env.SetMetadataKeyValue("key2", "value2")
