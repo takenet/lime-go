@@ -3,6 +3,7 @@ package lime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -89,22 +90,12 @@ func (t *StdoutTraceWriter) ReceiveWriter() *io.Writer {
 
 func (t *StdoutTraceWriter) Close() error {
 	// Close writers first to signal goroutines to exit
-	// Accumulate errors to ensure all resources are closed
-	var firstErr error
-
-	if err := t.sendWriter.Close(); err != nil {
-		firstErr = err
-	}
-	if err := t.receiveWriter.Close(); err != nil && firstErr == nil {
-		firstErr = err
-	}
+	// Accumulate all errors using errors.Join to ensure all resources are closed
+	sendWriterErr := t.sendWriter.Close()
+	receiveWriterErr := t.receiveWriter.Close()
 	// Close readers to clean up resources
-	if err := t.sendReader.Close(); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	if err := t.receiveReader.Close(); err != nil && firstErr == nil {
-		firstErr = err
-	}
+	sendReaderErr := t.sendReader.Close()
+	receiveReaderErr := t.receiveReader.Close()
 
-	return firstErr
+	return errors.Join(sendWriterErr, receiveWriterErr, sendReaderErr, receiveReaderErr)
 }

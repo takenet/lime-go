@@ -3,12 +3,14 @@ package lime
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 )
+
+const errUnexpectedEnvelopeType = "unexpected envelope type"
 
 func TestServerChannelEstablishSessionWhenGuest(t *testing.T) {
 	// Arrange
@@ -26,26 +28,26 @@ func TestServerChannelEstablishSessionWhenGuest(t *testing.T) {
 		Identity: Identity{Name: "golang", Domain: testDomain},
 		Instance: "home",
 	}
-	var wg sync.WaitGroup
+	var wg errgroup.Group
 
 	// Act
-	wg.Go(func() {
+	wg.Go(func() error {
 		err := client.Send(ctx, &Session{
 			State: SessionStateNew,
 		})
 		if err != nil {
-			return
+			return err
 		}
 		env, err := client.Receive(ctx)
 		if err != nil {
-			return
+			return err
 		}
 		s, ok := env.(*Session)
 		if !ok {
-			return
+			return errors.New(errUnexpectedEnvelopeType)
 		}
 
-		_ = client.Send(ctx, &Session{
+		return client.Send(ctx, &Session{
 			Envelope:       Envelope{ID: s.ID, From: clientNode},
 			State:          SessionStateAuthenticating,
 			Scheme:         AuthenticationSchemeGuest,
@@ -92,21 +94,23 @@ func TestServerChannelFinishSession(t *testing.T) {
 	c.setState(SessionStateEstablished)
 	sessionChan := make(chan *Session)
 	errChan := make(chan error)
-	var wg sync.WaitGroup
+	var wg errgroup.Group
 
 	// Act
-	wg.Go(func() {
+	wg.Go(func() error {
 		e, err := client.Receive(ctx)
 		if err != nil {
 			errChan <- err
-			return
+			return err
 		}
 		s, ok := e.(*Session)
 		if !ok {
-			errChan <- errors.New("unexpected envelope type")
-			return
+			err := errors.New(errUnexpectedEnvelopeType)
+			errChan <- err
+			return err
 		}
 		sessionChan <- s
+		return nil
 	})
 
 	time.Sleep(5 * time.Millisecond)
@@ -151,21 +155,23 @@ func TestServerChannelFailSession(t *testing.T) {
 	}
 	sessionChan := make(chan *Session)
 	errChan := make(chan error)
-	var wg sync.WaitGroup
+	var wg errgroup.Group
 
 	// Act
-	wg.Go(func() {
+	wg.Go(func() error {
 		e, err := client.Receive(ctx)
 		if err != nil {
 			errChan <- err
-			return
+			return err
 		}
 		s, ok := e.(*Session)
 		if !ok {
-			errChan <- errors.New("unexpected envelope type")
-			return
+			err := errors.New(errUnexpectedEnvelopeType)
+			errChan <- err
+			return err
 		}
 		sessionChan <- s
+		return nil
 	})
 
 	time.Sleep(5 * time.Millisecond)

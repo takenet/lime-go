@@ -131,7 +131,7 @@ func (r Reason) String() string {
 
 // NewEnvelopeID generates a new unique envelope ID.
 func NewEnvelopeID() string {
-	return uuid.New().String()
+	return uuid.NewString()
 }
 
 // envelope is the base interface for envelopes types.

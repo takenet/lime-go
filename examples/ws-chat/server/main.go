@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -14,7 +15,6 @@ import (
 	"sync"
 
 	"github.com/takenet/lime-go"
-	"go.uber.org/multierr"
 )
 
 var channels = make(map[string]*lime.ServerChannel)
@@ -95,12 +95,12 @@ func handleMessage(ctx context.Context, msg *lime.Message, _ lime.Sender) error 
 	mu.RLock()
 	defer mu.RUnlock()
 
-	var err error
+	var errs []error
 	// Check if it is a direct message to another user
 	if msg.To.Name != "" {
 		if sessionID, ok := nodesToID[msg.To.Name]; ok {
 			if c, ok := channels[sessionID]; ok {
-				err = c.SendMessage(ctx, msg)
+				return c.SendMessage(ctx, msg)
 			}
 		}
 	} else {
@@ -108,11 +108,13 @@ func handleMessage(ctx context.Context, msg *lime.Message, _ lime.Sender) error 
 		senderSessionID, _ := lime.ContextSessionID(ctx)
 		for id, c := range channels {
 			if id != senderSessionID {
-				err = multierr.Append(err, c.SendMessage(ctx, msg))
+				if err := c.SendMessage(ctx, msg); err != nil {
+					errs = append(errs, err)
+				}
 			}
 		}
 	}
-	return err
+	return errors.Join(errs...)
 }
 
 func handleFriendsCommand(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
