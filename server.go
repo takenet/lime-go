@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -199,7 +198,7 @@ func (srv *Server) Close() error {
 	}
 
 	close(srv.transportChan)
-	return multierr.Combine(errs...)
+	return errors.Join(errs...)
 }
 
 // ServerConfig define the configurations for a Server instance.
@@ -258,7 +257,7 @@ func NewServerConfig() *ServerConfig {
 					Name:   node.Name,
 					Domain: serverChannel.localNode.Domain,
 				},
-				Instance: uuid.New().String()}, nil
+				Instance: uuid.NewString()}, nil
 		},
 	}
 }

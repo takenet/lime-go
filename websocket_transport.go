@@ -13,8 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/multierr"
-
 	"github.com/gorilla/websocket"
 )
 
@@ -333,7 +331,7 @@ func (l *websocketTransportListener) Close() error {
 	srvErr := l.srv.Close()
 	l.srv = nil
 
-	return multierr.Combine(listErr, srvErr)
+	return errors.Join(listErr, srvErr)
 }
 
 func (l *websocketTransportListener) ensureStarted() error {
