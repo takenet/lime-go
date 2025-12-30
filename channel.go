@@ -267,6 +267,7 @@ func (c *channel) sendSession(ctx context.Context, ses *Session) error {
 	}
 	return nil
 }
+
 func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 	if ctx == nil {
 		panic("nil context")

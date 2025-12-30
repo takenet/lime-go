@@ -2,13 +2,14 @@ package lime
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/goleak"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 )
 
-func TestClientChannel_EstablishSession_WhenStateEstablished(t *testing.T) {
+func TestClientChannelEstablishSessionWhenStateEstablished(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -17,12 +18,12 @@ func TestClientChannel_EstablishSession_WhenStateEstablished(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
-		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "golang", Domain: testDomain},
 		Instance: "home",
 	}
-	sessionID := "52e59849-19a8-4b2d-86b7-3fa563cdb616"
+	sessionID := testSessionID
 	serverNode := Node{
-		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "postmaster", Domain: testDomain},
 		Instance: "server1",
 	}
 
@@ -74,7 +75,7 @@ func TestClientChannel_EstablishSession_WhenStateEstablished(t *testing.T) {
 	assert.True(t, c.transport.Connected())
 }
 
-func TestClientChannel_EstablishSession_WhenStateFailed(t *testing.T) {
+func TestClientChannelEstablishSessionWhenStateFailed(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -83,12 +84,12 @@ func TestClientChannel_EstablishSession_WhenStateFailed(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
-		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "golang", Domain: testDomain},
 		Instance: "home",
 	}
-	sessionID := "52e59849-19a8-4b2d-86b7-3fa563cdb616"
+	sessionID := testSessionID
 	serverNode := Node{
-		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "postmaster", Domain: testDomain},
 		Instance: "server1",
 	}
 
@@ -146,7 +147,7 @@ func TestClientChannel_EstablishSession_WhenStateFailed(t *testing.T) {
 	assert.False(t, c.transport.Connected())
 }
 
-func TestClientChannel_FinishSession(t *testing.T) {
+func TestClientChannelFinishSession(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	client, server := newInProcessTransportPair("localhost", 1)
@@ -155,12 +156,12 @@ func TestClientChannel_FinishSession(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
-		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "golang", Domain: testDomain},
 		Instance: "home",
 	}
 	sessionID := "52e59849-19a8-4b2d-86b7-3fa563cdb616"
 	serverNode := Node{
-		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "postmaster", Domain: testDomain},
 		Instance: "server1",
 	}
 	go func() {

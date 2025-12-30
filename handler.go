@@ -34,43 +34,40 @@ func (m *EnvelopeMux) listen(ctx context.Context, c *channel) error {
 
 	for c.Established() && ctx.Err() == nil {
 		ctx := sessionContext(ctx, c)
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-c.RcvDone():
-			return nil
-		case msg, ok := <-c.MsgChan():
-			if !ok {
-				return errors.New("msg chan: channel closed")
-			}
-			if err := m.handleMessage(ctx, msg, c); err != nil {
-				return err
-			}
-		case not, ok := <-c.NotChan():
-			if !ok {
-				return errors.New("not chan: channel closed")
-			}
-			if err := m.handleNotification(ctx, not); err != nil {
-				return err
-			}
-		case reqCmd, ok := <-c.ReqCmdChan():
-			if !ok {
-				return errors.New("req cmd chan: channel closed")
-			}
-			if err := m.handleRequestCommand(ctx, reqCmd, c); err != nil {
-				return err
-			}
-		case respCmd, ok := <-c.RespCmdChan():
-			if !ok {
-				return errors.New("resp cmd chan: channel closed")
-			}
-			if err := m.handleResponseCommand(ctx, respCmd, c); err != nil {
-				return err
-			}
+		if err := m.receiveAndHandle(ctx, c); err != nil {
+			return err
 		}
 	}
 	return ctx.Err()
+}
+
+func (m *EnvelopeMux) receiveAndHandle(ctx context.Context, c *channel) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.RcvDone():
+		return nil
+	case msg, ok := <-c.MsgChan():
+		if !ok {
+			return errors.New("msg chan: channel closed")
+		}
+		return m.handleMessage(ctx, msg, c)
+	case not, ok := <-c.NotChan():
+		if !ok {
+			return errors.New("not chan: channel closed")
+		}
+		return m.handleNotification(ctx, not)
+	case reqCmd, ok := <-c.ReqCmdChan():
+		if !ok {
+			return errors.New("req cmd chan: channel closed")
+		}
+		return m.handleRequestCommand(ctx, reqCmd, c)
+	case respCmd, ok := <-c.RespCmdChan():
+		if !ok {
+			return errors.New("resp cmd chan: channel closed")
+		}
+		return m.handleResponseCommand(ctx, respCmd, c)
+	}
 }
 
 func (m *EnvelopeMux) handleMessage(ctx context.Context, msg *Message, s Sender) error {

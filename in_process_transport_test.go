@@ -2,10 +2,11 @@ package lime
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/goleak"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 )
 
 func createInProcessListener(t *testing.T, addr InProcessAddr, transportChan chan Transport) TransportListener {
@@ -39,7 +40,7 @@ func createClientInProcessTransport(t *testing.T, addr InProcessAddr) Transport 
 	return client
 }
 
-func TestInProcessTransport_Dial_WhenListening(t *testing.T) {
+func TestInProcessTransportDialWhenListening(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
@@ -52,7 +53,7 @@ func TestInProcessTransport_Dial_WhenListening(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestInProcessTransport_Dial_WhenNotListening(t *testing.T) {
+func TestInProcessTransportDialWhenNotListening(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 
@@ -64,7 +65,7 @@ func TestInProcessTransport_Dial_WhenNotListening(t *testing.T) {
 	assert.Contains(t, err.Error(), "refused")
 }
 
-func TestInProcessTransport_Dial_AfterListenerClosed(t *testing.T) {
+func TestInProcessTransportDialAfterListenerClosed(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
@@ -80,7 +81,7 @@ func TestInProcessTransport_Dial_AfterListenerClosed(t *testing.T) {
 	assert.Contains(t, err.Error(), "refused")
 }
 
-func TestInProcessTransport_Dial_OtherAddress(t *testing.T) {
+func TestInProcessTransportDialOtherAddress(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
@@ -95,7 +96,7 @@ func TestInProcessTransport_Dial_OtherAddress(t *testing.T) {
 	assert.Contains(t, err.Error(), "refused")
 }
 
-func TestInProcessTransport_Close_WhenOpen(t *testing.T) {
+func TestInProcessTransportCloseWhenOpen(t *testing.T) {
 	// Arrange
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)
@@ -109,7 +110,7 @@ func TestInProcessTransport_Close_WhenOpen(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestInProcessTransport_Send_Session(t *testing.T) {
+func TestInProcessTransportSendSession(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	var addr InProcessAddr = "localhost"
@@ -125,7 +126,7 @@ func TestInProcessTransport_Send_Session(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestInProcessTransport_Receive_Session(t *testing.T) {
+func TestInProcessTransportReceiveSession(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
 	var addr InProcessAddr = "localhost"
@@ -149,4 +150,84 @@ func TestInProcessTransport_Receive_Session(t *testing.T) {
 	received, ok := e.(*Session)
 	assert.True(t, ok)
 	assert.Equal(t, s, received)
+}
+
+func TestInProcessTransportCompression(t *testing.T) {
+	var addr InProcessAddr = "localhost"
+	listener := createInProcessListener(t, addr, nil)
+	defer silentClose(listener)
+	transport := createClientInProcessTransport(t, addr)
+	defer silentClose(transport)
+
+	// Test SupportedCompression
+	supported := transport.SupportedCompression()
+	assert.NotNil(t, supported)
+	assert.Contains(t, supported, SessionCompressionNone)
+
+	// Test Compression
+	compression := transport.Compression()
+	assert.Equal(t, SessionCompressionNone, compression)
+
+	// Test SetCompression - should return error as not supported
+	err := transport.SetCompression(context.Background(), SessionCompressionGzip)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not supported")
+}
+
+func TestInProcessTransportEncryption(t *testing.T) {
+	var addr InProcessAddr = "localhost"
+	listener := createInProcessListener(t, addr, nil)
+	defer silentClose(listener)
+	transport := createClientInProcessTransport(t, addr)
+	defer silentClose(transport)
+
+	// Test SupportedEncryption
+	supported := transport.SupportedEncryption()
+	assert.NotNil(t, supported)
+	assert.Contains(t, supported, SessionEncryptionNone)
+
+	// Test Encryption
+	encryption := transport.Encryption()
+	assert.Equal(t, SessionEncryptionNone, encryption)
+
+	// Test SetEncryption - should return error as not supported
+	err := transport.SetEncryption(context.Background(), SessionEncryptionTLS)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not supported")
+}
+
+func TestInProcessTransportLocalAddr(t *testing.T) {
+	var addr InProcessAddr = "test-local-addr"
+	listener := createInProcessListener(t, addr, nil)
+	defer silentClose(listener)
+	transport := createClientInProcessTransport(t, addr)
+	defer silentClose(transport)
+
+	localAddr := transport.LocalAddr()
+	assert.NotNil(t, localAddr)
+	// Local addr is auto-generated for client
+	assert.IsType(t, InProcessAddr(""), localAddr)
+}
+
+func TestInProcessTransportRemoteAddr(t *testing.T) {
+	var addr InProcessAddr = "test-remote-addr"
+	var transportChan = make(chan Transport, 1)
+	listener := createInProcessListener(t, addr, transportChan)
+	defer silentClose(listener)
+	client := createClientInProcessTransport(t, addr)
+	defer silentClose(client)
+	server := receiveTransport(t, transportChan)
+	defer silentClose(server)
+
+	// From client's perspective, remote is the server address
+	remoteAddr := client.RemoteAddr()
+	assert.NotNil(t, remoteAddr)
+	assert.Equal(t, addr, remoteAddr)
+}
+
+func TestInProcessAddrNetwork(t *testing.T) {
+	addr := InProcessAddr("test-addr")
+
+	network := addr.Network()
+	assert.Equal(t, "in.process", network)
 }
