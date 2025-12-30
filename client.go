@@ -5,9 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"log"
-	"math"
 	"net"
 	"net/http"
 	"os"
@@ -15,6 +13,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Client allow the creation of a Lime connection with a server.
@@ -178,9 +178,15 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 			return channel, nil
 		}
 
-		interval := time.Duration(math.Pow(count, 2)*100) * time.Millisecond
+		interval := time.Duration(count*count*100) * time.Millisecond
 		log.Printf("build channel error on attempt %v, sleeping %v ms: %v", count, interval, err)
-		time.Sleep(interval)
+
+		// Use context-aware sleep to allow interruption
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("client: getOrBuildChannel: %w", ctx.Err())
+		case <-time.After(interval):
+		}
 		count++
 	}
 

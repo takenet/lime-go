@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 )
 
 type inProcessTransport struct {
@@ -130,7 +131,11 @@ func NewInProcessTransportListener(addr InProcessAddr) TransportListener {
 func (l *inProcessTransportListener) Close() error {
 	l.closedMu.Lock()
 	defer l.closedMu.Unlock()
+
+	inProcListenersMu.Lock()
 	delete(inProcListeners, l.addr)
+	inProcListenersMu.Unlock()
+
 	l.closed = true
 	l.done <- true
 	return nil
@@ -145,6 +150,9 @@ func (l *inProcessTransportListener) Listen(_ context.Context, addr net.Addr) er
 	if inProcAddr == "" {
 		return fmt.Errorf("empty in process address %s", inProcAddr)
 	}
+
+	inProcListenersMu.Lock()
+	defer inProcListenersMu.Unlock()
 
 	if _, ok := inProcListeners[inProcAddr]; ok {
 		return fmt.Errorf("a listerer is already active on address %s", inProcAddr)
@@ -180,16 +188,35 @@ func (l *inProcessTransportListener) newClient(addr InProcessAddr, bufferSize in
 	// Create transport pair
 	client, server := newInProcessTransportPair(addr, bufferSize)
 	go func() {
-		l.transports <- server
+		// Use a timeout to prevent goroutine leak if listener is closed
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		select {
+		case <-ctx.Done():
+			// Timeout or context cancelled, close the server transport
+			_ = server.Close()
+			return
+		case <-l.done:
+			// Listener closed, close the server transport
+			_ = server.Close()
+			return
+		case l.transports <- server:
+			// Successfully delivered
+		}
 	}()
 	return client
 }
 
 var inProcListeners = make(map[InProcessAddr]*inProcessTransportListener)
+var inProcListenersMu sync.RWMutex
 
 // DialInProcess creates a new in process transport connection to the specified path.
 func DialInProcess(addr InProcessAddr, bufferSize int) (Transport, error) {
+	inProcListenersMu.RLock()
 	l := inProcListeners[addr]
+	inProcListenersMu.RUnlock()
+
 	if l == nil {
 		return nil, fmt.Errorf("in process connection refused on %s address", addr)
 	}

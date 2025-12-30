@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"go.uber.org/multierr"
-	"golang.org/x/sync/errgroup"
 	"log"
 	"net"
 	"os"
@@ -14,6 +11,9 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 )
 
 // Server allows the receiving of Lime connections through multiple transport listeners, like TCP and Websockets.
@@ -26,6 +26,7 @@ type Server struct {
 	mu            sync.Mutex
 	transportChan chan Transport
 	shutdown      context.CancelFunc
+	wg            sync.WaitGroup
 }
 
 // NewServer creates a new instance of the Server type.
@@ -107,10 +108,29 @@ func (srv *Server) consumeTransports(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			// Wait for all handler goroutines with timeout
+			done := make(chan struct{})
+			go func() {
+				srv.wg.Wait()
+				close(done)
+			}()
+
+			if srv.config.ShutdownTimeout > 0 {
+				select {
+				case <-done:
+					// All handlers completed gracefully
+				case <-time.After(srv.config.ShutdownTimeout):
+					log.Printf("server: shutdown timeout (%v) exceeded, forcing exit", srv.config.ShutdownTimeout)
+				}
+			} else {
+				<-done
+			}
 			return
 		case t := <-srv.transportChan:
 			c := NewServerChannel(t, srv.config.ChannelBufferSize, srv.config.Node, uuid.NewString())
+			srv.wg.Add(1)
 			go func() {
+				defer srv.wg.Done()
 				srv.handleChannel(ctx, c)
 			}()
 		}
@@ -178,7 +198,7 @@ func (srv *Server) Close() error {
 	}
 
 	close(srv.transportChan)
-	return multierr.Combine(errs...)
+	return errors.Join(errs...)
 }
 
 // ServerConfig define the configurations for a Server instance.
@@ -189,6 +209,7 @@ type ServerConfig struct {
 	SchemeOpts        []AuthenticationScheme // SchemeOpts defines the authentication schemes that should be presented to the clients during session establishment.
 	Backlog           int                    // Backlog defines the size of the listener's pending connections queue.
 	ChannelBufferSize int                    // ChannelBufferSize determines the internal envelope buffer size for the channels.
+	ShutdownTimeout   time.Duration          // ShutdownTimeout defines the maximum time to wait for active handlers to complete during shutdown. Zero means no timeout.
 
 	// Authenticate is called for authenticating a client session.
 	// It should return an AuthenticationResult instance with DomainRole different of DomainRoleUnknown for a successful authentication.
@@ -204,6 +225,8 @@ type ServerConfig struct {
 }
 
 var defaultServerConfig = NewServerConfig()
+
+const errNilAuthenticator = "nil authenticator"
 
 // NewServerConfig creates a new instance of ServerConfig with the default configuration values.
 func NewServerConfig() *ServerConfig {
@@ -224,6 +247,7 @@ func NewServerConfig() *ServerConfig {
 		SchemeOpts:        []AuthenticationScheme{AuthenticationSchemeTransport},
 		Backlog:           runtime.NumCPU() * 8,
 		ChannelBufferSize: runtime.NumCPU() * 32,
+		ShutdownTimeout:   30 * time.Second,
 		Authenticate: func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
 			return MemberAuthenticationResult(), nil
 		},
@@ -233,7 +257,7 @@ func NewServerConfig() *ServerConfig {
 					Name:   node.Name,
 					Domain: serverChannel.localNode.Domain,
 				},
-				Instance: uuid.New().String()}, nil
+				Instance: uuid.NewString()}, nil
 		},
 	}
 }
@@ -447,7 +471,7 @@ type PlainAuthenticator func(ctx context.Context, identity Identity, password st
 // client sessions. The provided PlainAuthentication function is called for authenticating any session with this scheme.
 func (b *ServerBuilder) EnablePlainAuthentication(a PlainAuthenticator) *ServerBuilder {
 	if a == nil {
-		panic("nil authenticator")
+		panic(errNilAuthenticator)
 	}
 	b.plainAuth = a
 	if !contains(b.config.SchemeOpts, AuthenticationSchemePlain) {
@@ -464,7 +488,7 @@ type KeyAuthenticator func(ctx context.Context, identity Identity, key string) (
 // client sessions. The provided KeyAuthenticator function is called for authenticating any session with this scheme.
 func (b *ServerBuilder) EnableKeyAuthentication(a KeyAuthenticator) *ServerBuilder {
 	if a == nil {
-		panic("nil authenticator")
+		panic(errNilAuthenticator)
 	}
 	b.keyAuth = a
 	if !contains(b.config.SchemeOpts, AuthenticationSchemeKey) {
@@ -480,7 +504,7 @@ type ExternalAuthenticator func(ctx context.Context, identity Identity, token st
 // client sessions. The provided ExternalAuthenticator function is called for authenticating any session with this scheme.
 func (b *ServerBuilder) EnableExternalAuthentication(a ExternalAuthenticator) *ServerBuilder {
 	if a == nil {
-		panic("nil authenticator")
+		panic(errNilAuthenticator)
 	}
 	b.externalAuth = a
 	if !contains(b.config.SchemeOpts, AuthenticationSchemeExternal) {
@@ -529,39 +553,59 @@ func buildAuthenticate(plainAuth PlainAuthenticator, keyAuth KeyAuthenticator, e
 	return func(ctx context.Context, identity Identity, authentication Authentication) (*AuthenticationResult, error) {
 		switch a := authentication.(type) {
 		case *GuestAuthentication:
-			if _, err := uuid.Parse(identity.Name); err != nil {
-				return UnknownAuthenticationResult(), nil
-			}
-			return MemberAuthenticationResult(), nil
+			return authenticateGuest(identity)
 		case *TransportAuthentication:
-			return nil, errors.New("transport auth not implemented yet")
+			return authenticateTransport()
 		case *PlainAuthentication:
-			if plainAuth == nil {
-				return nil, errors.New("plain authenticator is nil")
-			}
-			pwd, err := a.GetPasswordFromBase64()
-			if err != nil {
-				return nil, fmt.Errorf("plain authenticator: %w", err)
-			}
-			return plainAuth(ctx, identity, pwd)
+			return authenticatePlain(ctx, identity, a, plainAuth)
 		case *KeyAuthentication:
-			if keyAuth == nil {
-				return nil, errors.New("key authenticator is nil")
-			}
-			key, err := a.GetKeyFromBase64()
-			if err != nil {
-				return nil, fmt.Errorf("key authenticator: %w", err)
-			}
-			return keyAuth(ctx, identity, key)
+			return authenticateKey(ctx, identity, a, keyAuth)
 		case *ExternalAuthentication:
-			if externalAuth == nil {
-				return nil, errors.New("external authenticator is nil")
-			}
-			return externalAuth(ctx, identity, a.Token, a.Issuer)
+			return authenticateExternal(ctx, identity, a, externalAuth)
 		}
 
 		return nil, errors.New("unknown authentication scheme")
 	}
+}
+
+func authenticateGuest(identity Identity) (*AuthenticationResult, error) {
+	if _, err := uuid.Parse(identity.Name); err != nil {
+		return UnknownAuthenticationResult(), nil
+	}
+	return MemberAuthenticationResult(), nil
+}
+
+func authenticateTransport() (*AuthenticationResult, error) {
+	return nil, errors.New("transport auth not implemented yet")
+}
+
+func authenticatePlain(ctx context.Context, identity Identity, a *PlainAuthentication, plainAuth PlainAuthenticator) (*AuthenticationResult, error) {
+	if plainAuth == nil {
+		return nil, errors.New("plain authenticator is nil")
+	}
+	pwd, err := a.GetPasswordFromBase64()
+	if err != nil {
+		return nil, fmt.Errorf("plain authenticator: %w", err)
+	}
+	return plainAuth(ctx, identity, pwd)
+}
+
+func authenticateKey(ctx context.Context, identity Identity, a *KeyAuthentication, keyAuth KeyAuthenticator) (*AuthenticationResult, error) {
+	if keyAuth == nil {
+		return nil, errors.New("key authenticator is nil")
+	}
+	key, err := a.GetKeyFromBase64()
+	if err != nil {
+		return nil, fmt.Errorf("key authenticator: %w", err)
+	}
+	return keyAuth(ctx, identity, key)
+}
+
+func authenticateExternal(ctx context.Context, identity Identity, a *ExternalAuthentication, externalAuth ExternalAuthenticator) (*AuthenticationResult, error) {
+	if externalAuth == nil {
+		return nil, errors.New("external authenticator is nil")
+	}
+	return externalAuth(ctx, identity, a.Token, a.Issuer)
 }
 
 // BoundListener represents a pair of a TransportListener and a net.Addr values.

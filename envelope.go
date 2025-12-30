@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/google/uuid"
 )
 
@@ -75,11 +76,10 @@ func (env *Envelope) SetMetadataKeyValue(key string, value string) *Envelope {
 
 // Sender returns the envelope sender Node.
 func (env *Envelope) Sender() Node {
-	if env.PP == (Node{}) {
+	if env.PP != (Node{}) {
 		return env.PP
-	} else {
-		return env.From
 	}
+	return env.From
 }
 
 func (env *Envelope) toRawEnvelope() (*rawEnvelope, error) {
@@ -131,7 +131,7 @@ func (r Reason) String() string {
 
 // NewEnvelopeID generates a new unique envelope ID.
 func NewEnvelopeID() string {
-	return uuid.New().String()
+	return uuid.NewString()
 }
 
 // envelope is the base interface for envelopes types.

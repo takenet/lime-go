@@ -1,35 +1,35 @@
 
-LIME - A lightweight messaging library  
-======================================
+# LIME - A lightweight messaging library  
 
 ![Go](https://github.com/takenet/lime-go/workflows/Go/badge.svg?branch=master)
 
-LIME allows you to build scalable, real-time messaging applications using a JSON-based 
+LIME allows you to build scalable, real-time messaging applications using a JSON-based
 [open protocol](http://limeprotocol.org).
 It's **fully asynchronous** and supports persistent transports like TCP or Websockets.
 
-You can send and receive any type of document into the wire as long it can be represented as JSON or text (plain or 
+You can send and receive any type of document into the wire as long it can be represented as JSON or text (plain or
 encoded with base64) and it has a **MIME type** to allow the other party to handle it in the right way.
 
-The connected nodes can send receipts to the other parties to notify events about messages (for instance, a message was 
+The connected nodes can send receipts to the other parties to notify events about messages (for instance, a message was
 received or the content invalid or not supported).
 
-Besides that, there's a **REST capable** command interface with verbs (*get, set, and delete*) and resource identifiers 
-(URIs) to allow rich messaging scenarios. 
-You can use that to provide services like on-band account registration or instance-messaging resources, like presence or 
+Besides that, there's a **REST capable** command interface with verbs (*get, set, and delete*) and resource identifiers
+(URIs) to allow rich messaging scenarios.
+You can use that to provide services like on-band account registration or instance-messaging resources, like presence or
 roster management.
 
 Finally, it has built-in support for authentication, transport encryption, and compression.
 
-Getting started
+## Getting started
+
 -----
 
 ### Server
 
-For creating a server and start receiving connections, you should use the `lime.Server` type, which can be built using 
+For creating a server and start receiving connections, you should use the `lime.Server` type, which can be built using
 the `lime.NewServerBuilder()` function.
 
-At least one **transport listener** (TCP, WebSocket, or in-process) should be configured. 
+At least one **transport listener** (TCP, WebSocket, or in-process) should be configured.
 You also should **register handlers** for processing the received envelopes.
 
 The example below shows how to create a simple TCP server that echoes every received message to its originator:
@@ -39,13 +39,13 @@ The example below shows how to create a simple TCP server that echoes every rece
 package main
 
 import (
-	"context"
-	"github.com/takenet/lime-go"
-	"log"
-	"net"
-	"os"
-	"os/signal"
-	"syscall"
+ "context"
+ "github.com/takenet/lime-go"
+ "log"
+ "net"
+ "os"
+ "os/signal"
+ "syscall"
 )
 
 func main() {
@@ -79,20 +79,19 @@ func main() {
 }
 ```
 
-### Client 
+### Client
 
-On the client-side, you may use the `lime.Client` type, which can be built using the helper method 
-`lime.NewClientBuilder`.
+On the client-side, you may use the `lime.Client` type, which can be built using the helper method `lime.NewClientBuilder`.
 
 ```go
 package main
 
 import (
-	"context"
-	"github.com/takenet/lime-go"
-	"log"
-	"net"
-	"time"
+ "context"
+ "github.com/takenet/lime-go"
+ "log"
+ "net"
+ "time"
 )
 
 func main() {
@@ -137,21 +136,20 @@ func main() {
 }
 ```
 
-Protocol overview
-------------------
+## Protocol overview
 
-The base protocol data package is called **envelope** and there are four types: **Message, notification, command and 
+The base protocol data package is called **envelope** and there are four types: **Message, notification, command and
 session**.
 
-All envelope types share some properties, like the `id` - the envelope's unique identifier - and the `from` and `to` 
+All envelope types share some properties, like the `id` - the envelope's unique identifier - and the `from` and `to`
 routing information.
-They also have the optional `metadata` property, which can be used to send any extra information about the envelope, 
+They also have the optional `metadata` property, which can be used to send any extra information about the envelope,
 much like a header in the HTTP protocol.
 
-### Message 
+### Message
 
-The message envelope is used to transport a **document** between sessions. 
-A document is just a type with a known MIME type. 
+The message envelope is used to transport a **document** between sessions.
+A document is just a type with a known MIME type.
 
 For instance, a message with a **text document** can be represented like this in JSON:
 
@@ -173,22 +171,22 @@ msg.SetContent(lime.TextDocument("Hello from Lime!")).
     SetToString("john")
 ```
 
-In this example, the document value is the `Hello from Lime!` text and its MIME type is `text/plain`. 
+In this example, the document value is the `Hello from Lime!` text and its MIME type is `text/plain`.
 
-This message also has an `id` property with `1` value. 
+This message also has an `id` property with `1` value.
 The id value is useful to **correlate notifications** about the message.
 When the id is set, the sender may receive notifications (receipts) with message events, which will have the same id.
 For instance, you may want to know if a message was received or read by its destination.
 In this case, you should provide an id value to the message.
 
-The `to` property sets the destination address of the message, and it is used by the server to route the envelope 
+The `to` property sets the destination address of the message, and it is used by the server to route the envelope
 to the correct destination.
 The address format is called **node** and in its full form is presented in the `name@domain/instance` format, similar to
 the [XMPP's Jabber ID](https://xmpp.org/rfcs/rfc3920.html#rfc.section.3).
-The node's _domain_ and _instance_ portions are optional, so the value `john` used in the example is a valid node 
+The node's *domain* and *instance* portions are optional, so the value `john` used in the example is a valid node
 address.
 
-In the previous example, the content is plain text. 
+In the previous example, the content is plain text.
 But a message can be used to transport any type of document that can be represented as JSON.
 
 For instance, to send a generic JSON document you can use the `application/json` type:
@@ -206,6 +204,7 @@ For instance, to send a generic JSON document you can use the `application/json`
 ```
 
 Building the same message in Go would be like this:
+
 ```go
 msg := &lime.Message{}
 msg.SetContent(&lime.JsonDocument{
@@ -230,7 +229,7 @@ domain:
 }
 ```
 
-Using custom MIME types enables the mapping of documents with types from your code. 
+Using custom MIME types enables the mapping of documents with types from your code.
 For this to be possible, these types need to implement the `lime.Document` interface.
 
 ```go
@@ -255,7 +254,7 @@ func init() {
 }
 ```
 
-For instance, to send a message to the `john` node, you can use the `SendMessage` method that is implemented both by 
+For instance, to send a message to the `john` node, you can use the `SendMessage` method that is implemented both by
 the `lime.Server` and `lime.Client` types:
 
 ```go
@@ -275,11 +274,11 @@ client := lime.NewClientBuilder().
     MessagesHandlerFunc(
         func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
             if txt, ok := msg.Content.(lime.TextDocument); ok {
-                fmt.Printf("Text message received - ID: %v - Type: %v - Content: %v\n", msg.ID, msg.Type, txt)	
+                fmt.Printf("Text message received - ID: %v - Type: %v - Content: %v\n", msg.ID, msg.Type, txt) 
             }
             return nil
         }).
-	Build()
+ Build()
 ```
 
 ### Notification
@@ -298,9 +297,9 @@ It can be done like this:
 }
 ```
 
-The notification `to` value should have the value of the `from` property of the message (or the `pp` value, if present). 
+The notification `to` value should have the value of the `from` property of the message (or the `pp` value, if present).
 
-In Go, you can use the `Notification(event)` method from the `*lime.Message` type for building a notification for the 
+In Go, you can use the `Notification(event)` method from the `*lime.Message` type for building a notification for the
 message:
 
 ```go
@@ -312,10 +311,11 @@ if msg.ID != "" {
 }
 ```
 
-Notifications can be emitted by the **destination of the message or by intermediates** - like a server that routes the 
+Notifications can be emitted by the **destination of the message or by intermediates** - like a server that routes the
 message.
 
 The protocol defines the following notification events:
+
 - **accepted**: The message was received and accepted by an intermediate.
 - **dispatched**: The message was dispatched to the destination by the intermediate.
 - **received**: The message was received by its destination.
@@ -327,9 +327,9 @@ A single message can **have multiple notifications**, one or more for each hop o
 By convention, the **consumed** and **failed** notifications are considered final, so no other notification should be
 received by the message sender after one of these.
 
-In case of failed notifications, a **reason** value should be present. 
+In case of failed notifications, a **reason** value should be present.
 
-For instance, a server (intermediate) should notify the sender if it is unable to determine the destination session of 
+For instance, a server (intermediate) should notify the sender if it is unable to determine the destination session of
 a message:
 
 ```json
@@ -352,32 +352,32 @@ not := msg.FailedNotification(&lime.Reason{Code: 1, Description: "Destination no
 
 ### Command
 
-The command envelope is used to **read and write resources of a remote node**. 
+The command envelope is used to **read and write resources of a remote node**.
 It provides a REST capable interface, with URI and methods (verbs), similar to the HTTP protocol.
 It also supports multiplexing, so the connection is not blocked to wait for a response when a request is sent.
 
-There are two types of commands: a request command - which contains a `uri` value - or a response command - with a 
+There are two types of commands: a request command - which contains a `uri` value - or a response command - with a
 `status` value.
 
 For instance, you can use commands for managing your contact list or to set your current status (available, busy, away).
-Another common use is **the in-band registration**, where users can create accounts for your service in the protocol 
+Another common use is **the in-band registration**, where users can create accounts for your service in the protocol
 itself.
 
 The advantage of using commands is that you can use the **same existing connection** that is used for messaging for
-handling resources, instead of creating out-of-band connections for that. 
+handling resources, instead of creating out-of-band connections for that.
 
-In practice, you can avoid having an external HTTP service for handling resources related to your messaging service. 
+In practice, you can avoid having an external HTTP service for handling resources related to your messaging service.
 
-This is more efficient in terms of energy consumption but also is usually more performatic as well. 
-Using a session that is already established and authenticated avoids the additional overhead of a TLS handshake and 
-authentication that an external connection would require. 
+This is more efficient in terms of energy consumption but also is usually more performatic as well.
+Using a session that is already established and authenticated avoids the additional overhead of a TLS handshake and
+authentication that an external connection would require.
 
-But there is a limitation: the command interface only supports JSON payloads, so you should not use it for 
+But there is a limitation: the command interface only supports JSON payloads, so you should not use it for
 transporting binary or any kind of large content.
 
 Like in an HTTP service, the URI and methods that you may use in commands depend on what the server implements.
 
-For instance, a server could implement a contact management service. 
+For instance, a server could implement a contact management service.
 In this example, to retrieve all contacts, you could send a command like this:
 
 ```json
@@ -388,7 +388,7 @@ In this example, to retrieve all contacts, you could send a command like this:
 }
 ```
 
-And the server may respond to this request like this: 
+And the server may respond to this request like this:
 
 ```json
 {
@@ -420,7 +420,7 @@ Note that the value of the `id` property is the same as the request.
 This is how we know that a response is to a specific request, so it is important to avoid using duplicate ids to avoid
 collisions. A way of doing this is to use GUID (UUID) values as id for the requests.
 
-The status is always present in a response command, but the resource may be present depending on the method of the 
+The status is always present in a response command, but the resource may be present depending on the method of the
 request and the status of the response. In successful `get` methods, the value of `resource` - and consequently `type` -
 should be present. In `set` requests, the `resource` value will probably not be present. This is similar to the HTTP
 methods and body, when `GET` requests will have a value in the response body if successful and not always in `POST`
@@ -453,7 +453,7 @@ reqCmd.SetURIString("/contacts").
 Note that for the `id` value, we are using the value returned by the `lime.NewEnvelopeID()` function, which will return
 a UUID v4 string (something like `3cdd2654-911d-497e-834a-3b7865510155`).
 
-For sending a command request, you should use the `ProcessCommand` method instead of the `SendCommand` method. 
+For sending a command request, you should use the `ProcessCommand` method instead of the `SendCommand` method.
 This is because the `ProcessCommand` method takes care of waiting for the corresponding response command.
 
 ```go
@@ -467,7 +467,7 @@ In the server side, you can add handlers for specific commands using the `Reques
 the `lime.Server` type.
 
 ```go
-server := lime.NewServerBuilder(). 	
+server := lime.NewServerBuilder().  
     RequestCommandHandlerFunc(
         // Set a predicate for filtering only the get contacts commands
         func(cmd *lime.RequestCommand) bool {
@@ -492,7 +492,7 @@ server := lime.NewServerBuilder().
     Build()
 ```
 
-This is also valid for the `lime.Client` type. 
+This is also valid for the `lime.Client` type.
 In Lime, the **client can receive and process commands requests** from other nodes, like the server.
 
 ### Session
@@ -500,7 +500,7 @@ In Lime, the **client can receive and process commands requests** from other nod
 > Note: The session establishment flow is automatically handled by the library.
 
 The session envelope is used for the negotiation, authentication, and establishment of the communication channel between
-the client and a server. 
+the client and a server.
 It helps the parties to select the transport options, like compression and encryption (TLS), authentication credentials,
 and session metadata, like its `id` and local/remote node addresses.
 
@@ -512,10 +512,11 @@ after the transport connection is established:
   "state": "new"
 }
 ```
+
 The server should reply to this with another session envelope, according to the session state that it wants to enforce.
 
 For instance, the server may want to present the client with the transport options for negotiation.
-This is useful for applying the TLS encryption to an unencrypted connection (the TCP connection starts without 
+This is useful for applying the TLS encryption to an unencrypted connection (the TCP connection starts without
 encryption by default).
 
 ```json
@@ -528,7 +529,7 @@ encryption by default).
 }
 ```
 
-Note that this envelope haves an `id` defined, which is the **session id**. 
+Note that this envelope haves an `id` defined, which is the **session id**.
 The next session envelopes sent by the client should use this same id, until the end of the session.
 During the session establishment, only session envelopes are allowed.
 
@@ -536,13 +537,13 @@ The server can skip the `negotiating` state and jump directly to the `authentica
 state. The session state progression can occur in the following order:
 
 1. new (started by the client)
-2. negotiating (optional) 
+2. negotiating (optional)
 3. authenticating (optional)
-4. established 
+4. established
 5. finishing (optional, started by the client)
 6. finished OR failed (final)
 
-In Go, the session negotiation, authentication, and establishment process is **automatically handled** by the 
+In Go, the session negotiation, authentication, and establishment process is **automatically handled** by the
 `lime.Client` and `lime.Server` types.
 You just need to make sure that the server and client are configured accordingly the desired behavior.
 
@@ -582,6 +583,7 @@ client := lime.NewClientBuilder().
 
 You may also want to configure the server and client authentication mechanisms.
 The Lime Go library supports the following schemes:
+
 - Guest (no authentication)
 - Plain (password)
 - Key

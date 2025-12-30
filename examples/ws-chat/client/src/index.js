@@ -46,13 +46,14 @@ async function createClient() {
                     appendMessage("BOT", BOT_IMG, "left", `The user <strong>${message.from}</strong> has joined the room.`);
                     break;
 
-                default:
-                    name = message.from;
+                default: {
+                    let senderName = message.from;
                     if (message.to) {
-                        name += " (private)";
+                        senderName += " (private)";
                     }
-                    appendMessage(name, PERSON_IMG, "left", message.content);
+                    appendMessage(senderName, PERSON_IMG, "left", message.content);
                     break;
+                }
             }
         }
         return client;
@@ -190,8 +191,7 @@ async function getFriends() {
     }
 
     let responseMsg = 'Your friends are:<br>';
-    for (let i = 0; i < response.resource.items.length; i++) {
-        let friend = response.resource.items[i];
+    for (let friend of response.resource.items) {
         responseMsg += `- ${friend.nickname}${friend.online? ' (online)': '' } <br>`;
     }
 
@@ -282,5 +282,3 @@ function setInputEnabled(enabled) {
         msgerInput.placeholder = "Connecting...";
     }
 }
-
-
