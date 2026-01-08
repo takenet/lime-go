@@ -3,17 +3,21 @@ package lime
 import (
 	"context"
 	"errors"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 )
 
-func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
+const errUnexpectedEnvelopeType = "unexpected envelope type"
+
+func TestServerChannelEstablishSessionWhenGuest(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
-	sessionID := "52e59849-19a8-4b2d-86b7-3fa563cdb616"
+	sessionID := testSessionID
 	serverNode := Node{
-		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "postmaster", Domain: testDomain},
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
@@ -21,34 +25,36 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	clientNode := Node{
-		Identity: Identity{Name: "golang", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "golang", Domain: testDomain},
 		Instance: "home",
 	}
+	var wg errgroup.Group
 
 	// Act
-	go func() {
+	wg.Go(func() error {
 		err := client.Send(ctx, &Session{
 			State: SessionStateNew,
 		})
 		if err != nil {
-			return
+			return err
 		}
 		env, err := client.Receive(ctx)
 		if err != nil {
-			return
+			return err
 		}
 		s, ok := env.(*Session)
 		if !ok {
-			return
+			return errors.New(errUnexpectedEnvelopeType)
 		}
 
-		_ = client.Send(ctx, &Session{
+		return client.Send(ctx, &Session{
 			Envelope:       Envelope{ID: s.ID, From: clientNode},
 			State:          SessionStateAuthenticating,
 			Scheme:         AuthenticationSchemeGuest,
 			Authentication: &GuestAuthentication{},
 		})
-	}()
+	})
+
 	err := c.EstablishSession(
 		ctx,
 		[]SessionCompression{SessionCompressionNone},
@@ -62,6 +68,8 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 		},
 	)
 
+	wg.Wait() // Ensure goroutine finishes (though EstablishSession is the main blocker usually)
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, serverNode, c.LocalNode())
@@ -71,12 +79,12 @@ func TestServerChannel_EstablishSession_WhenGuest(t *testing.T) {
 	assert.True(t, c.transport.Connected())
 }
 
-func TestServerChannel_FinishSession(t *testing.T) {
+func TestServerChannelFinishSession(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
-	sessionID := "52e59849-19a8-4b2d-86b7-3fa563cdb616"
+	sessionID := testSessionID
 	serverNode := Node{
-		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "postmaster", Domain: testDomain},
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
@@ -86,21 +94,25 @@ func TestServerChannel_FinishSession(t *testing.T) {
 	c.setState(SessionStateEstablished)
 	sessionChan := make(chan *Session)
 	errChan := make(chan error)
+	var wg errgroup.Group
 
 	// Act
-	go func() {
+	wg.Go(func() error {
 		e, err := client.Receive(ctx)
 		if err != nil {
 			errChan <- err
-			return
+			return err
 		}
 		s, ok := e.(*Session)
 		if !ok {
-			errChan <- errors.New("unexpected envelope type")
-			return
+			err := errors.New(errUnexpectedEnvelopeType)
+			errChan <- err
+			return err
 		}
 		sessionChan <- s
-	}()
+		return nil
+	})
+
 	time.Sleep(5 * time.Millisecond)
 	err := c.FinishSession(ctx)
 
@@ -121,14 +133,15 @@ func TestServerChannel_FinishSession(t *testing.T) {
 	assert.Equal(t, sessionID, s.ID)
 	assert.Equal(t, serverNode, s.From)
 	assert.Equal(t, SessionStateFinished, s.State)
+	wg.Wait()
 }
 
-func TestServerChannel_FailSession(t *testing.T) {
+func TestServerChannelFailSession(t *testing.T) {
 	// Arrange
 	client, server := newInProcessTransportPair("localhost", 1)
-	sessionID := "52e59849-19a8-4b2d-86b7-3fa563cdb616"
+	sessionID := testSessionID
 	serverNode := Node{
-		Identity: Identity{Name: "postmaster", Domain: "limeprotocol.org"},
+		Identity: Identity{Name: "postmaster", Domain: testDomain},
 		Instance: "server1",
 	}
 	c := NewServerChannel(server, 1, serverNode, sessionID)
@@ -142,21 +155,25 @@ func TestServerChannel_FailSession(t *testing.T) {
 	}
 	sessionChan := make(chan *Session)
 	errChan := make(chan error)
+	var wg errgroup.Group
 
 	// Act
-	go func() {
+	wg.Go(func() error {
 		e, err := client.Receive(ctx)
 		if err != nil {
 			errChan <- err
-			return
+			return err
 		}
 		s, ok := e.(*Session)
 		if !ok {
-			errChan <- errors.New("unexpected envelope type")
-			return
+			err := errors.New(errUnexpectedEnvelopeType)
+			errChan <- err
+			return err
 		}
 		sessionChan <- s
-	}()
+		return nil
+	})
+
 	time.Sleep(5 * time.Millisecond)
 	err := c.FailSession(ctx, r)
 
@@ -178,4 +195,5 @@ func TestServerChannel_FailSession(t *testing.T) {
 	assert.Equal(t, serverNode, s.From)
 	assert.Equal(t, SessionStateFailed, s.State)
 	assert.Equal(t, r, s.Reason)
+	wg.Wait()
 }

@@ -3,8 +3,9 @@ package lime
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func createTextDocument() TextDocument {
@@ -26,11 +27,11 @@ func createTestJsonDocument() *testJsonDocument {
 }
 
 type testJsonDocument struct {
-	Property1 string                 `json:"property1"`
-	Property2 int                    `json:"property2"`
-	Property3 map[string]interface{} `json:"property3"`
-	Property4 bool                   `json:"property4"`
-	Property5 float32                `json:"property5"`
+	Property1 string         `json:"property1"`
+	Property2 int            `json:"property2"`
+	Property3 map[string]any `json:"property3"`
+	Property4 bool           `json:"property4"`
+	Property5 float32        `json:"property5"`
 }
 
 func mediaTypeTestJson() MediaType {
@@ -45,7 +46,7 @@ func (t *testJsonDocument) MediaType() MediaType {
 	return mediaTypeTestJson()
 }
 
-func TestDocumentContainer_MarshalJSON_Plain(t *testing.T) {
+func TestDocumentContainerMarshalJSONPlain(t *testing.T) {
 	// Arrange
 	d := createTextDocument()
 	c := NewDocumentContainer(d)
@@ -60,7 +61,7 @@ func TestDocumentContainer_MarshalJSON_Plain(t *testing.T) {
 	assert.JSONEq(t, `{"type":"text/plain","value":"Hello world!"}`, string(b))
 }
 
-func TestDocumentContainer_MarshalJSON_JSON(t *testing.T) {
+func TestDocumentContainerMarshalJSONJSON(t *testing.T) {
 	// Arrange
 	d := createJsonDocument()
 	c := NewDocumentContainer(d)
@@ -75,7 +76,7 @@ func TestDocumentContainer_MarshalJSON_JSON(t *testing.T) {
 	assert.JSONEq(t, `{"type":"application/json","value":{"property1":"value1", "property2":2,"property3":{"subproperty1":"subvalue1"},"property4":false,"property5":12.3}}`, string(b))
 }
 
-func TestDocumentContainer_MarshalJSON_CustomJSON(t *testing.T) {
+func TestDocumentContainerMarshalJSONCustomJSON(t *testing.T) {
 	// Arrange
 	d := createTestJsonDocument()
 	c := NewDocumentContainer(d)
@@ -90,7 +91,7 @@ func TestDocumentContainer_MarshalJSON_CustomJSON(t *testing.T) {
 	assert.JSONEq(t, `{"type":"application/x-lime-test+json","value":{"property1":"value1", "property2":2,"property3":{"subproperty1":"subvalue1"},"property4":false,"property5":12.3}}`, string(b))
 }
 
-func TestDocumentContainer_UnmarshalJSON_Plain(t *testing.T) {
+func TestDocumentContainerUnmarshalJSONPlain(t *testing.T) {
 	// Arrange
 	j := []byte(`{"type":"text/plain","value":"Hello world!"}`)
 	var d DocumentContainer
@@ -108,7 +109,7 @@ func TestDocumentContainer_UnmarshalJSON_Plain(t *testing.T) {
 	assert.Equal(t, createTextDocument(), *actual)
 }
 
-func TestDocumentContainer_UnmarshalJSON_JSON(t *testing.T) {
+func TestDocumentContainerUnmarshalJSONJSON(t *testing.T) {
 	// Arrange
 	j := []byte(`{"type":"application/json","value":{"property1":"value1", "property2":2,"property3":{"subproperty1":"subvalue1"},"property4":false,"property5":12.3}}`)
 	var d DocumentContainer
@@ -126,7 +127,7 @@ func TestDocumentContainer_UnmarshalJSON_JSON(t *testing.T) {
 	assert.Equal(t, *createJsonDocument(), *actual)
 }
 
-func TestDocumentContainer_UnmarshalJSON_CustomJSON(t *testing.T) {
+func TestDocumentContainerUnmarshalJSONCustomJSON(t *testing.T) {
 	// Arrange
 	j := []byte(`{"type":"application/x-lime-test+json","value":{"property1":"value1", "property2":2,"property3":{"subproperty1":"subvalue1"},"property4":false,"property5":12.3}}`)
 	var d DocumentContainer
@@ -147,11 +148,11 @@ func TestDocumentContainer_UnmarshalJSON_CustomJSON(t *testing.T) {
 	assert.Equal(t, *createTestJsonDocument(), *actual)
 }
 
-func TestDocumentCollection_MarshalJSON_Plain(t *testing.T) {
+func TestDocumentCollectionMarshalJSONPlain(t *testing.T) {
 	// Arrange
 	items := make([]Document, 3)
-	for i := 0; i < len(items); i++ {
-		items[i] = TextDocument(fmt.Sprintf("Hello world %v!", i+1))
+	for i := range items {
+		items[i] = TextDocument(fmt.Sprintf(testHelloWorldFormat, i+1))
 	}
 	c := NewDocumentCollection(items, MediaTypeTextPlain())
 
@@ -165,11 +166,11 @@ func TestDocumentCollection_MarshalJSON_Plain(t *testing.T) {
 	assert.JSONEq(t, `{"total":3,"itemType":"text/plain","items":["Hello world 1!","Hello world 2!","Hello world 3!"]}`, string(b))
 }
 
-func TestDocumentCollection_MarshalJSON_JSON(t *testing.T) {
+func TestDocumentCollectionMarshalJSONJSON(t *testing.T) {
 	// Arrange
 	items := make([]Document, 3)
-	for i := 0; i < len(items); i++ {
-		items[i] = &JsonDocument{"text": fmt.Sprintf("Hello world %v!", i+1)}
+	for i := range items {
+		items[i] = &JsonDocument{"text": fmt.Sprintf(testHelloWorldFormat, i+1)}
 	}
 	c := NewDocumentCollection(items, MediaTypeApplicationJson())
 
@@ -183,7 +184,7 @@ func TestDocumentCollection_MarshalJSON_JSON(t *testing.T) {
 	assert.JSONEq(t, `{"total":3,"itemType":"application/json","items":[{"text":"Hello world 1!"},{"text":"Hello world 2!"},{"text":"Hello world 3!"}]}`, string(b))
 }
 
-func TestDocumentCollection_UnmarshalJSON_Plain(t *testing.T) {
+func TestDocumentCollectionUnmarshalJSONPlain(t *testing.T) {
 	// Arrange
 	j := []byte(`{"total":3,"itemType":"text/plain","items":["Hello world 1!","Hello world 2!","Hello world 3!"]}`)
 	var c DocumentCollection
@@ -204,7 +205,7 @@ func TestDocumentCollection_UnmarshalJSON_Plain(t *testing.T) {
 	}
 }
 
-func TestDocumentCollection_UnmarshalJSON_JSON(t *testing.T) {
+func TestDocumentCollectionUnmarshalJSONJSON(t *testing.T) {
 	// Arrange
 	j := []byte(`{"total":3,"itemType":"application/json","items":[{"text":"Hello world 1!"},{"text":"Hello world 2!"},{"text":"Hello world 3!"}]}`)
 	var c DocumentCollection
