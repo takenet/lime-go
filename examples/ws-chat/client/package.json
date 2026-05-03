@@ -8,7 +8,7 @@
   "dependencies": {
     "lime-js": "^3.0.1",
     "lime-transport-websocket": "^2.0.3",
-    "uuid": "^8.3.2"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "webpack": "^5.70.0",
