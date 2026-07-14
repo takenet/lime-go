@@ -29,7 +29,7 @@ This document outlines a strategic plan to bring the **lime-go** library to feat
 - Redis transport
 - Channel modules/middleware
 - Rich resource types with full properties
-- ASP.NET Core equivalent (HTTP/web server integration)
+- ~~ASP.NET Core equivalent (HTTP/web server integration)~~ ✅ Done (see 3.3)
 - Advanced listeners and builders
 - CLI tools and samples
 - Load testing and benchmarking infrastructure
@@ -1323,6 +1323,66 @@ func (l *EventChannelListener) handleMessage(ctx context.Context, msg *Message, 
 
 ### 3.3 HTTP/Web Server Integration
 
+**Status:** ✅ **Done.** Implemented as a self-contained `http/` package that
+implements the real, stateless LIME-over-HTTP protocol used by Blip's HTTP
+gateway ("Iris", publicly exposed at `https://http.msging.net`), covering both
+the outbound (client) and inbound (webhook/server) integration roles.
+
+Unlike the original sketch below (which assumed wiring an HTTP handler
+directly to a WebSocket-upgrading, session-oriented `lime.Server`), Iris'
+actual HTTP integration is per-request and stateless: each call is
+individually authenticated via `Authorization: Basic base64(identity:key)`
+(or `Key` scheme) and carries a single envelope as its JSON body — there is no
+session negotiation over HTTP. The implementation below reflects that real
+protocol instead of the ASP.NET Core-coupled design originally sketched here.
+
+**Files created:**
+
+- `http/doc.go` - package documentation and usage overview
+- `http/codec.go` - envelope type detection (mirrors `rawEnvelope.envelopeType()`)
+  and JSON encode/decode helpers for `lime.Message`/`lime.Notification`/
+  `lime.RequestCommand`/`lime.ResponseCommand`
+- `http/auth.go` - Basic/Key `Authorization` header building (client) and
+  parsing plus a pluggable `Authenticator` interface (server)
+- `http/client.go` - `Client` type sending envelopes to Iris's `/messages`,
+  `/notifications` and `/commands` endpoints, with synchronous
+  `ResponseCommand` handling for commands
+- `http/handler.go` - `Handler` type implementing `http.Handler`, receiving
+  Iris-forwarded webhook envelopes, authenticating them and dispatching to
+  pluggable `MessageHandler`/`NotificationHandler`/`CommandHandler` functions
+- `http/client_test.go`, `http/handler_test.go`, `http/codec_test.go`,
+  `http/auth_test.go` - table-driven tests using `net/http/httptest`
+  (80.8% statement coverage)
+- `examples/http-iris/client/main.go` - sends a message to Iris
+- `examples/http-iris/server/main.go` - webhook server receiving Iris callbacks
+
+**Usage:**
+
+```go
+// Outbound: sending to Iris
+client := http.NewClient(identity, accessKey)
+err := client.SendMessage(ctx, msg)
+
+// Inbound: receiving webhooks forwarded by Iris
+handler := &http.Handler{
+    Authenticator: myAuthenticator,
+    MessageHandler: func(ctx context.Context, msg *lime.Message) (*lime.Notification, error) {
+        return msg.Notification(lime.NotificationEventConsumed), nil
+    },
+}
+stdhttp.ListenAndServe(":8080", handler)
+```
+
+**Benefits:**
+
+- Integration with Go web frameworks (mountable as a plain `http.Handler`)
+- Interoperates directly with Blip/Iris's real HTTP gateway semantics
+- No changes required to the existing session-oriented `Transport`/`Server`/
+  `Client` core, keeping the change additive and low-risk
+
+<details>
+<summary>Original sketch (superseded by the implementation above)</summary>
+
 **Files to Create:**
 
 - `http/` directory (new package)
@@ -1368,6 +1428,8 @@ func (h *LimeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 - Equivalent to ASP.NET Core integration
 
 **Effort:** 50 hours
+
+</details>
 
 ---
 
@@ -1574,7 +1636,7 @@ func BenchmarkRedisTransportSend(b *testing.B) {
 
 - [ ] Redis transport functional
 - [ ] Listener abstractions complete
-- [ ] HTTP/WebSocket integration working
+- [x] HTTP/WebSocket integration working
 - [ ] Performance benchmarks acceptable
 - [ ] Tests passing (>80% coverage)
 

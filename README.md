@@ -136,6 +136,37 @@ func main() {
 }
 ```
 
+### HTTP integration (Iris)
+
+Besides the persistent TCP and WebSocket transports, `lime-go` also ships a
+`http` package for integrating with Blip's stateless HTTP gateway ("Iris",
+publicly exposed at `https://http.msging.net`). Unlike TCP/WebSocket, LIME-
+over-HTTP has no session negotiation: every request is individually
+authenticated and carries a single envelope.
+
+```go
+import (
+    "github.com/takenet/lime-go"
+    limehttp "github.com/takenet/lime-go/http"
+)
+
+// Sending a message to Iris
+client := limehttp.NewClient(identity, accessKey)
+err := client.SendMessage(ctx, msg)
+
+// Receiving webhooks forwarded by Iris
+handler := &limehttp.Handler{
+    Authenticator: myAuthenticator,
+    MessageHandler: func(ctx context.Context, msg *lime.Message) (*lime.Notification, error) {
+        return msg.Notification(lime.NotificationEventConsumed), nil
+    },
+}
+http.ListenAndServe(":8080", handler)
+```
+
+See the `http` package documentation and the `examples/http-iris/` directory
+for complete client and server examples.
+
 ## Protocol overview
 
 The base protocol data package is called **envelope** and there are four types: **Message, notification, command and
