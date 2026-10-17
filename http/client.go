@@ -3,13 +3,13 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
-	"github.com/takenet/lime-go"
+	"github.com/takenet/lime-go/codec"
+	lime "github.com/takenet/lime-go/protocol"
 )
 
 // defaultBaseURL is Blip's public HTTP gateway endpoint.
@@ -120,9 +120,13 @@ func (c *Client) ProcessCommand(ctx context.Context, cmd *lime.RequestCommand) (
 		return nil, fmt.Errorf("process command: %w", err)
 	}
 
-	respCmd := &lime.ResponseCommand{}
-	if err := json.Unmarshal(body, respCmd); err != nil {
+	envelope, err := codec.UnmarshalEnvelope(body)
+	if err != nil {
 		return nil, fmt.Errorf("process command: decode response: %w", err)
+	}
+	respCmd, ok := envelope.(*lime.ResponseCommand)
+	if !ok {
+		return nil, fmt.Errorf("process command: decode response: unexpected envelope type %T", envelope)
 	}
 
 	if respCmd.Status == lime.CommandStatusFailure {
@@ -138,7 +142,7 @@ func (c *Client) ProcessCommand(ctx context.Context, cmd *lime.RequestCommand) (
 
 // post marshals env, sends it as a POST request to path and returns the raw
 // response body when the request succeeds (2xx status).
-func (c *Client) post(ctx context.Context, path string, env any) ([]byte, error) {
+func (c *Client) post(ctx context.Context, path string, env lime.EnvelopeValue) ([]byte, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("nil context")
 	}
@@ -148,7 +152,7 @@ func (c *Client) post(ctx context.Context, path string, env any) ([]byte, error)
 		return nil, err
 	}
 
-	data, err := json.Marshal(env)
+	data, err := codec.MarshalEnvelope(env)
 	if err != nil {
 		return nil, fmt.Errorf("marshal envelope: %w", err)
 	}

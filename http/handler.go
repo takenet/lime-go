@@ -2,13 +2,13 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
-	"github.com/takenet/lime-go"
+	"github.com/takenet/lime-go/codec"
+	lime "github.com/takenet/lime-go/protocol"
 )
 
 // MessageHandlerFunc processes an inbound message forwarded by Iris. It may
@@ -22,9 +22,9 @@ type MessageHandlerFunc func(ctx context.Context, msg *lime.Message) (*lime.Noti
 // empty "202 Accepted" when the handler succeeds.
 type NotificationHandlerFunc func(ctx context.Context, not *lime.Notification) error
 
-// CommandHandlerFunc processes an inbound request command forwarded by
-// Iris and must return the ResponseCommand to be written back synchronously
-// as the HTTP response.
+// CommandHandlerFunc processes an inbound request command forwarded by Iris.
+// It must return a ResponseCommand except for observe commands without an ID,
+// which are fire-and-forget and may return nil.
 type CommandHandlerFunc func(ctx context.Context, cmd *lime.RequestCommand) (*lime.ResponseCommand, error)
 
 // Handler is an http.Handler that receives LIME envelopes forwarded by Iris
@@ -162,10 +162,18 @@ func (h *Handler) dispatchCommand(ctx context.Context, w http.ResponseWriter, cm
 
 	respCmd, err := h.CommandHandler(ctx, cmd)
 	if err != nil {
-		writeHandlerError(w, err)
+		if cmd.Method == lime.CommandMethodObserve && cmd.ID == "" {
+			writeHandlerError(w, err)
+			return
+		}
+		writeEnvelopeResponse(w, http.StatusOK, commandFailureResponse(cmd, err))
 		return
 	}
 	if respCmd == nil {
+		if cmd.Method == lime.CommandMethodObserve && cmd.ID == "" {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
 		http.Error(w, "command handler returned a nil response", http.StatusInternalServerError)
 		return
 	}
@@ -194,7 +202,12 @@ func writeEnvelopeResponse(w http.ResponseWriter, statusCode int, env any) {
 		return
 	}
 
-	data, err := json.Marshal(env)
+	envelope, ok := env.(lime.EnvelopeValue)
+	if !ok {
+		http.Error(w, fmt.Sprintf("unsupported envelope type %T", env), http.StatusInternalServerError)
+		return
+	}
+	data, err := codec.MarshalEnvelope(envelope)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("marshal response: %v", err), http.StatusInternalServerError)
 		return

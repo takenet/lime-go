@@ -6,36 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/takenet/lime-go"
+	lime "github.com/takenet/lime-go/protocol"
 )
-
-func TestDetectEnvelopeKind(t *testing.T) {
-	tests := []struct {
-		name    string
-		json    string
-		want    envelopeKind
-		wantErr bool
-	}{
-		{"message", `{"type":"text/plain","content":"hi"}`, envelopeKindMessage, false},
-		{"notification", `{"event":"received"}`, envelopeKindNotification, false},
-		{"request command", `{"method":"get","uri":"/account"}`, envelopeKindRequestCommand, false},
-		{"response command", `{"method":"get","status":"success"}`, envelopeKindResponseCommand, false},
-		{"unknown", `{"foo":"bar"}`, "", true},
-		{"invalid json", `not json`, "", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := detectEnvelopeKind([]byte(tt.json))
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
 
 func TestDecodeEnvelope(t *testing.T) {
 	msgJSON := `{"type":"text/plain","content":"hi"}`
@@ -52,6 +24,18 @@ func TestDecodeEnvelope(t *testing.T) {
 	not, ok := env.(*lime.Notification)
 	require.True(t, ok)
 	assert.Equal(t, lime.NotificationEventReceived, not.Event)
+
+	requestJSON := `{"method":"get","uri":"/account"}`
+	env, err = decodeEnvelope([]byte(requestJSON))
+	require.NoError(t, err)
+	_, ok = env.(*lime.RequestCommand)
+	require.True(t, ok)
+
+	responseJSON := `{"method":"get","status":"success"}`
+	env, err = decodeEnvelope([]byte(responseJSON))
+	require.NoError(t, err)
+	_, ok = env.(*lime.ResponseCommand)
+	require.True(t, ok)
 }
 
 func TestDecodeEnvelope_WhenUnknownKind_ReturnsError(t *testing.T) {

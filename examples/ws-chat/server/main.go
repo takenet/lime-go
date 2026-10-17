@@ -14,18 +14,21 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/takenet/lime-go"
+	"github.com/takenet/lime-go/channel"
+	"github.com/takenet/lime-go/document"
+	lime "github.com/takenet/lime-go/protocol"
+	serverpkg "github.com/takenet/lime-go/server"
 )
 
-var channels = make(map[string]*lime.ServerChannel)
+var channels = make(map[string]*serverpkg.ServerChannel)
 var nodesToID = make(map[string]string)
 var mu sync.RWMutex
 var nodeFriends = make(map[string][]string)
 
 func main() {
-	server := lime.NewServerBuilder().
+	srv := serverpkg.NewServerBuilder().
 		// Handler for registering new user sessions
-		Register(func(ctx context.Context, candidate lime.Node, c *lime.ServerChannel) (lime.Node, error) {
+		Register(func(ctx context.Context, candidate lime.Node, c *serverpkg.ServerChannel) (lime.Node, error) {
 			mu.Lock()
 			defer mu.Unlock()
 			// Detect and resolve name collisions
@@ -66,7 +69,7 @@ func main() {
 		// Listen using the websocket transport in the 8080 port
 		ListenWebsocket(
 			&net.TCPAddr{Port: 8080},
-			&lime.WebsocketConfig{
+			&serverpkg.WebsocketConfig{
 				CheckOrigin: func(r *http.Request) bool {
 					return true
 				}}).
@@ -76,7 +79,7 @@ func main() {
 	sig := make(chan os.Signal, 1)
 
 	go func() {
-		if err := server.ListenAndServe(); err != lime.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != serverpkg.ErrServerClosed {
 			log.Printf("server: listen: %v\n", err)
 			close(sig)
 		}
@@ -86,12 +89,12 @@ func main() {
 	log.Println("Listening at ws:8080. Press Ctrl+C to stop.")
 	<-sig
 
-	if err := server.Close(); err != nil {
+	if err := srv.Close(); err != nil {
 		log.Printf("server: close: %v\n", err)
 	}
 }
 
-func handleMessage(ctx context.Context, msg *lime.Message, _ lime.Sender) error {
+func handleMessage(ctx context.Context, msg *lime.Message, _ serverpkg.Sender) error {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -105,7 +108,7 @@ func handleMessage(ctx context.Context, msg *lime.Message, _ lime.Sender) error 
 		}
 	} else {
 		// Broadcast the message to all others sessions
-		senderSessionID, _ := lime.ContextSessionID(ctx)
+		senderSessionID, _ := channel.ContextSessionID(ctx)
 		for id, c := range channels {
 			if id != senderSessionID {
 				if err := c.SendMessage(ctx, msg); err != nil {
@@ -117,8 +120,8 @@ func handleMessage(ctx context.Context, msg *lime.Message, _ lime.Sender) error 
 	return errors.Join(errs...)
 }
 
-func handleFriendsCommand(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
-	node, _ := lime.ContextSessionRemoteNode(ctx)
+func handleFriendsCommand(ctx context.Context, cmd *lime.RequestCommand, s serverpkg.Sender) error {
+	node, _ := channel.ContextSessionRemoteNode(ctx)
 
 	var respCmd *lime.ResponseCommand
 	switch cmd.Method {
@@ -237,7 +240,7 @@ func (f *Friend) MediaType() lime.MediaType {
 }
 
 func init() {
-	lime.RegisterDocumentFactory(func() lime.Document {
+	document.RegisterDocumentFactory(func() document.Document {
 		return &Friend{}
 	})
 }

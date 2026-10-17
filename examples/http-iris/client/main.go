@@ -12,8 +12,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/takenet/lime-go"
 	limehttp "github.com/takenet/lime-go/http"
+	lime "github.com/takenet/lime-go/protocol"
 )
 
 func main() {

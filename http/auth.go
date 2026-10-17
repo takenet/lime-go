@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/takenet/lime-go"
+	lime "github.com/takenet/lime-go/protocol"
 )
 
 // ErrMissingAuthorizationHeader is returned when an incoming request has no

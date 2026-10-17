@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/takenet/lime-go"
+	lime "github.com/takenet/lime-go/protocol"
 )
 
 func newSignedRequest(t *testing.T, body string, contentType string) *http.Request {
@@ -190,6 +190,102 @@ func TestHandlerServeHTTP_WhenCommandHandled_ReturnsResponseCommand(t *testing.T
 	var resp lime.ResponseCommand
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, lime.CommandStatusSuccess, resp.Status)
+}
+
+func TestHandlerServeHTTP_WhenCommandHandlerFails_ReturnsSanitizedLimeFailure(t *testing.T) {
+	h := &Handler{
+		Authenticator: allowAllAuthenticator(),
+		CommandHandler: func(ctx context.Context, cmd *lime.RequestCommand) (*lime.ResponseCommand, error) {
+			return nil, errors.New("sensitive internal detail")
+		},
+	}
+	cmd := &lime.RequestCommand{Command: lime.Command{Method: lime.CommandMethodGet}}
+	cmd.SetID("command-id")
+	cmd.SetURIString("/resource")
+	data, err := json.Marshal(cmd)
+	require.NoError(t, err)
+
+	req := newSignedRequest(t, string(data), "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var response lime.ResponseCommand
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, lime.CommandStatusFailure, response.Status)
+	require.NotNil(t, response.Reason)
+	assert.Equal(t, 61, response.Reason.Code)
+	assert.NotContains(t, rec.Body.String(), "sensitive internal detail")
+}
+
+func TestHandlerServeHTTP_WhenCommandHandlerReturnsTypedFailure_PreservesReason(t *testing.T) {
+	h := &Handler{
+		Authenticator: allowAllAuthenticator(),
+		CommandHandler: func(ctx context.Context, cmd *lime.RequestCommand) (*lime.ResponseCommand, error) {
+			return nil, NewCommandError(lime.Reason{Code: 64, Description: "Invalid schedule"}, errors.New("invalid date"))
+		},
+	}
+	cmd := &lime.RequestCommand{Command: lime.Command{Method: lime.CommandMethodSet}}
+	cmd.SetID("command-id")
+	cmd.SetURIString("/schedules")
+	data, err := json.Marshal(cmd)
+	require.NoError(t, err)
+
+	req := newSignedRequest(t, string(data), "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var response lime.ResponseCommand
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.NotNil(t, response.Reason)
+	assert.Equal(t, 64, response.Reason.Code)
+	assert.Equal(t, "Invalid schedule", response.Reason.Description)
+	assert.NotContains(t, rec.Body.String(), "invalid date")
+}
+
+func TestHandlerServeHTTP_WhenMuxHasNoMatchingCommand_ReturnsLimeFailure(t *testing.T) {
+	mux := &CommandMux{}
+	h := &Handler{
+		Authenticator:  allowAllAuthenticator(),
+		CommandHandler: mux.Handle,
+	}
+	cmd := &lime.RequestCommand{Command: lime.Command{Method: lime.CommandMethodGet}}
+	cmd.SetID("command-id")
+	cmd.SetURIString("/unknown")
+	data, err := json.Marshal(cmd)
+	require.NoError(t, err)
+
+	req := newSignedRequest(t, string(data), "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var response lime.ResponseCommand
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, lime.CommandStatusFailure, response.Status)
+	require.NotNil(t, response.Reason)
+	assert.Equal(t, lime.ReasonCodeCommandResourceNotSupported, response.Reason.Code)
+}
+
+func TestHandlerServeHTTP_WhenObserveWithoutIDReturnsNoResponse_ReturnsAccepted(t *testing.T) {
+	h := &Handler{
+		Authenticator: allowAllAuthenticator(),
+		CommandHandler: func(ctx context.Context, cmd *lime.RequestCommand) (*lime.ResponseCommand, error) {
+			return nil, nil
+		},
+	}
+	cmd := &lime.RequestCommand{Command: lime.Command{Method: lime.CommandMethodObserve}}
+	cmd.SetURIString("/presence")
+	data, err := json.Marshal(cmd)
+	require.NoError(t, err)
+
+	req := newSignedRequest(t, string(data), "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+	assert.Empty(t, rec.Body.String())
 }
 
 func TestHandlerServeHTTP_WhenNoAuthenticatorConfigured_SkipsCredentialCheck(t *testing.T) {

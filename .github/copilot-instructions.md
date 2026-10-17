@@ -1,5 +1,40 @@
 # GitHub Copilot Instructions for lime-go
 
+## Keep Instructions Durable
+
+- Keep this file focused on contributor policies and decision-making guidance.
+- Do not duplicate implementation details: package trees, API signatures, type definitions, constants, algorithms, or usage examples. Inspect the current source, package documentation, tests, and examples instead.
+- Read [go.mod](../go.mod) for the supported Go version and dependencies, and [Makefile](../Makefile) for available build and validation targets. Do not copy their configuration here.
+- Do not add migration phases, temporary workarounds, task history, or dated project snapshots to these instructions.
+
+## Protocol Compatibility
+
+- Maintain compatibility with the official [core protocol](https://limeprotocol.org/index.html), [content types](https://limeprotocol.org/content-types.html), and [resources](https://limeprotocol.org/resources.html) specifications.
+- Consult the relevant specification before changing wire formats, serialization, session behavior, or resource semantics. Do not reproduce specification schemas or flows here.
+- Preserve public API and wire compatibility unless a breaking change is explicitly requested.
+- Use the [C# implementation](https://github.com/takenet/lime-csharp) as a secondary interoperability reference, not as a replacement for the specification. Surface discrepancies rather than silently choosing incompatible behavior.
+
+## Implementation Principles
+
+- Prioritize protocol correctness, then clarity and reliability, then performance. Optimize only with evidence.
+- Follow idiomatic Go and nearby repository conventions. Prefer explicit control flow, meaningful names, focused interfaces, and existing abstractions over cleverness or new generic helpers.
+- Locate the package that owns the behavior before editing. Follow current package boundaries rather than recreating historical layouts or duplicate implementations.
+- Handle errors explicitly and preserve their identity when adding useful context. Prefer explicit returns over naked returns.
+- Propagate caller cancellation and deadlines through blocking operations. Give goroutines a clear lifetime and ensure resources are released on failure and shutdown.
+- Validate untrusted inputs, use safe defaults, and handle malformed data without panicking.
+- Prefer dependency injection over new global mutable state. Avoid network calls, file I/O, or expensive work in initialization functions.
+- Use structured logging consistent with the surrounding code. Never expose passwords, credentials, tokens, or other sensitive data in logs or error messages.
+- Document exported behavior and non-obvious constraints in the owning package rather than restating implementation details here.
+
+## Validation
+
+- Add or update tests for changed behavior, including regression cases, invalid inputs, and relevant cancellation or failure paths.
+- Follow nearby test conventions and use table-driven tests when scenarios share the same setup and assertions.
+- Maintain at least 80% coverage for new code; coverage does not replace meaningful behavioral assertions.
+- Start with focused tests for the affected packages, then run the applicable repository checks defined in the Makefile. Include race detection for concurrency changes.
+- When moving code between packages, validate affected consumers and examples as well as the moved package.
+- Report which checks ran and disclose any checks that could not be completed.# GitHub Copilot Instructions for lime-go
+
 **Project:** LIME Protocol Implementation in Go  
 **Version:** 1.25+  
 **Last Updated:** December 30, 2025
@@ -8,7 +43,43 @@
 
 ## Project Overview
 
-This is a Go implementation of the **LIME Protocol** (Lightweight Messaging Protocol), a JSON-based open protocol for building scalable, real-time messaging applications. The implementation must maintain strict compatibility with the official LIME protocol specification.
+- Keep this file focused on contributor policies and decision-making guidance.
+- Do not duplicate implementation details: package trees, API signatures, type definitions, constants, algorithms, or usage examples. Inspect the current source, package documentation, tests, and examples instead.
+- Read [go.mod](../go.mod) for the supported Go version and dependencies, and [Makefile](../Makefile) for available build and validation targets. Do not copy their configuration here.
+- Do not add migration phases, temporary workarounds, task history, or dated project snapshots to these instructions.
+
+## Protocol Compatibility
+
+- Maintain compatibility with the official LIME specifications:
+    - [Core protocol](https://limeprotocol.org/index.html)
+    - [Content types](https://limeprotocol.org/content-types.html)
+    - [Resources](https://limeprotocol.org/resources.html)
+- Consult the relevant specification before changing wire formats, serialization, session behavior, or resource semantics. Do not reproduce specification schemas or flows here.
+- Preserve public API and wire compatibility unless a breaking change is explicitly requested.
+- Use the [C# implementation](https://github.com/takenet/lime-csharp) as a secondary interoperability reference, not as a replacement for the specification. Surface discrepancies rather than silently choosing incompatible behavior.
+
+## Implementation Principles
+
+- Prioritize protocol correctness, then clarity and reliability, then performance. Optimize only with evidence.
+- Follow idiomatic Go and nearby repository conventions. Prefer explicit control flow, meaningful names, focused interfaces, and existing abstractions over cleverness or new generic helpers.
+- Locate the package that owns the behavior before editing. Follow current package boundaries rather than recreating historical layouts or duplicate implementations.
+- Handle errors explicitly and preserve their identity when adding useful context. Prefer explicit returns over naked returns.
+- Propagate caller cancellation and deadlines through blocking operations. Give goroutines a clear lifetime and ensure resources are released on failure and shutdown.
+- Validate untrusted inputs, use safe defaults, and handle malformed data without panicking.
+- Prefer dependency injection over new global mutable state. Avoid network calls, file I/O, or expensive work in initialization functions.
+- Use structured logging consistent with the surrounding code. Never expose passwords, credentials, tokens, or other sensitive data in logs or error messages.
+- Document exported behavior and non-obvious constraints in the owning package rather than restating implementation details here.
+
+## Validation
+
+- Add or update tests for changed behavior, including regression cases, invalid inputs, and relevant cancellation or failure paths.
+- Follow nearby test conventions and use table-driven tests when scenarios share the same setup and assertions.
+- Maintain at least 80% coverage for new code; coverage does not replace meaningful behavioral assertions.
+- Start with focused tests for the affected packages, then run the applicable repository checks defined in the Makefile. Include race detection for concurrency changes.
+- When moving code between packages, validate affected consumers and examples as well as the moved package.
+- Report which checks ran and disclose any checks that could not be completed.
+
+The `protocol`, `client`, and `server` packages implement LIME, a JSON-based open protocol for building scalable, real-time messaging applications. The implementation must maintain strict compatibility with the official LIME protocol specification.
 
 ### Official Specification References
 
@@ -72,7 +143,7 @@ func (c *ClientChannel) SendMessage(ctx context.Context, msg *Message) error {
 
 ```go
 // ✅ GOOD: Defensive, handles errors gracefully
-func (t *TCPTransport) Receive(ctx context.Context) (Envelope, error) {
+func (t *WebSocketTransport) Receive(ctx context.Context) (Envelope, error) {
     // Set read deadline for resilience
     if deadline, ok := ctx.Deadline(); ok {
         if err := t.conn.SetReadDeadline(deadline); err != nil {
@@ -100,7 +171,7 @@ func (t *TCPTransport) Receive(ctx context.Context) (Envelope, error) {
 }
 
 // ❌ BAD: Optimized for speed but fragile
-func (t *TCPTransport) Receive(ctx context.Context) (Envelope, error) {
+func (t *WebSocketTransport) Receive(ctx context.Context) (Envelope, error) {
     buf := make([]byte, 8192)
     n, _ := t.conn.Read(buf)  // Ignores errors!
     env, _ := UnmarshalEnvelope(buf[:n])  // Ignores errors!
@@ -203,23 +274,25 @@ msg := &Message{
     },
     Content: document,
 }
-
-// ❌ BAD: Positional initialization
+    client := client.NewClientBuilder().
+        Name("user").
+            Domain("example.com").
 msg := &Message{
-    Envelope{"123", sender, receiver, nil},
+            UseWebsocket("wss://127.0.0.1:55321", nil, nil).
     document,
     nil,
 }
 ```
 
-#### Interface Usage
-
+    Envelope: protocol.Envelope{ID: "1", To: receiver}}
+    content := protocol.TextDocument("Hello!")
+    msg.SetContent(&content)
 ```go
 // ✅ GOOD: Small, focused interfaces
-type Sender interface {
-    SendMessage(ctx context.Context, msg *Message) error
-    SendNotification(ctx context.Context, not *Notification) error
-    SendCommand(ctx context.Context, cmd *Command) error
+    channel.NoneCompressionSelector,
+    channel.TLSEncryptionSelector,
+    protocol.Identity{Name: "user", Domain: "example.com"},
+    channel.GuestAuthenticator,
 }
 
 // ❌ BAD: God interface
@@ -603,12 +676,12 @@ func NewServerBuilder() *ServerBuilder {
     }
 }
 
-func (b *ServerBuilder) ListenTCP(addr *net.TCPAddr, config *TCPConfig) *ServerBuilder {
+func (b *ServerBuilder) ListenWebsocket(addr *net.TCPAddr, config *WebsocketConfig) *ServerBuilder {
     if addr == nil {
         panic("addr cannot be nil")
     }
-    b.config.TCPAddr = addr
-    b.config.TCPConfig = config
+    b.config.WebsocketAddr = addr
+    b.config.WebsocketConfig = config
     return b
 }
 
@@ -622,7 +695,7 @@ func (b *ServerBuilder) MessagesHandlerFunc(handler MessageHandlerFunc) *ServerB
 
 func (b *ServerBuilder) Build() *Server {
     // Validate configuration
-    if b.config.TCPAddr == nil {
+    if b.config.WebsocketAddr == nil {
         panic("no transport configured")
     }
     
@@ -768,11 +841,11 @@ func (c *Channel) Send(ctx context.Context, env Envelope) error {
 // ❌ BAD: Heavy work in init()
 func init() {
     // Don't do network calls, file I/O, or expensive operations in init()
-    conn, err := net.Dial("tcp", "example.com:5555")
+    response, err := http.Get("https://example.com")
     if err != nil {
         panic(err)
     }
-    globalConn = conn
+    globalResponse = response
 }
 
 // ✅ GOOD: Lightweight registration in init()
@@ -942,18 +1015,19 @@ func (c *ClientChannel) EstablishSession(ctx context.Context, ...) (*Session, er
 ```go
 // ✅ GOOD: Package doc explaining purpose and usage
 /*
-Package lime implements the LIME protocol (Lightweight Messaging Protocol),
-a JSON-based open protocol for building scalable, real-time messaging applications.
+Package protocol defines the LIME envelope and session models for the JSON-based
+Lightweight Messaging Protocol.
 
 The protocol specification is available at https://limeprotocol.org/
 
 Basic usage:
 
 	// Create a client
-	client := lime.NewClientBuilder().
-		Identity("user", "example.com").
+    client := client.NewClientBuilder().
+        Name("user").
+        Domain("example.com").
 		PlainAuthentication("password").
-		UseTCP(&net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 55321}, nil).
+        UseWebsocket("wss://127.0.0.1:55321", nil, nil).
 		Build()
 
 	// Establish session
@@ -964,15 +1038,14 @@ Basic usage:
 	}
 
 	// Send message
-	msg := &lime.Message{
-		Envelope: lime.Envelope{ID: "1", To: receiver},
-		Content:  lime.TextDocument("Hello!"),
-	}
+    msg := &protocol.Message{Envelope: protocol.Envelope{ID: "1", To: receiver}}
+    content := protocol.TextDocument("Hello!")
+    msg.SetContent(&content)
 	err = client.SendMessage(ctx, msg)
 
 For more examples, see the examples/ directory.
 */
-package lime
+package protocol
 ```
 
 ### Function Documentation
@@ -989,12 +1062,12 @@ package lime
 //
 // Example:
 //
-//	session, err := client.EstablishSession(
+//	session, err := channel.NewClientChannel(transport, 64).EstablishSession(
 //		ctx,
-//		lime.GzipCompressionSelector,
-//		lime.TLSEncryptionSelector,
-//		lime.Identity{Name: "user", Domain: "example.com"},
-//		lime.PlainAuthenticator("password"),
+//		channel.NoneCompressionSelector,
+//		channel.TLSEncryptionSelector,
+//		protocol.Identity{Name: "user", Domain: "example.com"},
+//		channel.GuestAuthenticator,
 //		"instance1",
 //	)
 func (c *ClientChannel) EstablishSession(
