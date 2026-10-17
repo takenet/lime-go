@@ -192,7 +192,7 @@ func TestClientTransportPollingRetainsResponsesAfterReceiveCancellation(t *testi
 	defer releaseOnce.Do(func() { close(release) })
 	var requests sync.Map
 	client, err := NewClientTransport(Config{
-		BaseURL: "https://iris.example.com",
+		BaseURL:  "https://iris.example.com",
 		Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
 		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 			if _, loaded := requests.LoadOrStore(request.URL.Path, true); loaded {
@@ -202,9 +202,9 @@ func TestClientTransportPollingRetainsResponsesAfterReceiveCancellation(t *testi
 			started <- request.URL.Path
 			<-release
 			bodies := map[string]string{
-				"/messages": `{"id":"message","type":"text/plain","content":"hello"}`,
+				"/messages":      `{"id":"message","type":"text/plain","content":"hello"}`,
 				"/notifications": `{"id":"notification","event":"received"}`,
-				"/commands": `{"id":"command","method":"get","uri":"/ping"}`,
+				"/commands":      `{"id":"command","method":"get","uri":"/ping"}`,
 			}
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(bodies[request.URL.Path])), Header: make(http.Header)}, nil
 		})},
@@ -259,10 +259,18 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 	}{
 		{name: "matching established session"},
 		{name: "missing session", status: http.StatusNotFound},
-		{name: "old callback", mutate: func(headers http.Header) { headers.Set(HeaderSessionMessageURL, "https://bot.example.com/old/messages") }, wantReset: true},
-		{name: "callback path case matters", mutate: func(headers http.Header) { headers.Set(HeaderSessionCommandURL, "https://bot.example.com/LIME/commands") }, wantReset: true},
-		{name: "callback credentials case matters", mutate: func(headers http.Header) { headers.Set(HeaderSessionCommandHeaders, strings.Replace(headers.Get(HeaderSessionCommandHeaders), "callback", "CALLBACK", 1)) }, wantReset: true},
-		{name: "polling removes old callback", polling: true, mutate: func(headers http.Header) { headers.Set(HeaderSessionMessageURL, "https://bot.example.com/old/messages") }, wantReset: true},
+		{name: "old callback", mutate: func(headers http.Header) {
+			headers.Set(HeaderSessionMessageURL, "https://bot.example.com/old/messages")
+		}, wantReset: true},
+		{name: "callback path case matters", mutate: func(headers http.Header) {
+			headers.Set(HeaderSessionCommandURL, "https://bot.example.com/LIME/commands")
+		}, wantReset: true},
+		{name: "callback credentials case matters", mutate: func(headers http.Header) {
+			headers.Set(HeaderSessionCommandHeaders, strings.Replace(headers.Get(HeaderSessionCommandHeaders), "callback", "CALLBACK", 1))
+		}, wantReset: true},
+		{name: "polling removes old callback", polling: true, mutate: func(headers http.Header) {
+			headers.Set(HeaderSessionMessageURL, "https://bot.example.com/old/messages")
+		}, wantReset: true},
 		{name: "changed presence", mutate: func(headers http.Header) { headers.Set(HeaderSessionPresenceRoutingRule, "instance") }, wantReset: true},
 		{name: "changed receipts", mutate: func(headers http.Header) { headers.Set(HeaderSessionReceiptEvents, "failed") }, wantReset: true},
 		{name: "missing config", mutate: func(headers http.Header) { headers.Del(HeaderSessionExpiration) }, wantReset: true},
@@ -282,11 +290,13 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var methods []string
 			callbackURL := "https://bot.example.com/lime"
-			if test.polling { callbackURL = "" }
+			if test.polling {
+				callbackURL = ""
+			}
 			client, err := NewClientTransport(Config{
 				BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
 				CallbackBaseURL: callbackURL, MaxBodyBytes: 512,
-				Headers: http.Header{"Authorization": {"Bearer outbound"}, "X-Custom": {"forwarded"}},
+				Headers:         http.Header{"Authorization": {"Bearer outbound"}, "X-Custom": {"forwarded"}},
 				CallbackHeaders: http.Header{"Authorization": {"Bearer callback"}},
 				HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 					methods = append(methods, request.Method)
@@ -299,9 +309,15 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 					body := `{"id":"existing","state":"established"}`
 					if request.Method == http.MethodGet {
 						assert.Empty(t, request.Header.Get(HeaderSession))
-						if test.mutate != nil { test.mutate(headers) }
-						if test.status != 0 { status = test.status }
-						if test.body != "" { body = test.body }
+						if test.mutate != nil {
+							test.mutate(headers)
+						}
+						if test.status != 0 {
+							status = test.status
+						}
+						if test.body != "" {
+							body = test.body
+						}
 					} else {
 						assert.Equal(t, test.wantReset, request.Header.Get(HeaderSession) == "reset")
 						headers.Set(HeaderSessionID, "new-http-session")
@@ -326,7 +342,7 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 }
 
 func TestClientTransportPresenceDefaultsAndHeaderIsolation(t *testing.T) {
-	for _, test := range []struct { name, callback, rule, want string }{
+	for _, test := range []struct{ name, callback, rule, want string }{
 		{"polling default", "", "", "instance"},
 		{"callback default", "https://bot.example.com/lime", "", "identity"},
 		{"explicit callback", "https://bot.example.com/lime", "domain", "domain"},
@@ -396,16 +412,32 @@ func TestClientTransportCloseCancelsAndJoinsPollers(t *testing.T) {
 	defer func() { releaseOnce.Do(func() { close(release) }); _ = client.Close() }()
 	client.startPolling()
 	for range 3 {
-		select { case <-started: case <-time.After(time.Second): t.Fatal("poller did not start") }
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("poller did not start")
+		}
 	}
 	closed := make(chan struct{})
 	go func() { _ = client.Close(); close(closed) }()
 	for range 3 {
-		select { case <-canceled: case <-time.After(time.Second): t.Fatal("Close did not cancel poller") }
+		select {
+		case <-canceled:
+		case <-time.After(time.Second):
+			t.Fatal("Close did not cancel poller")
+		}
 	}
-	select { case <-closed: t.Fatal("Close returned before pollers exited"); default: }
+	select {
+	case <-closed:
+		t.Fatal("Close returned before pollers exited")
+	default:
+	}
 	releaseOnce.Do(func() { close(release) })
-	select { case <-closed: case <-time.After(time.Second): t.Fatal("Close did not join pollers") }
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("Close did not join pollers")
+	}
 	assert.False(t, client.Connected())
 	_, err = client.Receive(context.Background())
 	require.Error(t, err)
@@ -420,9 +452,9 @@ func TestClientTransportPollingBackpressureIsBoundedAndCloseUnblocks(t *testing.
 		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 			requests.Add(1)
 			bodies := map[string]string{
-				"/messages": `{"type":"text/plain","content":"hello"}`,
+				"/messages":      `{"type":"text/plain","content":"hello"}`,
 				"/notifications": `{"id":"notification","event":"received"}`,
-				"/commands": `{"id":"command","method":"get","uri":"/ping"}`,
+				"/commands":      `{"id":"command","method":"get","uri":"/ping"}`,
 			}
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(bodies[request.URL.Path]))}, nil
 		})},
@@ -434,7 +466,11 @@ func TestClientTransportPollingBackpressureIsBoundedAndCloseUnblocks(t *testing.
 	assert.Len(t, client.incoming, cap(client.incoming))
 	closed := make(chan struct{})
 	go func() { _ = client.Close(); close(closed) }()
-	select { case <-closed: case <-time.After(time.Second): t.Fatal("Close blocked on full inbox") }
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("Close blocked on full inbox")
+	}
 	assert.Equal(t, int64(cap(client.incoming)+3), requests.Load())
 }
 
@@ -463,7 +499,7 @@ func TestClientTransportPollingTimeoutRetriesAndSurfacesErrors(t *testing.T) {
 func TestClientTransportCallbackBounds(t *testing.T) {
 	for _, test := range []struct {
 		name, method, path, body, authorization, session string
-		want int
+		want                                             int
 	}{
 		{name: "valid", method: http.MethodPost, path: "/messages", body: `{"type":"text/plain","content":"hello"}`, authorization: "Bearer callback", session: "http-session", want: http.StatusAccepted},
 		{name: "missing auth", method: http.MethodPost, path: "/messages", want: http.StatusUnauthorized},
@@ -478,7 +514,7 @@ func TestClientTransportCallbackBounds(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			client, err := NewClientTransport(Config{
 				BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"}, MaxBodyBytes: 128,
-				CallbackBaseURL: "https://bot.example.com/lime",
+				CallbackBaseURL:       "https://bot.example.com/lime",
 				CallbackAuthenticator: func(request *http.Request) bool { return request.Header.Get("Authorization") == "Bearer callback" },
 			})
 			require.NoError(t, err)
@@ -503,7 +539,9 @@ func TestClientTransportCallbackBounds(t *testing.T) {
 				assert.Equal(t, "lime-session", response.Header().Get(HeaderLimeSessionID))
 				assert.Equal(t, "iris@example.com/server", response.Header().Get(HeaderLimeRemoteNode))
 				assert.Equal(t, "bot@example.com/client", response.Header().Get(HeaderLimeLocalNode))
-			} else { assert.Empty(t, client.incoming) }
+			} else {
+				assert.Empty(t, client.incoming)
+			}
 		})
 	}
 }
@@ -518,10 +556,14 @@ func TestClientTransportReconnectResetsOldCallbackAndMuxDoesNotLeak(t *testing.T
 		}
 		if request.Method == http.MethodPost {
 			posts <- request.Header.Clone()
-			if existing == nil || request.Header.Get(HeaderSession) == "reset" { existing = request.Header.Clone() }
+			if existing == nil || request.Header.Get(HeaderSession) == "reset" {
+				existing = request.Header.Clone()
+			}
 		}
 		for key, values := range existing {
-			if strings.HasPrefix(key, HeaderSession+"-") { writer.Header()[key] = values }
+			if strings.HasPrefix(key, HeaderSession+"-") {
+				writer.Header()[key] = values
+			}
 		}
 		writer.Header().Set(HeaderSessionID, "http-session")
 		_, _ = io.WriteString(writer, `{"id":"lime-session","state":"established"}`)
