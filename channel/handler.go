@@ -7,10 +7,13 @@ import (
 )
 
 type EnvelopeMux struct {
-	msgHandlers     []MessageHandler
-	notHandlers     []NotificationHandler
-	reqCmdHandlers  []RequestCommandHandler
-	respCmdHandlers []ResponseCommandHandler
+	msgHandlers           []MessageHandler
+	notHandlers           []NotificationHandler
+	reqCmdHandlers        []RequestCommandHandler
+	respCmdHandlers       []ResponseCommandHandler
+	defaultMsgHandlers    []MessageHandler
+	defaultNotHandlers    []NotificationHandler
+	defaultReqCmdHandlers []RequestCommandHandler
 }
 
 // HandlerCounts reports the number of registered handlers for each envelope type.
@@ -21,12 +24,12 @@ type HandlerCounts struct {
 	ResponseCommands int
 }
 
-// HandlerCounts returns the number of handlers currently registered on the mux.
+// HandlerCounts returns the total number of explicit and default handlers registered on the mux.
 func (m *EnvelopeMux) HandlerCounts() HandlerCounts {
 	return HandlerCounts{
-		Messages:         len(m.msgHandlers),
-		Notifications:    len(m.notHandlers),
-		RequestCommands:  len(m.reqCmdHandlers),
+		Messages:         len(m.msgHandlers) + len(m.defaultMsgHandlers),
+		Notifications:    len(m.notHandlers) + len(m.defaultNotHandlers),
+		RequestCommands:  len(m.reqCmdHandlers) + len(m.defaultReqCmdHandlers),
 		ResponseCommands: len(m.respCmdHandlers),
 	}
 }
@@ -91,14 +94,16 @@ func (m *EnvelopeMux) receiveAndHandle(ctx context.Context, c *channel) error {
 func (m *EnvelopeMux) handleMessage(ctx context.Context, msg *Message, s Sender) (err error) {
 	ctx, span := startHandlerSpan(ctx, msg, "MessageProcessor.Handle")
 	defer finishEnvelopeSpan(span, &err, msg)
-	for _, h := range m.msgHandlers {
-		if !h.Match(msg) {
-			continue
+	for _, handlers := range [][]MessageHandler{m.msgHandlers, m.defaultMsgHandlers} {
+		for _, h := range handlers {
+			if !h.Match(msg) {
+				continue
+			}
+			if err := h.Handle(ctx, msg, s); err != nil {
+				return fmt.Errorf("handle message: %w", err)
+			}
+			return nil
 		}
-		if err := h.Handle(ctx, msg, s); err != nil {
-			return fmt.Errorf("handle message: %w", err)
-		}
-		break
 	}
 	return nil
 }
@@ -106,14 +111,16 @@ func (m *EnvelopeMux) handleMessage(ctx context.Context, msg *Message, s Sender)
 func (m *EnvelopeMux) handleNotification(ctx context.Context, not *Notification) (err error) {
 	ctx, span := startHandlerSpan(ctx, not, "NotificationProcessor.Handle")
 	defer finishEnvelopeSpan(span, &err, not)
-	for _, h := range m.notHandlers {
-		if !h.Match(not) {
-			continue
+	for _, handlers := range [][]NotificationHandler{m.notHandlers, m.defaultNotHandlers} {
+		for _, h := range handlers {
+			if !h.Match(not) {
+				continue
+			}
+			if err := h.Handle(ctx, not); err != nil {
+				return fmt.Errorf("handle notification: %w", err)
+			}
+			return nil
 		}
-		if err := h.Handle(ctx, not); err != nil {
-			return fmt.Errorf("handle notification: %w", err)
-		}
-		break
 	}
 	return nil
 }
@@ -121,14 +128,16 @@ func (m *EnvelopeMux) handleNotification(ctx context.Context, not *Notification)
 func (m *EnvelopeMux) handleRequestCommand(ctx context.Context, cmd *RequestCommand, s Sender) (err error) {
 	ctx, span := startHandlerSpan(ctx, cmd, "RequestCommandProcessor.Handle")
 	defer finishEnvelopeSpan(span, &err, cmd)
-	for _, h := range m.reqCmdHandlers {
-		if !h.Match(cmd) {
-			continue
+	for _, handlers := range [][]RequestCommandHandler{m.reqCmdHandlers, m.defaultReqCmdHandlers} {
+		for _, h := range handlers {
+			if !h.Match(cmd) {
+				continue
+			}
+			if err := h.Handle(ctx, cmd, s); err != nil {
+				return fmt.Errorf("handle command: %w", err)
+			}
+			return nil
 		}
-		if err := h.Handle(ctx, cmd, s); err != nil {
-			return fmt.Errorf("handle command: %w", err)
-		}
-		break
 	}
 	return nil
 }
@@ -156,6 +165,26 @@ func (m *EnvelopeMux) MessageHandlerFunc(predicate MessagePredicate, f MessageHa
 		predicate:   predicate,
 		handlerFunc: f,
 	})
+}
+
+// DefaultMessageHandlerFunc registers a synchronous fallback, evaluated only when no explicit
+// message handler matches, regardless of registration order. Defaults are first-match in
+// registration order; nil predicates match everything. Handler errors stop the listener,
+// not trigger another fallback. Register handlers before listening.
+func (m *EnvelopeMux) DefaultMessageHandlerFunc(predicate MessagePredicate, f MessageHandlerFunc) {
+	m.defaultMsgHandlers = append(m.defaultMsgHandlers, &messageHandler{predicate: predicate, handlerFunc: f})
+}
+
+// DefaultNotificationHandlerFunc registers a notification fallback with the same ordering,
+// nil-predicate, synchronous dispatch and error behavior as DefaultMessageHandlerFunc.
+func (m *EnvelopeMux) DefaultNotificationHandlerFunc(predicate NotificationPredicate, f NotificationHandlerFunc) {
+	m.defaultNotHandlers = append(m.defaultNotHandlers, &notificationHandler{predicate: predicate, handlerFunc: f})
+}
+
+// DefaultRequestCommandHandlerFunc registers a request-command fallback with the same ordering,
+// nil-predicate, synchronous dispatch and error behavior as DefaultMessageHandlerFunc.
+func (m *EnvelopeMux) DefaultRequestCommandHandlerFunc(predicate RequestCommandPredicate, f RequestCommandHandlerFunc) {
+	m.defaultReqCmdHandlers = append(m.defaultReqCmdHandlers, &requestCommandHandler{predicate: predicate, handlerFunc: f})
 }
 
 func (m *EnvelopeMux) MessageHandler(handler MessageHandler) {

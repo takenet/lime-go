@@ -136,6 +136,39 @@ func main() {
 }
 ```
 
+### Fallback handlers and connection retries
+
+`channel.EnvelopeMux` and `client.ClientBuilder` expose
+`DefaultMessageHandlerFunc`, `DefaultNotificationHandlerFunc`, and
+`DefaultRequestCommandHandlerFunc`, each taking the corresponding predicate and
+handler function. Explicit handlers are always checked first, even if registered
+after defaults. Within each group, registration order is first-match. A nil
+predicate matches every envelope. Dispatch remains synchronous; a matched handler
+returning an error stops the listener, without falling through to defaults.
+Register handlers before starting the client/listener. `HandlerCounts` includes
+both explicit and default registrations.
+
+For example, a catch-all command fallback does not shadow native ping handling:
+
+```go
+builder := limeclient.NewClientBuilder().
+    DefaultRequestCommandHandlerFunc(nil, handleApplicationCommand).
+    AutoReplyPings().
+    ConnectionRetryHandler(func(_ error, delay time.Duration) {
+        log.Printf("LIME unavailable; retrying in %v", delay)
+    })
+```
+
+`ClientConfig.ConnectionRetryHandler func(error, time.Duration)` is also available
+without the builder. The SDK owns the retry loop and calls the hook synchronously
+after each failed connection/session attempt that will be retried, with the error
+and planned delay. The hook replaces default retry logging, must return promptly,
+and must not call blocking client methods. Sanitize errors before logging them;
+transport errors can contain credentials. With no hook, the SDK logs a generic
+failure and delay without error text. Cancellation is not reported as a retry.
+Backoff starts at zero, grows by `100ms * attempt^2` (zero-based), caps at 30
+seconds, and resets after a successful connection. Waiting remains cancellable.
+
 ### HTTP integration (Iris)
 
 Besides the persistent WebSocket transport, `lime-go` also ships a
