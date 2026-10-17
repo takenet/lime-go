@@ -145,7 +145,9 @@ func (t *websocketTransport) runIO(ctx context.Context, operation func() error) 
 	select {
 	case <-ctx.Done():
 		_ = t.Close()
-		<-result
+		if err := <-result; err != nil && !errors.Is(err, net.ErrClosed) {
+			return errors.Join(ctx.Err(), err)
+		}
 		return ctx.Err()
 	case err := <-result:
 		if ctxErr := ctx.Err(); ctxErr != nil {
