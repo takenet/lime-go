@@ -169,7 +169,7 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 		return channel, nil
 	}
 
-	count := 0.0
+	attempt := 0
 
 	for ctx.Err() == nil {
 		c.mu.Lock()
@@ -190,8 +190,15 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 			return channel, nil
 		}
 
-		interval := time.Duration(count*count*100) * time.Millisecond
-		log.Printf("build channel error on attempt %v, sleeping %v ms: %v", count, interval, err)
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("client: getOrBuildChannel: %w", ctx.Err())
+		}
+		interval := connectionRetryDelay(attempt)
+		if c.config.ConnectionRetryHandler != nil {
+			c.config.ConnectionRetryHandler(err, interval)
+		} else {
+			log.Printf("client: connection attempt failed; retrying in %v", interval)
+		}
 
 		// Use context-aware sleep to allow interruption
 		select {
@@ -199,10 +206,19 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 			return nil, fmt.Errorf("client: getOrBuildChannel: %w", ctx.Err())
 		case <-time.After(interval):
 		}
-		count++
+		if attempt < 18 {
+			attempt++
+		}
 	}
 
 	return nil, fmt.Errorf("client: getOrBuildChannel: %w", ctx.Err())
+}
+
+func connectionRetryDelay(attempt int) time.Duration {
+	if attempt >= 18 {
+		return 30 * time.Second
+	}
+	return time.Duration(attempt*attempt) * 100 * time.Millisecond
 }
 
 func (c *Client) startListener() {
@@ -216,7 +232,6 @@ func (c *Client) startListener() {
 		for ctx.Err() == nil {
 			channel, err := c.getOrBuildChannel(ctx)
 			if err != nil {
-				log.Printf("client: listen: %v", err)
 				continue
 			}
 
@@ -283,6 +298,14 @@ type ClientConfig struct {
 	// Authenticator is called during the session authentication and allows the client to provide its credentials
 	// during the process.
 	Authenticator Authenticator
+	// ConnectionRetryHandler is called synchronously after each failed connection/session
+	// attempt that will be retried, with the original error and planned delay. Delays start
+	// at zero, grow quadratically (100ms * attempt squared), and are capped at 30 seconds.
+	// The callback replaces default connection-retry logging; nil retains a generic log
+	// without potentially sensitive error text. It must return promptly, must not call
+	// blocking client methods, and must sanitize errors before logging them. Cancellation
+	// is not reported as a retry. Concurrent callers are serialized by the connection lock.
+	ConnectionRetryHandler func(err error, retryDelay time.Duration)
 }
 
 var defaultClientConfig = NewClientConfig()
@@ -360,6 +383,35 @@ func (b *ClientBuilder) Instance(instance string) *ClientBuilder {
 // the first predicate match occurs.
 func (b *ClientBuilder) MessageHandlerFunc(predicate MessagePredicate, f MessageHandlerFunc) *ClientBuilder {
 	b.mux.MessageHandlerFunc(predicate, f)
+	return b
+}
+
+// DefaultMessageHandlerFunc forwards a fallback registration to EnvelopeMux.
+// Explicit handlers always have priority; defaults are synchronous, first-match and
+// ordered by registration. A nil predicate matches everything.
+func (b *ClientBuilder) DefaultMessageHandlerFunc(predicate MessagePredicate, f MessageHandlerFunc) *ClientBuilder {
+	b.mux.DefaultMessageHandlerFunc(predicate, f)
+	return b
+}
+
+// DefaultNotificationHandlerFunc forwards a fallback registration to EnvelopeMux,
+// with the same dispatch semantics as DefaultMessageHandlerFunc.
+func (b *ClientBuilder) DefaultNotificationHandlerFunc(predicate NotificationPredicate, f NotificationHandlerFunc) *ClientBuilder {
+	b.mux.DefaultNotificationHandlerFunc(predicate, f)
+	return b
+}
+
+// DefaultRequestCommandHandlerFunc forwards a fallback registration to EnvelopeMux,
+// with the same dispatch semantics as DefaultMessageHandlerFunc.
+func (b *ClientBuilder) DefaultRequestCommandHandlerFunc(predicate RequestCommandPredicate, f RequestCommandHandlerFunc) *ClientBuilder {
+	b.mux.DefaultRequestCommandHandlerFunc(predicate, f)
+	return b
+}
+
+// ConnectionRetryHandler sets ClientConfig.ConnectionRetryHandler, replacing default
+// connection-retry logging. The callback runs synchronously and must return promptly.
+func (b *ClientBuilder) ConnectionRetryHandler(handler func(err error, retryDelay time.Duration)) *ClientBuilder {
+	b.config.ConnectionRetryHandler = handler
 	return b
 }
 

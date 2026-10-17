@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -331,6 +333,214 @@ func TestClientClose_ConcurrentBuild_ClosesPublishedChannel(t *testing.T) {
 	require.NoError(t, <-closeResult)
 	assert.Nil(t, client.establishedChannel())
 	assert.EqualValues(t, 1, transport.closeCount.Load())
+}
+
+func TestClientBuilderDefaultsBeforeNativeHandlers(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	transport, peer := inprocess.NewPair(InProcessAddr(t.Name()), 16)
+	require.NoError(t, peer.Send(ctx, &protocol.Session{State: SessionStateEstablished}))
+	calls := make(chan string, 8)
+	builder := NewClientBuilder()
+	require.Same(t, builder, builder.DefaultMessageHandlerFunc(nil, func(context.Context, *Message, Sender) error {
+		calls <- "default message"
+		return nil
+	}))
+	require.Same(t, builder, builder.DefaultNotificationHandlerFunc(nil, func(context.Context, *Notification) error {
+		calls <- "default notification"
+		return nil
+	}))
+	require.Same(t, builder, builder.DefaultRequestCommandHandlerFunc(nil, func(context.Context, *RequestCommand, Sender) error {
+		calls <- "default command"
+		return nil
+	}))
+	builder.AutoReplyPings().
+		MessageHandlerFunc(func(msg *Message) bool { return msg.ID == "explicit" }, func(context.Context, *Message, Sender) error {
+			calls <- "explicit message"
+			return nil
+		}).
+		NotificationHandlerFunc(func(not *Notification) bool { return not.ID == "explicit" }, func(context.Context, *Notification) error {
+			calls <- "explicit notification"
+			return nil
+		})
+	builder.config.NewTransport = func(context.Context) (Transport, error) { return transport, nil }
+	client := builder.Build()
+	t.Cleanup(func() {
+		client.stopListener()
+		require.NoError(t, peer.Close())
+		require.NoError(t, client.Close())
+	})
+	require.NoError(t, client.Establish(ctx))
+	_, err := peer.Receive(ctx)
+	require.NoError(t, err)
+	ping := (&RequestCommand{Command: protocol.Command{Envelope: protocol.Envelope{ID: "ping"}, Method: CommandMethodGet}}).SetURIString("/ping")
+	require.NoError(t, peer.Send(ctx, ping))
+	response, err := peer.Receive(ctx)
+	require.NoError(t, err)
+	command, ok := response.(*ResponseCommand)
+	require.True(t, ok)
+	require.Equal(t, ping.ID, command.ID)
+	require.Equal(t, CommandStatusSuccess, command.Status)
+	require.IsType(t, &Ping{}, command.Resource)
+	for _, test := range []struct {
+		envelope protocol.EnvelopeValue
+		want     string
+	}{
+		{&Message{Envelope: protocol.Envelope{ID: "explicit"}}, "explicit message"},
+		{&Notification{Envelope: protocol.Envelope{ID: "explicit"}}, "explicit notification"},
+		{&Message{}, "default message"},
+		{&Notification{}, "default notification"},
+		{(&RequestCommand{Command: protocol.Command{Method: CommandMethodGet}}).SetURIString("/other"), "default command"},
+	} {
+		require.NoError(t, peer.Send(ctx, test.envelope))
+		select {
+		case got := <-calls:
+			require.Equal(t, test.want, got)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+	}
+	require.Empty(t, calls)
+	require.Equal(t, channelpkg.HandlerCounts{Messages: 2, Notifications: 2, RequestCommands: 2}, builder.mux.HandlerCounts())
+}
+
+func TestClientConnectionRetryBoundAndCancellation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		failure := errors.New("temporary connection error")
+		attempts := 0
+		reports := 0
+		var lastReport time.Time
+		var lastDelay time.Duration
+		builder := NewClientBuilder()
+		require.Same(t, builder, builder.ConnectionRetryHandler(func(err error, delay time.Duration) {
+			require.ErrorIs(t, err, failure)
+			require.Equal(t, connectionRetryDelay(reports), delay)
+			require.LessOrEqual(t, delay, 30*time.Second)
+			if reports > 0 {
+				require.Equal(t, lastDelay, time.Since(lastReport))
+			}
+			lastReport, lastDelay = time.Now(), delay
+			reports++
+			if reports == 24 {
+				cancel()
+			}
+		}))
+		builder.config.NewTransport = func(context.Context) (Transport, error) {
+			attempts++
+			return nil, failure
+		}
+		client := &Client{config: builder.config, lock: make(chan struct{}, 1)}
+		require.ErrorIs(t, client.Establish(ctx), context.Canceled)
+		require.Equal(t, 24, attempts)
+		require.Equal(t, attempts, reports)
+		require.Equal(t, 30*time.Second, lastDelay)
+		require.Zero(t, connectionRetryDelay(0))
+		require.Equal(t, 100*time.Millisecond, connectionRetryDelay(1))
+		require.Equal(t, 400*time.Millisecond, connectionRetryDelay(2))
+		require.Equal(t, 28900*time.Millisecond, connectionRetryDelay(17))
+		require.Equal(t, 30*time.Second, connectionRetryDelay(int(^uint(0)>>1)))
+	})
+}
+
+func TestClientConnectionRetryWaitCancellation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		config := NewClientConfig()
+		reports := make(chan time.Duration, 4)
+		config.ConnectionRetryHandler = func(_ error, delay time.Duration) { reports <- delay }
+		config.NewTransport = func(context.Context) (Transport, error) { return nil, errors.New("unavailable") }
+		client := &Client{config: config, lock: make(chan struct{}, 1)}
+		done := make(chan error, 1)
+		started := time.Now()
+		go func() { done <- client.Establish(ctx) }()
+		synctest.Wait()
+		require.Equal(t, time.Duration(0), <-reports)
+		require.Equal(t, 100*time.Millisecond, <-reports)
+		cancel()
+		require.ErrorIs(t, <-done, context.Canceled)
+		require.Zero(t, time.Since(started))
+	})
+}
+
+func TestClientConnectionRetryLogging(t *testing.T) {
+	for _, configured := range []bool{false, true} {
+		t.Run(fmt.Sprintf("hook=%v", configured), func(t *testing.T) {
+			var output bytes.Buffer
+			previous := log.Writer()
+			log.SetOutput(&output)
+			defer log.SetOutput(previous)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			config := NewClientConfig()
+			failure := errors.New("https://user:secret@example.test/?token=secret")
+			attempts, reports := 0, 0
+			config.NewTransport = func(context.Context) (Transport, error) {
+				attempts++
+				if attempts == 2 {
+					cancel()
+				}
+				return nil, failure
+			}
+			if configured {
+				config.ConnectionRetryHandler = func(err error, delay time.Duration) {
+					require.ErrorIs(t, err, failure)
+					require.Zero(t, delay)
+					reports++
+				}
+			}
+			client := &Client{config: config, lock: make(chan struct{}, 1)}
+			require.ErrorIs(t, client.Establish(ctx), context.Canceled)
+			require.Equal(t, 2, attempts)
+			if configured {
+				require.Equal(t, 1, reports)
+				require.Empty(t, output.String())
+			} else {
+				require.Contains(t, output.String(), "connection attempt failed; retrying in 0s")
+				require.NotContains(t, output.String(), "secret")
+				require.NotContains(t, output.String(), "example.test")
+			}
+		})
+	}
+}
+
+func TestClientConnectionRetryReconnects(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := context.Background()
+		config := NewClientConfig()
+		failure := errors.New("temporary connection error")
+		attempts := 0
+		var delays []time.Duration
+		config.ConnectionRetryHandler = func(err error, delay time.Duration) {
+			require.ErrorIs(t, err, failure)
+			delays = append(delays, delay)
+		}
+		config.NewTransport = func(context.Context) (Transport, error) {
+			attempts++
+			if attempts == 2 || attempts == 3 {
+				return nil, failure
+			}
+			transport, peer := inprocess.NewPair(InProcessAddr(t.Name()), 16)
+			require.NoError(t, peer.Send(ctx, &protocol.Session{State: SessionStateEstablished}))
+			return transport, nil
+		}
+		client := &Client{config: config, lock: make(chan struct{}, 1)}
+		require.NoError(t, client.Establish(ctx))
+		first := client.establishedChannel()
+		require.NotNil(t, first)
+		require.NoError(t, first.Close())
+		require.NoError(t, client.Establish(ctx))
+		second := client.establishedChannel()
+		require.NotNil(t, second)
+		require.NotSame(t, first, second)
+		require.Equal(t, []time.Duration{0, 100 * time.Millisecond}, delays)
+		require.Equal(t, 4, attempts)
+		require.NoError(t, second.Close())
+		require.NoError(t, client.Close())
+	})
 }
 
 func TestClientNewClientMessage(t *testing.T) {
