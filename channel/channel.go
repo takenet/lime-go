@@ -7,6 +7,9 @@ import (
 	"log"
 	"reflect"
 	"sync"
+
+	"github.com/takenet/lime-go/tracing"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type MessageSender interface {
@@ -261,6 +264,7 @@ func (c *channel) sendSession(ctx context.Context, ses *Session) error {
 		return fmt.Errorf("send session: cannot do in the %v state", state)
 	}
 
+	tracing.InjectContextIfAbsent(ctx, ses)
 	err := c.transport.Send(ctx, ses)
 	if err != nil {
 		return fmt.Errorf("send session: transport error: %w", err)
@@ -357,6 +361,7 @@ func (c *channel) sendToTransport(ctx context.Context, e EnvelopeValue, action s
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
 
+	tracing.InjectContextIfAbsent(ctx, e)
 	if err := c.transport.Send(ctx, e); err != nil {
 		return fmt.Errorf("%v: %w", action, err)
 	}
@@ -391,13 +396,17 @@ func (c *channel) ensureTransportOK(action string) error {
 	return nil
 }
 
-func (c *channel) processCommand(ctx context.Context, sender RequestCommandSender, reqCmd *RequestCommand) (*ResponseCommand, error) {
+func (c *channel) processCommand(ctx context.Context, sender RequestCommandSender, reqCmd *RequestCommand) (response *ResponseCommand, err error) {
 	if reqCmd == nil {
 		panic("process command: command cannot be nil")
 	}
 	if reqCmd.ID == "" {
 		panic("process command: invalid command id")
 	}
+
+	ctx, span := tracing.StartSpan(ctx, reqCmd, "Channel.ProcessCommand", trace.WithSpanKind(trace.SpanKindClient))
+	setChannelTags(span, c)
+	defer func() { finishEnvelopeSpan(span, &err, response) }()
 
 	c.processingCmdsMu.Lock()
 
@@ -416,7 +425,7 @@ func (c *channel) processCommand(ctx context.Context, sender RequestCommandSende
 		c.processingCmdsMu.Unlock()
 	}()
 
-	err := sender.SendRequestCommand(ctx, reqCmd)
+	err = sender.SendRequestCommand(ctx, reqCmd)
 	if err != nil {
 		return nil, err
 	}
@@ -425,6 +434,7 @@ func (c *channel) processCommand(ctx context.Context, sender RequestCommandSende
 	case <-ctx.Done():
 		return nil, fmt.Errorf("process command: %w", ctx.Err())
 	case respCmd := <-respChan:
+		tracing.SetEnvelopeTags(span, respCmd)
 		return respCmd, nil
 	}
 }
