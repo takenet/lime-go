@@ -170,6 +170,27 @@ func TestInProcessTransportReceiveSession(t *testing.T) {
 	assert.Equal(t, s, received)
 }
 
+func TestInProcessTransportDrainsSessionBeforeClosed(t *testing.T) {
+	client, server := newInProcessTransportPair("drain-final-session", 1)
+	session := &protocol.Session{State: protocol.SessionStateFinished}
+	if err := server.Send(context.Background(), session); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Close(); err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := client.Receive(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if envelope != session {
+		t.Fatal("final session was discarded")
+	}
+	if _, err := client.Receive(context.Background()); err == nil {
+		t.Fatal("closed empty transport accepted receive")
+	}
+}
+
 func TestInProcessTransportCompression(t *testing.T) {
 	var addr InProcessAddr = "localhost"
 	listener := createInProcessListener(t, addr, nil)

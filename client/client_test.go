@@ -129,6 +129,99 @@ func TestClientBuildChannel_UnsuccessfulSession_ClosesTransport(t *testing.T) {
 	}
 }
 
+func TestClientLocalNode(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	config := NewClientConfig()
+	config.Node = Node{Identity: Identity{Name: "requested", Domain: "localhost"}, Instance: "requested"}
+	acceptedNodes := []Node{
+		{Identity: Identity{Name: "accepted", Domain: "server.example"}, Instance: "first"},
+		{Identity: Identity{Name: "replacement", Domain: "server.example"}, Instance: "second"},
+	}
+	var transport *lifecycleTransport
+	buildCount := 0
+	config.NewTransport = func(context.Context) (Transport, error) {
+		sessions := make(chan protocol.EnvelopeValue, 1)
+		sessions <- &protocol.Session{
+			Envelope: protocol.Envelope{To: acceptedNodes[buildCount]},
+			State:    SessionStateEstablished,
+		}
+		buildCount++
+		transport = &lifecycleTransport{
+			receive: func(ctx context.Context) (protocol.EnvelopeValue, error) {
+				select {
+				case session := <-sessions:
+					return session, nil
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			},
+			send: func(_ context.Context, envelope protocol.EnvelopeValue) error {
+				if session := envelope.(*protocol.Session); session.State == protocol.SessionStateFinishing {
+					sessions <- &protocol.Session{State: protocol.SessionStateFinished}
+				}
+				return nil
+			},
+		}
+		return transport, nil
+	}
+	client := &Client{config: config, lock: make(chan struct{}, 1)}
+	t.Cleanup(func() { assert.NoError(t, client.Close()) })
+	node, ok := client.LocalNode()
+	assert.False(t, ok)
+	assert.Equal(t, Node{}, node)
+	client.channel = channelpkg.NewClientChannel(&lifecycleTransport{}, 1)
+	node, ok = client.LocalNode()
+	assert.False(t, ok)
+	assert.Equal(t, Node{}, node)
+
+	require.NoError(t, client.Establish(ctx))
+	node, ok = client.LocalNode()
+	assert.True(t, ok)
+	assert.Equal(t, acceptedNodes[0], node)
+	assert.NotEqual(t, config.Node, node)
+
+	stopReads := make(chan struct{})
+	readsStarted := make(chan struct{})
+	readsDone := make(chan struct{})
+	go func() {
+		defer close(readsDone)
+		close(readsStarted)
+		for {
+			select {
+			case <-stopReads:
+				return
+			default:
+				node, ok := client.LocalNode()
+				if ok {
+					assert.Contains(t, acceptedNodes, node)
+				} else {
+					assert.Equal(t, Node{}, node)
+				}
+			}
+		}
+	}()
+	t.Cleanup(func() {
+		close(stopReads)
+		<-readsDone
+	})
+	<-readsStarted
+
+	require.NoError(t, transport.Close())
+	node, ok = client.LocalNode()
+	assert.False(t, ok)
+	assert.Equal(t, Node{}, node)
+	require.NoError(t, client.Establish(ctx))
+	node, ok = client.LocalNode()
+	assert.True(t, ok)
+	assert.Equal(t, acceptedNodes[1], node)
+	require.NoError(t, client.Close())
+	node, ok = client.LocalNode()
+	assert.False(t, ok)
+	assert.Equal(t, Node{}, node)
+}
+
 func TestClientClose_BlockingTransport_DetachesWithoutHoldingMutex(t *testing.T) {
 	closeStarted := make(chan struct{})
 	releaseClose := make(chan struct{})
@@ -151,6 +244,9 @@ func TestClientClose_BlockingTransport_DetachesWithoutHoldingMutex(t *testing.T)
 	require.True(t, client.mu.TryRLock(), "Close must not hold mu during transport shutdown")
 	assert.Nil(t, client.channel)
 	client.mu.RUnlock()
+	node, ok := client.LocalNode()
+	assert.False(t, ok)
+	assert.Equal(t, Node{}, node)
 	assert.Len(t, client.lock, 1, "Close must retain the lifecycle lock")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -208,6 +304,7 @@ func TestClientClose_ConcurrentBuild_ClosesPublishedChannel(t *testing.T) {
 				return
 			default:
 				_ = client.establishedChannel()
+				_, _ = client.LocalNode()
 			}
 		}
 	}()

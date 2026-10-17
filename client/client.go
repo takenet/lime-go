@@ -58,6 +58,17 @@ func (c *Client) Establish(ctx context.Context) error {
 	return err
 }
 
+// LocalNode returns the server-accepted node for the current established, connected session.
+// It returns the zero node and false when no such session exists.
+func (c *Client) LocalNode() (Node, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.channel == nil || !c.channel.Established() {
+		return Node{}, false
+	}
+	return c.channel.LocalNode(), true
+}
+
 // Close stops the listener and finishes any established session with the server.
 func (c *Client) Close() error {
 	c.stopListener()
