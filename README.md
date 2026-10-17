@@ -1,7 +1,7 @@
 
 # LIME - A lightweight messaging library  
 
-![Go](https://github.com/takenet/lime-go/workflows/Go/badge.svg?branch=master)
+![Go](https://github.com/takenet/lime-go/workflows/Go/badge.svg?branch=main)
 
 LIME allows you to build scalable, real-time messaging applications using a JSON-based
 [open protocol](http://limeprotocol.org).
