@@ -5,42 +5,34 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/takenet/lime-go"
-	"github.com/takenet/lime-go/chat"
 	"log"
-	"net"
 	"os"
 	"time"
+
+	"github.com/takenet/lime-go/client"
+	"github.com/takenet/lime-go/protocol"
+	"github.com/takenet/lime-go/resources"
 )
 
 func main() {
-
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:55321")
-	if err != nil {
-		log.Fatalf("Client establishment failed: %v", err)
-	}
-
-	client := lime.NewClientBuilder().
-		Encryption(lime.SessionEncryptionTLS).
-		UseTCP(addr, &lime.TCPConfig{
-			TLSConfig:   &tls.Config{ServerName: "localhost", InsecureSkipVerify: true},
-			TraceWriter: lime.NewStdoutTraceWriter(),
-		}).
+	client := client.NewClientBuilder().
+		Encryption(protocol.SessionEncryptionTLS).
+		UseWebsocket("wss://localhost:55321", nil, &tls.Config{ServerName: "localhost", InsecureSkipVerify: true}).
 		Name("john").
 		PlainAuthentication("mysecretpassword").
 		MessagesHandlerFunc(
-			func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
+			func(ctx context.Context, msg *protocol.Message, s client.Sender) error {
 				fmt.Printf("Message received - ID: %v - From: %v - Type: %v - Content: %v\n", msg.ID, msg.From, msg.Type, msg.Content)
 				return nil
 			}).
 		AutoReplyPings().
 		RequestCommandsHandlerFunc(
-			func(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
+			func(ctx context.Context, cmd *protocol.RequestCommand, s client.Sender) error {
 				fmt.Printf("Request command received - ID: %v\n", cmd.ID)
 				return nil
 			}).
 		NotificationsHandlerFunc(
-			func(ctx context.Context, not *lime.Notification) error {
+			func(ctx context.Context, not *protocol.Notification) error {
 				fmt.Printf("Notification received - ID: %v - From: %v - Event: %v - Reason: %v\n", not.ID, not.From, not.Event, not.Reason)
 				return nil
 			}).
@@ -55,13 +47,13 @@ func main() {
 
 	log.Println("Session established")
 
-	reqCmd := &lime.RequestCommand{}
+	reqCmd := &protocol.RequestCommand{}
 	reqCmd.SetURIString("/presence").
-		SetResource(&chat.Presence{
-			Status:      chat.PresenceStatusAvailable,
-			RoutingRule: chat.RoutingRuleIdentity}).
-		SetMethod(lime.CommandMethodSet).
-		SetID(lime.NewEnvelopeID())
+		SetResource(&resources.Presence{
+			Status:      resources.PresenceStatusAvailable,
+			RoutingRule: resources.RoutingRuleIdentity}).
+		SetMethod(protocol.CommandMethodSet).
+		SetID(protocol.NewEnvelopeID())
 
 	respCmd, err := client.ProcessCommand(ctx, reqCmd)
 	if err != nil {
@@ -83,16 +75,16 @@ func main() {
 			break
 		}
 
-		to := lime.ParseNode(toValue)
+		to := protocol.ParseNode(toValue)
 
 		fmt.Print("Content: ")
 		scanner.Scan()
-		content := lime.TextDocument(scanner.Text())
+		content := protocol.TextDocument(scanner.Text())
 
 		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 
-		msg := &lime.Message{
-			Envelope: lime.Envelope{
+		msg := &protocol.Message{
+			Envelope: protocol.Envelope{
 				To: to,
 			},
 		}

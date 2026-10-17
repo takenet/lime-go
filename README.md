@@ -1,11 +1,11 @@
 
 # LIME - A lightweight messaging library  
 
-![Go](https://github.com/takenet/lime-go/workflows/Go/badge.svg?branch=master)
+![Go](https://github.com/takenet/lime-go/workflows/Go/badge.svg?branch=main)
 
 LIME allows you to build scalable, real-time messaging applications using a JSON-based
 [open protocol](http://limeprotocol.org).
-It's **fully asynchronous** and supports persistent transports like TCP or Websockets.
+It's **fully asynchronous** and supports persistent WebSocket transports (WS/WSS).
 
 You can send and receive any type of document into the wire as long it can be represented as JSON or text (plain or
 encoded with base64) and it has a **MIME type** to allow the other party to handle it in the right way.
@@ -26,13 +26,12 @@ Finally, it has built-in support for authentication, transport encryption, and c
 
 ### Server
 
-For creating a server and start receiving connections, you should use the `lime.Server` type, which can be built using
-the `lime.NewServerBuilder()` function.
+Use `server.Server` and `server.NewServerBuilder()` to accept LIME connections.
 
-At least one **transport listener** (TCP, WebSocket, or in-process) should be configured.
+A WebSocket transport listener should be configured.
 You also should **register handlers** for processing the received envelopes.
 
-The example below shows how to create a simple TCP server that echoes every received message to its originator:
+The example below shows how to create a simple WebSocket server that echoes every received message to its originator:
 
 ```go
 
@@ -40,7 +39,8 @@ package main
 
 import (
  "context"
- "github.com/takenet/lime-go"
+ protocol "github.com/takenet/lime-go/protocol"
+ limeserver "github.com/takenet/lime-go/server"
  "log"
  "net"
  "os"
@@ -50,16 +50,16 @@ import (
 
 func main() {
     // Message handler that echoes all received messages to the originator
-    msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
-        echoMsg := &lime.Message{}
+    msgHandler := func(ctx context.Context, msg *protocol.Message, s limeserver.Sender) error {
+        echoMsg := &protocol.Message{}
         echoMsg.SetContent(msg.Content).SetTo(msg.From)
         return s.SendMessage(ctx, echoMsg)
     }
     
-    // Build a server, listening for TCP connections in the 55321 port
-    server := lime.NewServerBuilder().
+    // Build a server, listening for WebSocket connections on port 55321
+    server := limeserver.NewServerBuilder().
         MessagesHandlerFunc(msgHandler).
-        ListenTCP(&net.TCPAddr{Port: 55321}, &lime.TCPConfig{}).
+        ListenWebsocket(&net.TCPAddr{Port: 55321}, &limeserver.WebsocketConfig{}).
         Build()
     
     // Listen for the OS termination signals
@@ -73,7 +73,7 @@ func main() {
     }()
     
     // Start listening (blocking call)
-    if err := server.ListenAndServe(); err != lime.ErrServerClosed {
+     if err := server.ListenAndServe(); err != limeserver.ErrServerClosed {
         log.Printf("listen: %v\n", err)
     }
 }
@@ -81,16 +81,16 @@ func main() {
 
 ### Client
 
-On the client-side, you may use the `lime.Client` type, which can be built using the helper method `lime.NewClientBuilder`.
+Use `client.Client` and `client.NewClientBuilder()` to connect to a LIME server.
 
 ```go
 package main
 
 import (
  "context"
- "github.com/takenet/lime-go"
+ protocol "github.com/takenet/lime-go/protocol"
+ limeclient "github.com/takenet/lime-go/client"
  "log"
- "net"
  "time"
 )
 
@@ -99,8 +99,8 @@ func main() {
     
     // Defines a simple handler function for printing  
     // the received messages to the stdout
-    msgHandler := func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
-    if txt, ok := msg.Content.(lime.TextDocument); ok {
+    msgHandler := func(ctx context.Context, msg *protocol.Message, s limeclient.Sender) error {
+    if txt, ok := msg.Content.(protocol.TextDocument); ok {
         log.Printf("Text message received - ID: %v - Type: %v - Content: %v\n", msg.ID, msg.Type, txt)
     }
         close(done)
@@ -108,14 +108,14 @@ func main() {
     }
     
     // Initialize the client
-    client := lime.NewClientBuilder().
-        UseTCP(&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 55321}, &lime.TCPConfig{}).
+    client := limeclient.NewClientBuilder().
+        UseWebsocket("ws://127.0.0.1:55321", nil, nil).
         MessagesHandlerFunc(msgHandler).
         Build()
     
     // Prepare a simple text message to be sent
-    msg := &lime.Message{}
-    msg.SetContent(lime.TextDocument("Hello world!"))
+    msg := &protocol.Message{}
+    msg.SetContent(protocol.TextDocument("Hello world!"))
     
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
     defer cancel()
@@ -135,6 +135,73 @@ func main() {
     }
 }
 ```
+
+### HTTP integration (Iris)
+
+Besides the persistent WebSocket transport, `lime-go` also ships a
+`http` package for integrating with Blip's stateless HTTP gateway ("Iris",
+publicly exposed at `https://http.msging.net`). Unlike WebSocket, LIME-
+over-HTTP has no session negotiation: every request is individually
+authenticated and carries a single envelope.
+
+```go
+import (
+    protocol "github.com/takenet/lime-go/protocol"
+    limehttp "github.com/takenet/lime-go/http"
+)
+
+// Sending a message to Iris
+client := limehttp.NewClient(identity, accessKey)
+err := client.SendMessage(ctx, msg)
+
+// Receiving webhooks forwarded by Iris
+handler := &limehttp.Handler{
+    Authenticator: myAuthenticator,
+    MessageHandler: func(ctx context.Context, msg *protocol.Message) (*protocol.Notification, error) {
+        return msg.Notification(protocol.NotificationEventConsumed), nil
+    },
+}
+http.ListenAndServe(":8080", handler)
+```
+
+For session-based Iris HTTP transport, use `transport/http` instead. It
+performs session negotiation, sends the `Http-Session-*` headers, and supports
+either polling or callbacks. Mount one `CallbackMux` on the externally reachable
+callback URL and supply matching callback headers/authentication:
+
+```go
+import (
+    "net/http"
+
+    limeclient "github.com/takenet/lime-go/client"
+    httptransport "github.com/takenet/lime-go/transport/http"
+)
+
+callbackMux := httptransport.NewCallbackMux()
+http.Handle("/lime/", callbackMux)
+
+sessionTransport := httptransport.Config{
+    BaseURL:         "https://http.msging.net",
+    CallbackBaseURL: "https://bot.example.com/lime",
+    CallbackMux:     callbackMux,
+    CallbackHeaders: http.Header{"Authorization": {"Bearer callback-token"}},
+    CallbackAuthenticator: func(r *http.Request) bool {
+        return r.Header.Get("Authorization") == "Bearer callback-token"
+    },
+}
+client := limeclient.NewClientBuilder().
+    Name("bot").
+    Domain("example.com").
+    UseHTTPTransport(sessionTransport).
+    Build()
+```
+
+For `AuthenticationSchemeTransport`, configure the supplied `http.Client` with
+the client certificate required by the Iris deployment. Callback URLs must be
+reachable by Iris and served over HTTPS in production.
+
+See the `http` package documentation and the `examples/http-iris/` directory
+for complete client and server examples.
 
 ## Protocol overview
 
@@ -162,11 +229,11 @@ For instance, a message with a **text document** can be represented like this in
 }
 ```
 
-In Go, the message envelope is implemented by the `lime.Message` type:
+In Go, the message envelope is `protocol.Message`:
 
 ```go
-msg := &lime.Message{}
-msg.SetContent(lime.TextDocument("Hello from Lime!")).
+msg := &protocol.Message{}
+msg.SetContent(protocol.TextDocument("Hello from Lime!")).
     SetID("1").
     SetToString("john")
 ```
@@ -206,8 +273,8 @@ For instance, to send a generic JSON document you can use the `application/json`
 Building the same message in Go would be like this:
 
 ```go
-msg := &lime.Message{}
-msg.SetContent(&lime.JsonDocument{
+msg := &protocol.Message{}
+msg.SetContent(&protocol.JsonDocument{
         "text": "Hello from Lime!",
         "timestamp": "2022-03-23T00:00:00.000Z"}).
     SetID("1").
@@ -230,7 +297,7 @@ domain:
 ```
 
 Using custom MIME types enables the mapping of documents with types from your code.
-For this to be possible, these types need to implement the `lime.Document` interface.
+For this to be possible, these types need to implement `document.Document`.
 
 ```go
 type Image struct {
@@ -238,8 +305,8 @@ type Image struct {
     URL     string `json:"url,omitempty"`
 }
 
-func (f *Image) MediaType() lime.MediaType {
-    return lime.MediaType{
+func (f *Image) MediaType() document.MediaType {
+    return document.MediaType{
         Type:    "application",
         Subtype: "x-app-image",
         Suffix:  "json",
@@ -248,18 +315,18 @@ func (f *Image) MediaType() lime.MediaType {
 
 // To register your custom type, use the RegisterDocumentFactory function.
 func init() {
-    lime.RegisterDocumentFactory(func() Document {
+    document.RegisterDocumentFactory(func() document.Document {
         return &Image{}
     })
 }
 ```
-
-For instance, to send a message to the `john` node, you can use the `SendMessage` method that is implemented both by
-the `lime.Server` and `lime.Client` types:
+    msg.SetContent(protocol.TextDocument("Hello from Lime!")).
+For instance, to send a message to the `john` node, use `SendMessage` on a
+`server.Server` or `client.Client`:
 
 ```go
-msg := &lime.Message{}
-msg.SetContent(lime.TextDocument("Hello from Lime!")).
+msg := &protocol.Message{}
+msg.SetContent(protocol.TextDocument("Hello from Lime!")).
     SetID("1").
     SetToString("john")
 
@@ -270,10 +337,10 @@ And for receiving messages, you can use a message handler that can be registered
 or the server:
 
 ```go
-client := lime.NewClientBuilder().
+client := limeclient.NewClientBuilder().
     MessagesHandlerFunc(
-        func(ctx context.Context, msg *lime.Message, s lime.Sender) error {
-            if txt, ok := msg.Content.(lime.TextDocument); ok {
+        func(ctx context.Context, msg *protocol.Message, s limeclient.Sender) error {
+            if txt, ok := msg.Content.(protocol.TextDocument); ok {
                 fmt.Printf("Text message received - ID: %v - Type: %v - Content: %v\n", msg.ID, msg.Type, txt) 
             }
             return nil
@@ -299,13 +366,12 @@ It can be done like this:
 
 The notification `to` value should have the value of the `from` property of the message (or the `pp` value, if present).
 
-In Go, you can use the `Notification(event)` method from the `*lime.Message` type for building a notification for the
-message:
+In Go, use `Notification(event)` on `*protocol.Message` to build a notification for the message:
 
 ```go
 // Creates a corresponding notification to the message
 if msg.ID != "" {
-    not := msg.Notification(lime.NotificationEventReceived)
+    not := msg.Notification(protocol.NotificationEventReceived)
     // Send the notification 
     err := s.SendNotification(ctx, not)
 }
@@ -347,7 +413,7 @@ a message:
 In Go, you can use the message's `FailedNotification(reason)` method for that:
 
 ```go
-not := msg.FailedNotification(&lime.Reason{Code: 1, Description: "Destination not found"})
+not := msg.FailedNotification(&protocol.Reason{Code: 1, Description: "Destination not found"})
 ```
 
 ### Command
@@ -441,16 +507,16 @@ In case of `failure` response status, the command should have the `reason` prope
 }
 ```
 
-For creating a request command in Go, you can use the `lime.RequestCommand` type:
+For creating a request command in Go, use `protocol.RequestCommand`:
 
 ```go
-reqCmd := &lime.RequestCommand{}
+reqCmd := &protocol.RequestCommand{}
 reqCmd.SetURIString("/contacts").
-    SetMethod(lime.CommandMethodGet).
-    SetID(lime.NewEnvelopeID())
+    SetMethod(protocol.CommandMethodGet).
+    SetID(protocol.NewEnvelopeID())
 ```
 
-Note that for the `id` value, we are using the value returned by the `lime.NewEnvelopeID()` function, which will return
+Note that for the `id` value, we are using the value returned by `protocol.NewEnvelopeID()`, which returns
 a UUID v4 string (something like `3cdd2654-911d-497e-834a-3b7865510155`).
 
 For sending a command request, you should use the `ProcessCommand` method instead of the `SendCommand` method.
@@ -464,24 +530,24 @@ if err == nil {
 ```
 
 In the server side, you can add handlers for specific commands using the `RequestCommandHandler*` methods from
-the `lime.Server` type.
+the `server.Server` type.
 
 ```go
-server := lime.NewServerBuilder().  
+server := serverpkg.NewServerBuilder().
     RequestCommandHandlerFunc(
         // Set a predicate for filtering only the get contacts commands
-        func(cmd *lime.RequestCommand) bool {
-            return cmd.Method == lime.CommandMethodGet && cmd.URI.Path() == "/contacts"
+        func(cmd *protocol.RequestCommand) bool {
+            return cmd.Method == protocol.CommandMethodGet && cmd.URI.Path() == "/contacts"
         },
         // The handler implementation
-        func(ctx context.Context, cmd *lime.RequestCommand, s lime.Sender) error {
+        func(ctx context.Context, cmd *protocol.RequestCommand, s serverpkg.Sender) error {
             // Create a document collection of contacts
-            contacts := &lime.DocumentCollection{
+            contacts := &protocol.DocumentCollection{
                 Total:    2,
-                ItemType: chat.MediaTypeContact(),
-                Items: []lime.Document{
-                    &chat.Contact{Name: "John Doe"},
-                    &chat.Contact{Name: "Mary"},
+                ItemType: resources.MediaTypeContact(),
+                Items: []protocol.Document{
+                    &resources.Contact{Name: "John Doe"},
+                    &resources.Contact{Name: "Mary"},
                 },
             }
             // Send the response to the sender
@@ -492,7 +558,7 @@ server := lime.NewServerBuilder().
     Build()
 ```
 
-This is also valid for the `lime.Client` type.
+This is also valid for `client.Client`.
 In Lime, the **client can receive and process commands requests** from other nodes, like the server.
 
 ### Session
@@ -516,8 +582,8 @@ after the transport connection is established:
 The server should reply to this with another session envelope, according to the session state that it wants to enforce.
 
 For instance, the server may want to present the client with the transport options for negotiation.
-This is useful for applying the TLS encryption to an unencrypted connection (the TCP connection starts without
-encryption by default).
+WebSocket TLS is selected when the connection is created: `ws://` is unencrypted and `wss://` uses TLS. The LIME
+session does not upgrade a WebSocket connection to TLS.
 
 ```json
 {
@@ -543,19 +609,18 @@ state. The session state progression can occur in the following order:
 5. finishing (optional, started by the client)
 6. finished OR failed (final)
 
-In Go, the session negotiation, authentication, and establishment process is **automatically handled** by the
-`lime.Client` and `lime.Server` types.
+In Go, session negotiation, authentication, and establishment are handled by
+`client.Client` and `server.Server`.
 You just need to make sure that the server and client are configured accordingly the desired behavior.
 
-For instance, if you want to ensure that the TCP transport connections are using TLS encryption, you will need to
-configure the server similarly to this:
+For instance, to require TLS for WebSocket connections, configure the server and client for WSS:
 
 ```go
-server := lime.NewServerBuilder().
+server := serverpkg.NewServerBuilder().
     // Enable the TLS encryption option for all sessions
-    EncryptionOptions(lime.SessionEncryptionTLS).
-    // Set up the TCP listener providing a certificate
-    ListenTCP(addr, &lime.TCPConfig{
+    EncryptionOptions(protocol.SessionEncryptionTLS).
+    // Set up the secure WebSocket listener providing a certificate
+    ListenWebsocket(addr, &serverpkg.WebsocketConfig{
         TLSConfig: &tls.Config{
             GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
                 cert, err := tls.LoadX509KeyPair("cert.pem", "key.pem")
@@ -569,14 +634,12 @@ server := lime.NewServerBuilder().
     Build()
 ```
 
-And in the client side, you should set up the TLS encryption option and the TCP config:
+And on the client side, use a WSS URL and the TLS server name:
 
 ```go
-client := lime.NewClientBuilder().
-    Encryption(lime.SessionEncryptionTLS).
-    UseTCP(addr, &lime.TCPConfig{
-        TLSConfig:   &tls.Config{ServerName: "localhost"},
-    }).
+client := limeclient.NewClientBuilder().
+    Encryption(protocol.SessionEncryptionTLS).
+    UseWebsocket("wss://localhost:55321", nil, &tls.Config{ServerName: "localhost"}).
     // TODO: Setup other client options
     Build()
 ```
@@ -587,21 +650,21 @@ The Lime Go library supports the following schemes:
 - Guest (no authentication)
 - Plain (password)
 - Key
-- Transport (mutual TLS on TCP)
+- Transport (credentials delegated to the underlying transport)
 - External (token emitted by an issuer)
 
 To enable the use of plain authentication, in the server you should use the `EnablePlainAuthentication` method passing
 the authentication handler function, like in the example below:
 
 ```go
-server := lime.NewServerBuilder().
+server := serverpkg.NewServerBuilder().
     EnablePlainAuthentication(
-        func(ctx context.Context, i lime.Identity, pwd string) (*lime.AuthenticationResult, error) {
+        func(ctx context.Context, i protocol.Identity, pwd string) (*serverpkg.AuthenticationResult, error) {
         // TODO: implement checkCredentials to validate the user/password in your secret store
         if checkCredentials(i.Name, pwd) {
-            return &lime.AuthenticationResult{Role: lime.DomainRoleMember}, nil
+            return &serverpkg.AuthenticationResult{Role: serverpkg.DomainRoleMember}, nil
         }
-        return &lime.AuthenticationResult{Role: lime.DomainRoleUnknown}, nil
+        return &serverpkg.AuthenticationResult{Role: serverpkg.DomainRoleUnknown}, nil
     }).
     // TODO: Setup other server options
     Build()
@@ -610,7 +673,7 @@ server := lime.NewServerBuilder().
 On the client side, you can use the `PlainAuthentication` method to set the password that should be used:
 
 ```go
-client := lime.NewClientBuilder().
+client := limeclient.NewClientBuilder().
     // Sets the identity name and password
     Name("john").
     PlainAuthentication("mysecretpassword").
