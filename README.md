@@ -203,6 +203,76 @@ reachable by Iris and served over HTTPS in production.
 See the `http` package documentation and the `examples/http-iris/` directory
 for complete client and server examples.
 
+## OpenTelemetry
+
+The `tracing` package uses the OpenTelemetry API with the `Lime.Protocol`
+instrumentation scope, matching lime-csharp. Applications configure and shut down
+their own tracer provider and exporters, for example with
+`otel.SetTracerProvider(provider)`. The library does not install a provider or
+export telemetry by itself.
+
+Channels propagate W3C `traceparent` and `tracestate` through envelope metadata
+when sending messages, notifications, commands, and sessions. Existing
+`traceparent` values are preserved. `EnvelopeMux` restores remote context and
+creates consumer spans around handlers; `ProcessCommand` creates a client span
+covering the request/response round trip. Errors are recorded on these spans.
+Ping commands do not create spans, but still propagate the caller's context.
+
+For direct channel consumers or custom processing, start and end spans explicitly:
+
+```go
+import (
+    "context"
+
+    "github.com/takenet/lime-go/protocol"
+    "github.com/takenet/lime-go/tracing"
+    "go.opentelemetry.io/otel/codes"
+    "go.opentelemetry.io/otel/trace"
+)
+
+func handle(ctx context.Context, message *protocol.Message,
+    process func(context.Context, *protocol.Message) error) error {
+    ctx = tracing.ExtractContext(ctx, message)
+    ctx, span := tracing.StartSpan(ctx, message, "Message.Handle",
+        trace.WithSpanKind(trace.SpanKindConsumer))
+    defer span.End()
+
+    if err := process(ctx, message); err != nil {
+        span.RecordError(err)
+        span.SetStatus(codes.Error, err.Error())
+        return err
+    }
+    tracing.SetEnvelopeTags(span, message)
+    return nil
+}
+```
+
+`StartSpan` prefers the active context by default. Use `ExtractContext` first to
+prioritize the envelope's remote parent, as above. Invalid metadata falls back to
+the caller's context without losing cancellation, deadlines, or context values.
+New span context is injected into the envelope. Success status is finalized with
+`SetEnvelopeTags` after processing, allowing processing errors to take precedence.
+`InjectContext`, `InjectContextIfAbsent`, and `CopyContext` are also available for
+custom propagation; replacing or copying context clears stale `tracestate`.
+
+Envelope attributes use the C# keys and enum names: `lime.envelope.type`,
+`lime.envelope.id`, `lime.envelope.from`, `lime.envelope.to`,
+`lime.message.type`, `lime.notification.event`, `lime.command.uri`,
+`lime.command.method`, `lime.command.type`, `lime.command.status`, and
+`lime.session.state`. Request and response commands both use the envelope type
+`Command`; enum labels use values such as `Get`, `Pending`, and `Success`.
+Handlers include `lime.channel.local_node` and `lime.channel.remote_node` when
+available; command round trips also include `lime.node` and
+`lime.transport.local_endpoint`, `lime.transport.remote_endpoint`, and
+`lime.transport.type`. Transport type values identify the Go implementation.
+
+Envelope bodies, arbitrary metadata, and authentication are not captured.
+Envelope IDs and node addresses are high-cardinality, potentially identifying
+attributes; configure exporter filtering and retention for your environment.
+Envelope metadata is mutable, so do not trace or send the same envelope
+concurrently without synchronization. Export requires an application-configured
+provider and a sampling policy that records the span.
+
 ## Protocol overview
 
 The base protocol data package is called **envelope** and there are four types: **Message, notification, command and
