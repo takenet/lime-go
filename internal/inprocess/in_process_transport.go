@@ -46,6 +46,14 @@ func (t *inProcessTransport) Send(_ context.Context, e EnvelopeValue) error {
 }
 
 func (t *inProcessTransport) Receive(ctx context.Context) (EnvelopeValue, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("receive: %w", err)
+	}
+	select {
+	case envelope := <-t.envChan:
+		return envelope, nil
+	default:
+	}
 	if !t.Connected() {
 		return nil, errors.New("transport is closed")
 	}
@@ -53,7 +61,12 @@ func (t *inProcessTransport) Receive(ctx context.Context) (EnvelopeValue, error)
 	case <-ctx.Done():
 		return nil, fmt.Errorf("receive: %w", ctx.Err())
 	case <-t.done:
-		return nil, errors.New("transport was closed while receiving")
+		select {
+		case envelope := <-t.envChan:
+			return envelope, nil
+		default:
+			return nil, errors.New("transport was closed while receiving")
+		}
 	case e := <-t.envChan:
 		return e, nil
 	}

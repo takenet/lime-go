@@ -58,35 +58,44 @@ func (c *Client) Establish(ctx context.Context) error {
 	return err
 }
 
+// LocalNode returns the server-accepted node for the current established, connected session.
+// It returns the zero node and false when no such session exists.
+func (c *Client) LocalNode() (Node, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.channel == nil || !c.channel.Established() {
+		return Node{}, false
+	}
+	return c.channel.LocalNode(), true
+}
+
 // Close stops the listener and finishes any established session with the server.
 func (c *Client) Close() error {
 	c.stopListener()
-
-	if c.channel == nil {
-		return nil
-	}
 
 	c.lock <- struct{}{}
 	defer func() {
 		<-c.lock
 	}()
 
-	if c.channel == nil {
+	c.mu.Lock()
+	channel := c.channel
+	c.channel = nil
+	c.mu.Unlock()
+
+	if channel == nil {
 		return nil
 	}
 
-	if c.channel.Established() {
+	if channel.Established() {
 		// Try to close the session gracefully
 		ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancelFunc()
-		_, err := c.channel.FinishSession(ctx)
-		c.channel = nil
+		_, err := channel.FinishSession(ctx)
 		return err
 	}
 
-	err := c.channel.Close()
-	c.channel = nil
-	return err
+	return channel.Close()
 }
 
 // SendMessage asynchronously sends a Message to the server.
@@ -131,17 +140,18 @@ func (c *Client) ProcessCommand(ctx context.Context, cmd *RequestCommand) (*Resp
 	return channel.ProcessCommand(ctx, cmd)
 }
 
-func (c *Client) channelOK() bool {
+func (c *Client) establishedChannel() *ClientChannel {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.channel != nil && c.channel.Established()
+	if c.channel != nil && c.channel.Established() {
+		return c.channel
+	}
+	return nil
 }
 
 func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) {
-	if c.channelOK() {
-		c.mu.RLock()
-		defer c.mu.RUnlock()
-		return c.channel, nil
+	if channel := c.establishedChannel(); channel != nil {
+		return channel, nil
 	}
 
 	select {
@@ -155,22 +165,21 @@ func (c *Client) getOrBuildChannel(ctx context.Context) (*ClientChannel, error) 
 		<-c.lock
 	}()
 
-	if c.channelOK() {
-		c.mu.RLock()
-		defer c.mu.RUnlock()
-		return c.channel, nil
+	if channel := c.establishedChannel(); channel != nil {
+		return channel, nil
 	}
 
 	count := 0.0
 
 	for ctx.Err() == nil {
-		if c.channel != nil {
+		c.mu.Lock()
+		previousChannel := c.channel
+		c.channel = nil
+		c.mu.Unlock()
+		if previousChannel != nil {
 			// don't care about the result,
 			// calling close just to release resources.
-			_ = c.channel.Close()
-			c.mu.Lock()
-			c.channel = nil
-			c.mu.Unlock()
+			_ = previousChannel.Close()
 		}
 
 		channel, err := c.buildChannel(ctx)
@@ -245,10 +254,12 @@ func (c *Client) buildChannel(ctx context.Context) (*ClientChannel, error) {
 		c.config.Node.Instance,
 	)
 	if err != nil {
+		_ = channel.Close()
 		return nil, fmt.Errorf("buildChannel: %w", err)
 	}
 
 	if ses.State != SessionStateEstablished {
+		_ = channel.Close()
 		return nil, fmt.Errorf("buildChannel: channel state is %v", ses.State)
 	}
 

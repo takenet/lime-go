@@ -179,7 +179,7 @@ func receiveFromTransport(ctx context.Context, c *channel, done chan<- struct{})
 		close(c.inSesChan)
 	}()
 
-	for c.Established() {
+	for c.State() == SessionStateEstablished {
 		env, err := c.transport.Receive(ctx)
 		if err != nil {
 			if ctx.Err() == nil {
@@ -271,6 +271,16 @@ func (c *channel) sendSession(ctx context.Context, ses *Session) error {
 func (c *channel) receiveSession(ctx context.Context) (*Session, error) {
 	if ctx == nil {
 		panic("nil context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("receive session: %w", err)
+	}
+	select {
+	case session, ok := <-c.inSesChan:
+		if ok {
+			return session, nil
+		}
+	default:
 	}
 
 	state := c.State()
