@@ -22,6 +22,8 @@ Finally, it has built-in support for authentication, transport encryption, and c
 
 ## Getting started
 
+Requires Go 1.27.2 or newer.
+
 -----
 
 ### Server
