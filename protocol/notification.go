@@ -97,6 +97,7 @@ const (
 	NotificationEventReceived = NotificationEvent("received")
 	// NotificationEventConsumed The node has consumed the Content of the message.
 	NotificationEventConsumed = NotificationEvent("consumed")
+	NotificationEventDeleted  = NotificationEvent("deleted")
 	// NotificationEventFailed A problem occurred during the processing of the message.
 	// In this case, the reason property of the notification should be present.
 	NotificationEventFailed = NotificationEvent("failed")
@@ -104,7 +105,7 @@ const (
 
 func (e *NotificationEvent) Validate() error {
 	switch *e {
-	case NotificationEventAccepted, NotificationEventDispatched, NotificationEventReceived, NotificationEventConsumed, NotificationEventFailed:
+	case NotificationEventAccepted, NotificationEventDispatched, NotificationEventReceived, NotificationEventConsumed, NotificationEventDeleted, NotificationEventFailed:
 		return nil
 	}
 

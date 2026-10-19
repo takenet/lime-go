@@ -101,6 +101,7 @@ func TestNotificationEventValidate(t *testing.T) {
 		{"dispatched", NotificationEventDispatched, false},
 		{"received", NotificationEventReceived, false},
 		{"consumed", NotificationEventConsumed, false},
+		{"deleted", NotificationEventDeleted, false},
 		{"failed", NotificationEventFailed, false},
 		{"invalid", NotificationEvent("invalid"), true},
 		{"empty", NotificationEvent(""), true},
@@ -125,6 +126,16 @@ func TestNotificationEventMarshalText(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("received"), bytes)
+}
+
+func TestNotificationDeletedRoundTrip(t *testing.T) {
+	notification := Notification{Envelope: Envelope{ID: "message-id"}, Event: NotificationEventDeleted}
+	data, err := json.Marshal(notification)
+	assert.NoError(t, err)
+	assert.JSONEq(t, `{"id":"message-id","event":"deleted"}`, string(data))
+	var decoded Notification
+	assert.NoError(t, json.Unmarshal(data, &decoded))
+	assert.Equal(t, notification, decoded)
 }
 
 func TestNotificationEventMarshalTextInvalid(t *testing.T) {

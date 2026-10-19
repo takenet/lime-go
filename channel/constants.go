@@ -19,6 +19,7 @@ const (
 	NotificationEventDispatched = protocol.NotificationEventDispatched
 	NotificationEventReceived   = protocol.NotificationEventReceived
 	NotificationEventConsumed   = protocol.NotificationEventConsumed
+	NotificationEventDeleted    = protocol.NotificationEventDeleted
 	NotificationEventFailed     = protocol.NotificationEventFailed
 )
 
