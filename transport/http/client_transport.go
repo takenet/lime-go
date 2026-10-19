@@ -50,8 +50,8 @@ const defaultMaxBodyBytes = 4 << 20
 // CallbackAuthenticator validates requests delivered by Iris to this transport.
 type CallbackAuthenticator func(*http.Request) bool
 
-// Config configures an Iris HTTP session transport. ReceiveBaseUri selects
-// callback delivery; without it, Receive starts polling until Close.
+// Config configures an Iris HTTP session transport. ReceiveBaseUri enables
+// callback delivery of incoming envelopes.
 // Headers authenticate outbound requests, CallbackHeaders are sent to callback
 // URLs, and CallbackAuthenticator independently validates incoming callbacks.
 type Config struct {
@@ -68,8 +68,6 @@ type Config struct {
 	PresenceRoutingRule    string
 	PresencePromiscuous    bool
 	ReceiptEvents          []protocol.NotificationEvent
-	PollTimeout            time.Duration
-	PollInterval           time.Duration
 	CallbackCommandTimeout time.Duration
 	MaxBodyBytes           int64
 }
@@ -77,21 +75,15 @@ type Config struct {
 // ClientTransport implements transport.Transport over Iris HTTP sessions.
 // ServeHTTP receives two-way session callbacks and can be mounted on the
 // application HTTP server at the configured callback paths.
-// Polling uses a bounded inbox and survives Receive cancellation. Close cancels
-// and joins the pollers; a custom HTTPClient must honor request contexts.
 type ClientTransport struct {
 	config         Config
 	baseURL        *url.URL
 	receiveBaseUri string
 	callbackPath   string
 	httpClient     *http.Client
-	incoming       chan pollResult
+	incoming       chan protocol.EnvelopeValue
 	done           chan struct{}
 	closeOnce      sync.Once
-	pollContext    context.Context
-	cancelPolling  context.CancelFunc
-	pollers        sync.WaitGroup
-	polling        bool
 
 	mu            sync.RWMutex
 	closed        bool
@@ -116,12 +108,6 @@ func NewClientTransport(config Config) (*ClientTransport, error) {
 	}
 	if config.HTTPClient == nil {
 		config.HTTPClient = http.DefaultClient
-	}
-	if config.PollTimeout <= 0 {
-		config.PollTimeout = 50 * time.Second
-	}
-	if config.PollInterval <= 0 {
-		config.PollInterval = 25 * time.Millisecond
 	}
 	if config.CallbackCommandTimeout <= 0 {
 		config.CallbackCommandTimeout = 30 * time.Second
@@ -170,11 +156,10 @@ func NewClientTransport(config Config) (*ClientTransport, error) {
 		config:     config,
 		baseURL:    baseURL,
 		httpClient: config.HTTPClient,
-		incoming:   make(chan pollResult, 64),
+		incoming:   make(chan protocol.EnvelopeValue, 64),
 		done:       make(chan struct{}),
 		pending:    make(map[string]chan *protocol.ResponseCommand),
 	}
-	client.pollContext, client.cancelPolling = context.WithCancel(context.Background())
 	if config.ReceiveBaseUri != "" {
 		callbackBase, _ := url.Parse(config.ReceiveBaseUri)
 		client.receiveBaseUri = strings.TrimRight(config.ReceiveBaseUri, "/")
@@ -265,12 +250,9 @@ func (t *ClientTransport) Receive(ctx context.Context) (protocol.EnvelopeValue, 
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("iris http transport: receive: %w", err)
 	}
-	if t.config.ReceiveBaseUri == "" {
-		t.startPolling()
-	}
 	select {
-	case result := <-t.incoming:
-		return result.envelope, result.err
+	case envelope := <-t.incoming:
+		return envelope, nil
 	case <-ctx.Done():
 		return nil, fmt.Errorf("iris http transport: receive: %w", ctx.Err())
 	case <-t.done:
@@ -282,13 +264,11 @@ func (t *ClientTransport) Close() error {
 	t.closeOnce.Do(func() {
 		t.mu.Lock()
 		t.closed = true
-		t.cancelPolling()
 		t.mu.Unlock()
 		close(t.done)
 		if t.config.CallbackMux != nil {
 			t.config.CallbackMux.unregister(t.callbackPath, t)
 		}
-		t.pollers.Wait()
 	})
 	return nil
 }
@@ -428,72 +408,6 @@ func (t *ClientTransport) handleCommandCallback(writer http.ResponseWriter, requ
 	}
 }
 
-func (t *ClientTransport) startPolling() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.closed || t.polling {
-		return
-	}
-	t.polling = true
-	for _, endpoint := range []string{"messages", "notifications", "commands"} {
-		t.pollers.Add(1)
-		go t.poll(endpoint)
-	}
-}
-
-func (t *ClientTransport) poll(endpoint string) {
-	defer t.pollers.Done()
-	for t.pollContext.Err() == nil {
-		ctx, cancel := context.WithTimeout(t.pollContext, t.config.PollTimeout)
-		envelope, err := t.pollEndpoint(ctx, endpoint)
-		cancel()
-		if t.pollContext.Err() != nil {
-			return
-		}
-		if envelope != nil || (err != nil && !errors.Is(err, context.DeadlineExceeded)) {
-			select {
-			case t.incoming <- pollResult{envelope: envelope, err: err}:
-			case <-t.done:
-				return
-			}
-		}
-		if err := wait(t.pollContext, t.config.PollInterval, t.done); err != nil {
-			return
-		}
-	}
-}
-
-func (t *ClientTransport) pollEndpoint(ctx context.Context, endpoint string) (protocol.EnvelopeValue, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, t.endpointURL(endpoint), nil)
-	if err != nil {
-		return nil, err
-	}
-	request.Header = t.requestHeaders(false)
-	response, err := t.httpClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusNoContent || response.StatusCode == http.StatusAccepted {
-		return nil, nil
-	}
-	body, err := t.readBody(response.Body)
-	if err != nil {
-		return nil, err
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("iris http transport: poll %s returned status %d: %s", endpoint, response.StatusCode, string(body))
-	}
-	if len(body) == 0 {
-		return nil, nil
-	}
-	envelope, err := codec.UnmarshalEnvelope(body)
-	if err == nil {
-		inheritHTTPContext(context.Background(), response.Header, envelope)
-	}
-	return envelope, err
-}
-
 func inheritHTTPContext(ctx context.Context, headers http.Header, envelope protocol.EnvelopeValue) {
 	if trace.SpanContextFromContext(tracing.ExtractContext(context.Background(), envelope)).IsValid() {
 		return
@@ -502,11 +416,6 @@ func inheritHTTPContext(ctx context.Context, headers http.Header, envelope proto
 		ctx = propagation.TraceContext{}.Extract(ctx, propagation.HeaderCarrier(headers))
 	}
 	tracing.InjectContext(ctx, envelope)
-}
-
-type pollResult struct {
-	envelope protocol.EnvelopeValue
-	err      error
 }
 
 func (t *ClientTransport) requestHeaders(initialSession bool) http.Header {
@@ -659,7 +568,7 @@ func (t *ClientTransport) sessionID() string {
 
 func (t *ClientTransport) enqueue(ctx context.Context, envelope protocol.EnvelopeValue) error {
 	select {
-	case t.incoming <- pollResult{envelope: envelope}:
+	case t.incoming <- envelope:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -784,19 +693,6 @@ func lastPathSegment(path string) string {
 		return path[index+1:]
 	}
 	return path
-}
-
-func wait(ctx context.Context, duration time.Duration, done <-chan struct{}) error {
-	timer := time.NewTimer(duration)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return nil
-	case <-ctx.Done():
-		return fmt.Errorf("iris http transport: receive: %w", ctx.Err())
-	case <-done:
-		return errors.New("iris http transport: transport is closed")
-	}
 }
 
 type endpointAddr struct {

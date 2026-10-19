@@ -3,11 +3,11 @@ package httptransport
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -191,114 +191,34 @@ func TestClientTransportCallbackCommandReturnsCorrelatedResponse(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, closedCallback.Code)
 }
 
-func TestClientTransportPollsForIncomingEnvelope(t *testing.T) {
-	const parent = "00-11111111111111111111111111111111-1111111111111111-01"
-	var delivered atomic.Bool
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method == http.MethodGet && request.URL.Path == "/messages" && delivered.CompareAndSwap(false, true) {
-			writer.Header().Set(tracing.TraceParent, parent)
-			message := &protocol.Message{}
-			content := protocol.TextDocument("from Iris")
-			message.SetContent(&content)
-			data, err := codec.MarshalEnvelope(message)
-			if err != nil {
-				http.Error(writer, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			_, _ = writer.Write(data)
-			return
-		}
-		writer.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
-
-	client, err := NewClientTransport(Config{
-		BaseURL:      server.URL,
-		Identity:     protocol.Identity{Name: "bot", Domain: "example.com"},
-		PollTimeout:  time.Second,
-		PollInterval: time.Millisecond,
-	})
-	require.NoError(t, err)
-	defer func() { _ = client.Close() }()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	envelope, err := client.Receive(ctx)
-	require.NoError(t, err)
-	message, ok := envelope.(*protocol.Message)
-	require.True(t, ok)
-	require.Equal(t, parent, message.Metadata[tracing.TraceParent])
-	raw, ok := message.Content.(*protocol.TextDocument)
-	require.True(t, ok)
-	assert.Equal(t, protocol.TextDocument("from Iris"), *raw)
-}
-
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (roundTrip roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return roundTrip(request)
 }
 
-func TestClientTransportPollingRetainsResponsesAfterReceiveCancellation(t *testing.T) {
-	started := make(chan string, 3)
-	release := make(chan struct{})
-	var releaseOnce sync.Once
-	defer releaseOnce.Do(func() { close(release) })
-	var requests sync.Map
+func TestClientTransportReceiveDoesNotMakeHTTPRequests(t *testing.T) {
+	var requests atomic.Int64
 	client, err := NewClientTransport(Config{
-		BaseURL:  "https://iris.example.com",
-		Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
+		BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
 		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-			if _, loaded := requests.LoadOrStore(request.URL.Path, true); loaded {
-				<-request.Context().Done()
-				return nil, request.Context().Err()
-			}
-			started <- request.URL.Path
-			<-release
-			bodies := map[string]string{
-				"/messages":      `{"id":"message","type":"text/plain","content":"hello"}`,
-				"/notifications": `{"id":"notification","event":"received"}`,
-				"/commands":      `{"id":"command","method":"get","uri":"/ping"}`,
-			}
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(bodies[request.URL.Path])), Header: make(http.Header)}, nil
+			requests.Add(1)
+			return nil, errors.New("unexpected HTTP request")
 		})},
 	})
 	require.NoError(t, err)
-	defer func() { releaseOnce.Do(func() { close(release) }); _ = client.Close() }()
-
-	ctx, cancel := context.WithCancel(context.Background())
+	defer func() { _ = client.Close() }()
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
 	defer cancel()
-	received := make(chan error, 1)
-	go func() { _, receiveErr := client.Receive(ctx); received <- receiveErr }()
-	for range 3 {
-		select {
-		case <-started:
-		case <-time.After(time.Second):
-			t.Fatal("pollers did not start")
-		}
-	}
-	cancel()
-	require.ErrorIs(t, <-received, context.Canceled)
-	releaseOnce.Do(func() { close(release) })
-
-	nextCtx, nextCancel := context.WithTimeout(context.Background(), time.Second)
-	defer nextCancel()
-	ids := make(map[string]bool)
-	for range 3 {
-		envelope, receiveErr := client.Receive(nextCtx)
-		require.NoError(t, receiveErr)
-		switch value := envelope.(type) {
-		case *protocol.Message:
-			ids[value.ID] = true
-		case *protocol.Notification:
-			ids[value.ID] = true
-		case *protocol.RequestCommand:
-			ids[value.ID] = true
-		default:
-			t.Fatalf("unexpected envelope %T", envelope)
-		}
-	}
-	assert.Equal(t, map[string]bool{"message": true, "notification": true, "command": true}, ids)
+	_, err = client.Receive(ctx)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	message := &protocol.Message{Envelope: protocol.Envelope{ID: "queued"}}
+	require.NoError(t, client.enqueue(context.Background(), message))
+	envelope, err := client.Receive(context.Background())
+	require.NoError(t, err)
+	assert.Same(t, message, envelope)
+	require.NoError(t, client.Close())
+	assert.Zero(t, requests.Load())
 }
 
 func TestClientTransportSessionPreflight(t *testing.T) {
@@ -309,7 +229,7 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 		mutate    func(http.Header)
 		wantReset bool
 		wantError bool
-		polling   bool
+		oneWay    bool
 	}{
 		{name: "matching established session"},
 		{name: "missing session", status: http.StatusNotFound},
@@ -322,7 +242,7 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 		{name: "callback credentials case matters", mutate: func(headers http.Header) {
 			headers.Set(HeaderSessionCommandHeaders, strings.Replace(headers.Get(HeaderSessionCommandHeaders), "callback", "CALLBACK", 1))
 		}, wantReset: true},
-		{name: "polling removes old callback", polling: true, mutate: func(headers http.Header) {
+		{name: "one-way session removes old callback", oneWay: true, mutate: func(headers http.Header) {
 			headers.Set(HeaderSessionMessageURL, "https://bot.example.com/old/messages")
 		}, wantReset: true},
 		{name: "changed presence", mutate: func(headers http.Header) { headers.Set(HeaderSessionPresenceRoutingRule, "instance") }, wantReset: true},
@@ -344,7 +264,7 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var methods []string
 			callbackURL := "https://bot.example.com/lime"
-			if test.polling {
+			if test.oneWay {
 				callbackURL = ""
 			}
 			client, err := NewClientTransport(Config{
@@ -397,10 +317,10 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 
 func TestClientTransportPresenceDefaultsAndHeaderIsolation(t *testing.T) {
 	for _, test := range []struct{ name, callback, rule, want string }{
-		{"polling default", "", "", "instance"},
+		{"one-way default", "", "", "instance"},
 		{"callback default", "https://bot.example.com/lime", "", "identity"},
 		{"explicit callback", "https://bot.example.com/lime", "domain", "domain"},
-		{"explicit polling", "", "identity", "identity"},
+		{"explicit one-way", "", "identity", "identity"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			outbound := http.Header{"Authorization": {"Bearer outbound"}}
@@ -447,50 +367,20 @@ func TestClientTransportRejectsAmbiguousCallbackHeaders(t *testing.T) {
 	}
 }
 
-func TestClientTransportCloseCancelsAndJoinsPollers(t *testing.T) {
-	started := make(chan struct{}, 3)
-	canceled := make(chan struct{}, 3)
-	release := make(chan struct{})
-	var releaseOnce sync.Once
+func TestClientTransportCloseUnblocksReceive(t *testing.T) {
 	client, err := NewClientTransport(Config{
 		BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
-		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-			started <- struct{}{}
-			<-request.Context().Done()
-			canceled <- struct{}{}
-			<-release
-			return nil, request.Context().Err()
-		})},
 	})
 	require.NoError(t, err)
-	defer func() { releaseOnce.Do(func() { close(release) }); _ = client.Close() }()
-	client.startPolling()
-	for range 3 {
-		select {
-		case <-started:
-		case <-time.After(time.Second):
-			t.Fatal("poller did not start")
-		}
-	}
-	closed := make(chan struct{})
-	go func() { _ = client.Close(); close(closed) }()
-	for range 3 {
-		select {
-		case <-canceled:
-		case <-time.After(time.Second):
-			t.Fatal("Close did not cancel poller")
-		}
-	}
+	defer func() { _ = client.Close() }()
+	received := make(chan error, 1)
+	go func() { _, receiveErr := client.Receive(context.Background()); received <- receiveErr }()
+	require.NoError(t, client.Close())
 	select {
-	case <-closed:
-		t.Fatal("Close returned before pollers exited")
-	default:
-	}
-	releaseOnce.Do(func() { close(release) })
-	select {
-	case <-closed:
+	case receiveErr := <-received:
+		require.ErrorContains(t, receiveErr, "transport is closed")
 	case <-time.After(time.Second):
-		t.Fatal("Close did not join pollers")
+		t.Fatal("Close did not unblock Receive")
 	}
 	assert.False(t, client.Connected())
 	_, err = client.Receive(context.Background())
@@ -498,56 +388,25 @@ func TestClientTransportCloseCancelsAndJoinsPollers(t *testing.T) {
 	require.NoError(t, client.Close())
 }
 
-func TestClientTransportPollingBackpressureIsBoundedAndCloseUnblocks(t *testing.T) {
-	var requests atomic.Int64
+func TestClientTransportCloseUnblocksFullReceiveBuffer(t *testing.T) {
 	client, err := NewClientTransport(Config{
 		BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
-		PollInterval: time.Nanosecond,
-		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-			requests.Add(1)
-			bodies := map[string]string{
-				"/messages":      `{"type":"text/plain","content":"hello"}`,
-				"/notifications": `{"id":"notification","event":"received"}`,
-				"/commands":      `{"id":"command","method":"get","uri":"/ping"}`,
-			}
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(bodies[request.URL.Path]))}, nil
-		})},
 	})
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
-	client.startPolling()
-	require.Eventually(t, func() bool { return requests.Load() == int64(cap(client.incoming)+3) }, time.Second, time.Millisecond)
-	assert.Len(t, client.incoming, cap(client.incoming))
-	closed := make(chan struct{})
-	go func() { _ = client.Close(); close(closed) }()
-	select {
-	case <-closed:
-	case <-time.After(time.Second):
-		t.Fatal("Close blocked on full inbox")
+	for range cap(client.incoming) {
+		require.NoError(t, client.enqueue(context.Background(), &protocol.Message{}))
 	}
-	assert.Equal(t, int64(cap(client.incoming)+3), requests.Load())
-}
-
-func TestClientTransportPollingTimeoutRetriesAndSurfacesErrors(t *testing.T) {
-	var attempts atomic.Int64
-	client, err := NewClientTransport(Config{
-		BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
-		PollTimeout: time.Millisecond, PollInterval: time.Millisecond,
-		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-			if request.URL.Path != "/messages" || attempts.Add(1) == 1 {
-				<-request.Context().Done()
-				return nil, request.Context().Err()
-			}
-			return &http.Response{StatusCode: http.StatusForbidden, Body: io.NopCloser(strings.NewReader("denied"))}, nil
-		})},
-	})
-	require.NoError(t, err)
-	defer func() { _ = client.Close() }()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_, err = client.Receive(ctx)
-	require.ErrorContains(t, err, "poll messages returned status 403")
-	assert.GreaterOrEqual(t, attempts.Load(), int64(2))
+	assert.Len(t, client.incoming, cap(client.incoming))
+	enqueued := make(chan error, 1)
+	go func() { enqueued <- client.enqueue(context.Background(), &protocol.Message{}) }()
+	require.NoError(t, client.Close())
+	select {
+	case enqueueErr := <-enqueued:
+		require.ErrorContains(t, enqueueErr, "transport is closed")
+	case <-time.After(time.Second):
+		t.Fatal("Close did not unblock enqueue")
+	}
 }
 
 func TestClientTransportCallbackBounds(t *testing.T) {
@@ -677,5 +536,4 @@ func TestClientTransportCanceledReceiveDoesNotConsumeQueuedEnvelope(t *testing.T
 	envelope, err := client.Receive(context.Background())
 	require.NoError(t, err)
 	assert.Same(t, message, envelope)
-	assert.False(t, client.polling)
 }

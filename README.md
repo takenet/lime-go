@@ -200,8 +200,9 @@ http.ListenAndServe(":8080", handler)
 ```
 
 For session-based Iris HTTP transport, use `transport/http` instead. It
-performs session negotiation, sends the `Http-Session-*` headers, and supports
-either polling or callbacks. Mount one `CallbackMux` on the externally reachable
+performs session negotiation, sends the `Http-Session-*` headers, and receives
+incoming envelopes through callbacks. Without `ReceiveBaseUri`, only outbound
+requests and their synchronous responses are supported. Mount one `CallbackMux` on the externally reachable
 callback URL and supply matching callback headers/authentication:
 
 ```go
@@ -262,7 +263,7 @@ unrelated envelopes without a parent start independent traces. Responses and
 other work explicitly sent with a handler's context remain in that handler's trace.
 
 HTTP callbacks prioritize valid envelope metadata, then the active HTTP request
-span or W3C HTTP headers. Poll and synchronous responses use W3C response headers
+span or W3C HTTP headers. Synchronous responses use W3C response headers
 as a fallback when envelope metadata has no valid parent. HTTP sends and session
 preflight propagate the active W3C context in request headers. Applications must
 configure a tracer provider to create spans. Errors are recorded on channel spans.
