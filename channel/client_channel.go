@@ -3,6 +3,9 @@ package channel
 import (
 	"context"
 	"fmt"
+
+	"github.com/takenet/lime-go/tracing"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const errEstablishSession = "establish session: %w"
@@ -248,7 +251,7 @@ func (c *ClientChannel) EstablishSession(
 	identity Identity,
 	authenticator Authenticator,
 	instance string,
-) (*Session, error) {
+) (session *Session, err error) {
 	if authenticator == nil {
 		panic("the authenticator should not be nil")
 	}
@@ -256,6 +259,12 @@ func (c *ClientChannel) EstablishSession(
 	if c.state != SessionStateNew {
 		panic("channel state is not new")
 	}
+
+	ctx, span := tracing.StartSpan(ctx, &Session{State: SessionStateNew}, "ClientChannel.EstablishSession", trace.WithSpanKind(trace.SpanKindClient))
+	defer func() {
+		setChannelTags(span, c.channel)
+		finishEnvelopeSpan(span, &err, session)
+	}()
 
 	ses, err := c.startNewSession(ctx)
 	if err != nil {

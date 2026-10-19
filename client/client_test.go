@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -19,6 +20,11 @@ import (
 	"github.com/takenet/lime-go/protocol"
 	serverpkg "github.com/takenet/lime-go/server"
 	httptransport "github.com/takenet/lime-go/transport/http"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/goleak"
 )
 
@@ -34,6 +40,10 @@ type lifecycleTransport struct {
 }
 
 func (transport *lifecycleTransport) Connected() bool { return !transport.closed.Load() }
+
+func (*lifecycleTransport) LocalAddr() net.Addr { return nil }
+
+func (*lifecycleTransport) RemoteAddr() net.Addr { return nil }
 
 func (transport *lifecycleTransport) Send(ctx context.Context, envelope protocol.EnvelopeValue) error {
 	if transport.send != nil {
@@ -56,19 +66,40 @@ func (transport *lifecycleTransport) Close() error {
 }
 
 func TestClientBuildChannel_EstablishmentFailure_ClosesTransport(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	previous := otel.GetTracerProvider()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	otel.SetTracerProvider(provider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previous)
+		require.NoError(t, provider.Shutdown(context.Background()))
+	})
 	establishErr := errors.New("establishment failed")
 	for _, closeErr := range []error{nil, errors.New("close failed")} {
 		t.Run(fmt.Sprint(closeErr), func(t *testing.T) {
 			transport := &lifecycleTransport{sendErr: establishErr, closeErr: closeErr}
 			config := NewClientConfig()
-			config.NewTransport = func(context.Context) (Transport, error) { return transport, nil }
+			ctx, parent := otel.Tracer("test").Start(context.Background(), "caller")
+			defer parent.End()
+			var connectionContext trace.SpanContext
+			config.NewTransport = func(ctx context.Context) (Transport, error) {
+				connectionContext = trace.SpanContextFromContext(ctx)
+				return transport, nil
+			}
 			client := &Client{config: config}
 
-			channel, err := client.buildChannel(context.Background())
+			channel, err := client.buildChannel(ctx)
 
 			require.ErrorIs(t, err, establishErr)
 			assert.Nil(t, channel)
 			assert.EqualValues(t, 1, transport.closeCount.Load())
+			require.True(t, connectionContext.IsValid())
+			require.Equal(t, parent.SpanContext().TraceID(), connectionContext.TraceID())
+			spans := recorder.Ended()
+			connection := spans[len(spans)-1]
+			require.Equal(t, "Client.Connect", connection.Name())
+			require.Equal(t, parent.SpanContext().SpanID(), connection.Parent().SpanID())
+			require.Equal(t, codes.Error, connection.Status().Code)
 		})
 	}
 }

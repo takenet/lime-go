@@ -7,6 +7,9 @@ import (
 	"iter"
 	"log/slog"
 	"slices"
+
+	"github.com/takenet/lime-go/tracing"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type ServerChannel struct {
@@ -206,7 +209,7 @@ func (c *ServerChannel) EstablishSession(
 	encryptOpts []SessionEncryption,
 	schemeOpts []AuthenticationScheme,
 	authenticate func(context.Context, Identity, Authentication) (*AuthenticationResult, error),
-	register func(context.Context, Node, *ServerChannel) (Node, error)) error {
+	register func(context.Context, Node, *ServerChannel) (Node, error)) (err error) {
 
 	if err := c.validateEstablishSessionParams(compOpts, encryptOpts, authenticate, register); err != nil {
 		return err
@@ -217,6 +220,12 @@ func (c *ServerChannel) EstablishSession(
 		slog.Error("Failed to receive new session", "error", err)
 		return err
 	}
+
+	ctx, span := tracing.StartSpan(tracing.ExtractContext(ctx, ses), ses, "ServerChannel.EstablishSession", trace.WithSpanKind(trace.SpanKindServer))
+	defer func() {
+		setChannelTags(span, c.channel)
+		finishEnvelopeSpan(span, &err, &Session{Envelope: Envelope{ID: c.sessionID}, State: c.State()})
+	}()
 
 	if err := c.validateSessionID(ctx, ses); err != nil {
 		return err

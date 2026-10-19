@@ -18,7 +18,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/takenet/lime-go/codec"
 	"github.com/takenet/lime-go/protocol"
+	"github.com/takenet/lime-go/tracing"
 	"github.com/takenet/lime-go/transport"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -213,6 +216,7 @@ func (t *ClientTransport) Send(ctx context.Context, envelope protocol.EnvelopeVa
 		return fmt.Errorf("iris http transport: build request: %w", err)
 	}
 	request.Header = t.requestHeaders(initialSession)
+	propagation.TraceContext{}.Inject(ctx, propagation.HeaderCarrier(request.Header))
 	if initialSession {
 		if err := t.prepareSession(ctx, request.Header); err != nil {
 			return err
@@ -243,6 +247,7 @@ func (t *ClientTransport) Send(ctx context.Context, envelope protocol.EnvelopeVa
 	if err != nil {
 		return fmt.Errorf("iris http transport: decode %s response: %w", endpoint, err)
 	}
+	inheritHTTPContext(context.Background(), response.Header, result)
 	if session, ok := result.(*protocol.Session); ok {
 		t.storeLimeSession(session)
 	}
@@ -374,6 +379,7 @@ func (t *ClientTransport) ServeHTTP(writer http.ResponseWriter, request *http.Re
 		return
 	}
 
+	inheritHTTPContext(request.Context(), request.Header, envelope)
 	if command, ok := envelope.(*protocol.RequestCommand); ok && command.ID != "" {
 		t.handleCommandCallback(writer, request, command)
 		return
@@ -481,7 +487,21 @@ func (t *ClientTransport) pollEndpoint(ctx context.Context, endpoint string) (pr
 	if len(body) == 0 {
 		return nil, nil
 	}
-	return codec.UnmarshalEnvelope(body)
+	envelope, err := codec.UnmarshalEnvelope(body)
+	if err == nil {
+		inheritHTTPContext(context.Background(), response.Header, envelope)
+	}
+	return envelope, err
+}
+
+func inheritHTTPContext(ctx context.Context, headers http.Header, envelope protocol.EnvelopeValue) {
+	if trace.SpanContextFromContext(tracing.ExtractContext(context.Background(), envelope)).IsValid() {
+		return
+	}
+	if !trace.SpanContextFromContext(ctx).IsValid() {
+		ctx = propagation.TraceContext{}.Extract(ctx, propagation.HeaderCarrier(headers))
+	}
+	tracing.InjectContext(ctx, envelope)
 }
 
 type pollResult struct {

@@ -30,7 +30,7 @@ func tracingRecorder(t *testing.T) *tracetest.SpanRecorder {
 }
 
 func TestChannelSendsPropagateContext(t *testing.T) {
-	tracingRecorder(t)
+	recorder := tracingRecorder(t)
 	ctx, span := otel.Tracer("test").Start(context.Background(), "send")
 	defer span.End()
 	for _, preserve := range []bool{false, true} {
@@ -79,7 +79,9 @@ func TestChannelSendsPropagateContext(t *testing.T) {
 				} else {
 					extracted := trace.SpanContextFromContext(tracing.ExtractContext(context.Background(), received))
 					require.Equal(t, span.SpanContext().TraceID(), extracted.TraceID())
-					require.Equal(t, span.SpanContext().SpanID(), extracted.SpanID())
+					ended := recorder.Ended()[len(recorder.Ended())-1]
+					require.Equal(t, span.SpanContext().SpanID(), ended.Parent().SpanID())
+					require.Equal(t, ended.SpanContext().SpanID(), extracted.SpanID())
 				}
 			})
 		}
@@ -148,6 +150,82 @@ func TestMuxRestoresRemoteParentAndRecordsErrors(t *testing.T) {
 	}
 }
 
+func TestSessionTracingPreservesCallerAndIsolatesEnvelopes(t *testing.T) {
+	recorder := tracingRecorder(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	callerCtx, caller := otel.Tracer("test").Start(ctx, "caller")
+	defer caller.End()
+	local, remote := newInProcessTransportPair("localhost", 4)
+	client := NewClientChannel(local, 4)
+	defer silentClose(client)
+	server := NewServerChannel(remote, 4, protocol.ParseNode("postmaster@example.com/server"), "session")
+	defer silentClose(server)
+	serverDone := make(chan error, 1)
+	authContext := make(chan trace.SpanContext, 1)
+	go func() {
+		serverDone <- server.EstablishSession(ctx,
+			[]SessionCompression{SessionCompressionNone}, []SessionEncryption{SessionEncryptionNone},
+			[]AuthenticationScheme{AuthenticationSchemeGuest},
+			func(ctx context.Context, _ Identity, _ Authentication) (*AuthenticationResult, error) {
+				authContext <- trace.SpanContextFromContext(ctx)
+				return MemberAuthenticationResult(), nil
+			},
+			func(_ context.Context, node Node, _ *ServerChannel) (Node, error) { return node, nil })
+	}()
+	session, err := client.EstablishSession(callerCtx, NoneCompressionSelector, NoneEncryptionSelector,
+		Identity{Name: "client", Domain: "example.com"}, GuestAuthenticator, "instance")
+	require.NoError(t, err)
+	require.Equal(t, SessionStateEstablished, session.State)
+	require.NoError(t, <-serverDone)
+	require.Equal(t, caller.SpanContext().TraceID(), (<-authContext).TraceID())
+	require.GreaterOrEqual(t, len(recorder.Ended()), 6)
+	for _, span := range recorder.Ended() {
+		require.Equal(t, caller.SpanContext().TraceID(), span.SpanContext().TraceID())
+		if span.Name() == "ClientChannel.EstablishSession" {
+			require.Equal(t, caller.SpanContext().SpanID(), span.Parent().SpanID())
+		}
+	}
+	require.Equal(t, caller.SpanContext().TraceID(), trace.SpanContextFromContext(tracing.ExtractContext(ctx, session)).TraceID())
+
+	var previous trace.TraceID
+	for range 2 {
+		message := createMessage()
+		require.NoError(t, client.SendMessage(ctx, message))
+		var received *Message
+		select {
+		case received = <-server.MsgChan():
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		parent := trace.SpanContextFromContext(tracing.ExtractContext(ctx, received))
+		require.True(t, parent.IsValid())
+		require.NotEqual(t, caller.SpanContext().TraceID(), parent.TraceID())
+		require.NotEqual(t, previous, parent.TraceID())
+		previous = parent.TraceID()
+	}
+}
+
+func TestHandlerTracingIndependentRootsAndHTTPFallback(t *testing.T) {
+	recorder := tracingRecorder(t)
+	var previous trace.TraceID
+	for _, metadata := range []map[string]string{nil, {tracing.TraceParent: "invalid"}} {
+		message := createMessage()
+		message.Metadata = metadata
+		_, span := startHandlerSpan(context.Background(), message, "receive")
+		require.True(t, span.SpanContext().IsValid())
+		require.NotEqual(t, previous, span.SpanContext().TraceID())
+		previous = span.SpanContext().TraceID()
+		span.End()
+	}
+	ctx, parent := otel.Tracer("test").Start(context.Background(), "http")
+	defer parent.End()
+	_, span := startHandlerSpan(ctx, createMessage(), "receive")
+	span.End()
+	ended := recorder.Ended()[2]
+	require.Equal(t, parent.SpanContext().SpanID(), ended.Parent().SpanID())
+}
+
 func TestProcessCommandTracing(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		t.Run(map[bool]string{false: "success", true: "failure"}[fail], func(t *testing.T) {
@@ -179,8 +257,8 @@ func TestProcessCommandTracing(t *testing.T) {
 			_, err := c.ProcessCommand(ctx, request)
 			require.NoError(t, err)
 			require.NoError(t, <-remoteDone)
-			require.Len(t, recorder.Ended(), 1)
-			ended := recorder.Ended()[0]
+			require.Len(t, recorder.Ended(), 2)
+			ended := recorder.Ended()[1]
 			require.Equal(t, trace.SpanKindClient, ended.SpanKind())
 			require.Equal(t, ended.SpanContext().SpanID(), trace.SpanContextFromContext(tracing.ExtractContext(ctx, request)).SpanID())
 			if fail {
