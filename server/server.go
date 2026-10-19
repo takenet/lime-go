@@ -161,7 +161,7 @@ func (srv *Server) handleChannel(ctx context.Context, c *ServerChannel) {
 	}
 
 	defer func() {
-		if c.Established() {
+		if c.State() == SessionStateEstablished {
 			// Do not use the shared context since it could be canceled
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()

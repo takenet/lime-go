@@ -113,7 +113,12 @@ func newChannel(t Transport, bufferSize int) *channel {
 }
 
 func (c *channel) Established() bool {
-	return c.State() == SessionStateEstablished && c.transport.Connected()
+	select {
+	case <-c.rcvDone:
+		return false
+	default:
+		return c.State() == SessionStateEstablished && c.transport.Connected()
+	}
 }
 
 func (c *channel) startReceiver() {

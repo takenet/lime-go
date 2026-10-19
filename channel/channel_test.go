@@ -57,6 +57,19 @@ func TestChannelEstablishedWhenTransportClosed(t *testing.T) {
 	assert.False(t, established)
 }
 
+func TestChannelEstablishedWhenReceiverStopped(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	transport, _ := newInProcessTransportPair("localhost", 1)
+	testChannel := newChannel(transport, 1)
+	defer silentClose(testChannel)
+	testChannel.setState(SessionStateEstablished)
+
+	testChannel.stopRcv.Do(testChannel.stopReceiver)
+
+	assert.True(t, transport.Connected())
+	assert.False(t, testChannel.Established())
+}
+
 func TestChannelSendMessageWhenEstablished(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)

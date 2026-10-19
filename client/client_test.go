@@ -574,6 +574,65 @@ func TestClientConnectionRetryReconnects(t *testing.T) {
 	})
 }
 
+func TestClientConnectionRetryAfterReceiverFailure(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	synctest.Test(t, func(t *testing.T) {
+		ctx := context.Background()
+		config := NewClientConfig()
+		failReceive := make(chan struct{})
+		attempts := 0
+		var firstTransport *lifecycleTransport
+		config.NewTransport = func(context.Context) (Transport, error) {
+			attempts++
+			transport, peer := inprocess.NewPair(InProcessAddr(t.Name()), 16)
+			require.NoError(t, peer.Send(ctx, &protocol.Session{State: SessionStateEstablished}))
+			if attempts != 1 {
+				return transport, nil
+			}
+			receives := 0
+			firstTransport = &lifecycleTransport{
+				Transport: transport,
+				receive: func(ctx context.Context) (protocol.EnvelopeValue, error) {
+					receives++
+					if receives == 1 {
+						return transport.Receive(ctx)
+					}
+					select {
+					case <-failReceive:
+						return nil, errors.New("receiver failed while transport remained connected")
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					}
+				},
+				close: func() { require.NoError(t, transport.Close()) },
+			}
+			return firstTransport, nil
+		}
+		client := &Client{config: config, mux: &EnvelopeMux{}, lock: make(chan struct{}, 1)}
+		defer func() {
+			client.stopListener()
+			if active := client.establishedChannel(); active != nil {
+				require.NoError(t, active.Close())
+			}
+			require.NoError(t, client.Close())
+		}()
+		require.NoError(t, client.Establish(ctx))
+		first := client.establishedChannel()
+		require.NotNil(t, first)
+		client.startListener()
+
+		close(failReceive)
+		synctest.Wait()
+
+		second := client.establishedChannel()
+		require.NotNil(t, second)
+		require.NotSame(t, first, second)
+		require.Equal(t, 2, attempts)
+		require.EqualValues(t, 1, firstTransport.closeCount.Load())
+		require.False(t, first.Established())
+	})
+}
+
 func TestClientNewClientMessage(t *testing.T) {
 	// Arrange
 	defer goleak.VerifyNone(t)
