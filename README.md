@@ -217,7 +217,7 @@ http.Handle("/lime/", callbackMux)
 
 sessionTransport := httptransport.Config{
     BaseURL:         "https://http.msging.net",
-    CallbackBaseURL: "https://bot.example.com/lime",
+    ReceiveBaseUri:  "https://bot.example.com/lime",
     CallbackMux:     callbackMux,
     CallbackHeaders: http.Header{"Authorization": {"Bearer callback-token"}},
     CallbackAuthenticator: func(r *http.Request) bool {

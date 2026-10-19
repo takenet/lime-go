@@ -50,7 +50,7 @@ const defaultMaxBodyBytes = 4 << 20
 // CallbackAuthenticator validates requests delivered by Iris to this transport.
 type CallbackAuthenticator func(*http.Request) bool
 
-// Config configures an Iris HTTP session transport. CallbackBaseURL selects
+// Config configures an Iris HTTP session transport. ReceiveBaseUri selects
 // callback delivery; without it, Receive starts polling until Close.
 // Headers authenticate outbound requests, CallbackHeaders are sent to callback
 // URLs, and CallbackAuthenticator independently validates incoming callbacks.
@@ -59,7 +59,7 @@ type Config struct {
 	Identity               protocol.Identity
 	HTTPClient             *http.Client
 	Headers                http.Header
-	CallbackBaseURL        string
+	ReceiveBaseUri         string
 	CallbackHeaders        http.Header
 	CallbackAuthenticator  CallbackAuthenticator
 	CallbackMux            *CallbackMux
@@ -131,7 +131,7 @@ func NewClientTransport(config Config) (*ClientTransport, error) {
 	}
 	if config.PresenceRoutingRule == "" {
 		config.PresenceRoutingRule = "instance"
-		if config.CallbackBaseURL != "" {
+		if config.ReceiveBaseUri != "" {
 			config.PresenceRoutingRule = "identity"
 		}
 	}
@@ -143,10 +143,10 @@ func NewClientTransport(config Config) (*ClientTransport, error) {
 			protocol.NotificationEventFailed,
 		}
 	}
-	if config.CallbackBaseURL != "" {
-		callbackURL, parseErr := url.Parse(config.CallbackBaseURL)
+	if config.ReceiveBaseUri != "" {
+		callbackURL, parseErr := url.Parse(config.ReceiveBaseUri)
 		if parseErr != nil || callbackURL.Host == "" || (callbackURL.Scheme != "http" && callbackURL.Scheme != "https") {
-			return nil, errors.New("iris http transport: CallbackBaseURL must be an absolute HTTP or HTTPS URL")
+			return nil, errors.New("iris http transport: ReceiveBaseUri must be an absolute HTTP or HTTPS URL")
 		}
 	}
 	config.Headers = config.Headers.Clone()
@@ -158,7 +158,7 @@ func NewClientTransport(config Config) (*ClientTransport, error) {
 	}
 	forwarded.Set(HeaderShouldStore, "true")
 	forwarded.Set(HeaderSessionIdentity, config.Identity.String())
-	if config.CallbackBaseURL != "" {
+	if config.ReceiveBaseUri != "" {
 		if err := validateCallbackHeaders(forwarded); err != nil {
 			return nil, err
 		}
@@ -175,9 +175,9 @@ func NewClientTransport(config Config) (*ClientTransport, error) {
 		pending:    make(map[string]chan *protocol.ResponseCommand),
 	}
 	client.pollContext, client.cancelPolling = context.WithCancel(context.Background())
-	if config.CallbackBaseURL != "" {
-		callbackBase, _ := url.Parse(config.CallbackBaseURL)
-		client.callbackBaseURL = strings.TrimRight(config.CallbackBaseURL, "/")
+	if config.ReceiveBaseUri != "" {
+		callbackBase, _ := url.Parse(config.ReceiveBaseUri)
+		client.callbackBaseURL = strings.TrimRight(config.ReceiveBaseUri, "/")
 		if config.CallbackMux != nil {
 			client.callbackPath = strings.TrimRight(callbackBase.Path, "/") + "/" + uuid.NewString()
 			client.callbackBaseURL = callbackBase.Scheme + "://" + callbackBase.Host + client.callbackPath
@@ -265,7 +265,7 @@ func (t *ClientTransport) Receive(ctx context.Context) (protocol.EnvelopeValue, 
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("iris http transport: receive: %w", err)
 	}
-	if t.config.CallbackBaseURL == "" {
+	if t.config.ReceiveBaseUri == "" {
 		t.startPolling()
 	}
 	select {

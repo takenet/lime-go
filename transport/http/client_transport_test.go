@@ -38,7 +38,7 @@ func TestClientTransportCallbackTraceContext(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			client, err := NewClientTransport(Config{BaseURL: "https://iris.example.com",
-				Identity: protocol.Identity{Name: "bot", Domain: "example.com"}, CallbackBaseURL: "https://bot.example.com/lime"})
+				Identity: protocol.Identity{Name: "bot", Domain: "example.com"}, ReceiveBaseUri: "https://bot.example.com/lime"})
 			require.NoError(t, err)
 			defer func() { _ = client.Close() }()
 			message := &protocol.Message{Envelope: protocol.Envelope{Metadata: map[string]string{tracing.TraceParent: test.metadata}}}
@@ -99,7 +99,7 @@ func TestClientTransportPostsSessionAndUsesSessionHeaders(t *testing.T) {
 	client, err := NewClientTransport(Config{
 		BaseURL:             server.URL,
 		Identity:            identity,
-		CallbackBaseURL:     "https://bot.example.com/lime",
+		ReceiveBaseUri:      "https://bot.example.com/lime",
 		SendSessionIDHeader: true,
 	})
 	require.NoError(t, err)
@@ -135,10 +135,10 @@ func TestClientTransportPostsSessionAndUsesSessionHeaders(t *testing.T) {
 func TestClientTransportCallbackCommandReturnsCorrelatedResponse(t *testing.T) {
 	callbackMux := NewCallbackMux()
 	client, err := NewClientTransport(Config{
-		BaseURL:         "https://iris.example.com",
-		Identity:        protocol.Identity{Name: "bot", Domain: "example.com"},
-		CallbackBaseURL: "https://bot.example.com/lime",
-		CallbackMux:     callbackMux,
+		BaseURL:        "https://iris.example.com",
+		Identity:       protocol.Identity{Name: "bot", Domain: "example.com"},
+		ReceiveBaseUri: "https://bot.example.com/lime",
+		CallbackMux:    callbackMux,
 	})
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
@@ -349,7 +349,7 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 			}
 			client, err := NewClientTransport(Config{
 				BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
-				CallbackBaseURL: callbackURL, MaxBodyBytes: 512,
+				ReceiveBaseUri: callbackURL, MaxBodyBytes: 512,
 				Headers:         http.Header{"Authorization": {"Bearer outbound"}, "X-Custom": {"forwarded"}},
 				CallbackHeaders: http.Header{"Authorization": {"Bearer callback"}},
 				HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
@@ -407,7 +407,7 @@ func TestClientTransportPresenceDefaultsAndHeaderIsolation(t *testing.T) {
 			callbacks := http.Header{"Authorization": {"Bearer callback=="}}
 			client, err := NewClientTransport(Config{
 				BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
-				CallbackBaseURL: test.callback, PresenceRoutingRule: test.rule, Headers: outbound, CallbackHeaders: callbacks,
+				ReceiveBaseUri: test.callback, PresenceRoutingRule: test.rule, Headers: outbound, CallbackHeaders: callbacks,
 			})
 			require.NoError(t, err)
 			defer func() { _ = client.Close() }()
@@ -439,7 +439,7 @@ func TestClientTransportRejectsAmbiguousCallbackHeaders(t *testing.T) {
 	} {
 		client, err := NewClientTransport(Config{
 			BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
-			CallbackBaseURL: "https://bot.example.com/lime", CallbackHeaders: headers,
+			ReceiveBaseUri: "https://bot.example.com/lime", CallbackHeaders: headers,
 		})
 		require.Error(t, err)
 		assert.Nil(t, client)
@@ -568,7 +568,7 @@ func TestClientTransportCallbackBounds(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			client, err := NewClientTransport(Config{
 				BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"}, MaxBodyBytes: 128,
-				CallbackBaseURL:       "https://bot.example.com/lime",
+				ReceiveBaseUri:        "https://bot.example.com/lime",
 				CallbackAuthenticator: func(request *http.Request) bool { return request.Header.Get("Authorization") == "Bearer callback" },
 			})
 			require.NoError(t, err)
@@ -624,7 +624,7 @@ func TestClientTransportReconnectResetsOldCallbackAndMuxDoesNotLeak(t *testing.T
 	}))
 	defer server.Close()
 	callbackMux := NewCallbackMux()
-	config := Config{BaseURL: server.URL, Identity: protocol.Identity{Name: "bot", Domain: "example.com"}, CallbackBaseURL: "https://bot.example.com/lime", CallbackMux: callbackMux}
+	config := Config{BaseURL: server.URL, Identity: protocol.Identity{Name: "bot", Domain: "example.com"}, ReceiveBaseUri: "https://bot.example.com/lime", CallbackMux: callbackMux}
 	first, err := NewClientTransport(config)
 	require.NoError(t, err)
 	defer func() { _ = first.Close() }()
@@ -664,7 +664,7 @@ func TestClientTransportReconnectResetsOldCallbackAndMuxDoesNotLeak(t *testing.T
 func TestClientTransportCanceledReceiveDoesNotConsumeQueuedEnvelope(t *testing.T) {
 	client, err := NewClientTransport(Config{
 		BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
-		CallbackBaseURL: "https://bot.example.com/lime",
+		ReceiveBaseUri: "https://bot.example.com/lime",
 	})
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
