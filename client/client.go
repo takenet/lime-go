@@ -16,8 +16,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/takenet/lime-go/channel"
+	"github.com/takenet/lime-go/tracing"
 	httptransport "github.com/takenet/lime-go/transport/http"
 	ws "github.com/takenet/lime-go/transport/websocket"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // Client allow the creation of a Lime connection with a server.
@@ -253,7 +256,14 @@ func (c *Client) stopListener() {
 	}
 }
 
-func (c *Client) buildChannel(ctx context.Context) (*ClientChannel, error) {
+func (c *Client) buildChannel(ctx context.Context) (result *ClientChannel, err error) {
+	ctx, span := otel.Tracer(tracing.InstrumentationName).Start(ctx, "Client.Connect")
+	defer func() {
+		if err != nil {
+			span.SetStatus(codes.Error, "Connection establishment failed")
+		}
+		span.End()
+	}()
 	transport, err := c.config.NewTransport(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("buildChannel: %w", err)

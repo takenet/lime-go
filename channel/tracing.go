@@ -5,10 +5,21 @@ import (
 	"reflect"
 
 	"github.com/takenet/lime-go/tracing"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
+
+func (c *channel) startSendSpan(ctx context.Context, envelope EnvelopeValue) (context.Context, trace.Span) {
+	if !trace.SpanContextFromContext(ctx).IsValid() {
+		ctx = tracing.ExtractContext(ctx, envelope)
+	}
+	ctx, span := otel.Tracer(tracing.InstrumentationName).Start(ctx, "Channel.Send", trace.WithSpanKind(trace.SpanKindProducer))
+	setChannelTags(span, c)
+	tracing.InjectContextIfAbsent(ctx, envelope)
+	return ctx, span
+}
 
 func startHandlerSpan(ctx context.Context, envelope EnvelopeValue, name string) (context.Context, trace.Span) {
 	ctx, span := tracing.StartSpan(tracing.ExtractContext(ctx, envelope), envelope, name, trace.WithSpanKind(trace.SpanKindConsumer))

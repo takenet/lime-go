@@ -254,7 +254,7 @@ func (c *channel) State() SessionState {
 	return c.state
 }
 
-func (c *channel) sendSession(ctx context.Context, ses *Session) error {
+func (c *channel) sendSession(ctx context.Context, ses *Session) (err error) {
 	if err := c.ensureTransportOK("send session"); err != nil {
 		return err
 	}
@@ -264,8 +264,9 @@ func (c *channel) sendSession(ctx context.Context, ses *Session) error {
 		return fmt.Errorf("send session: cannot do in the %v state", state)
 	}
 
-	tracing.InjectContextIfAbsent(ctx, ses)
-	err := c.transport.Send(ctx, ses)
+	ctx, span := c.startSendSpan(ctx, ses)
+	defer func() { finishEnvelopeSpan(span, &err, ses) }()
+	err = c.transport.Send(ctx, ses)
 	if err != nil {
 		return fmt.Errorf("send session: transport error: %w", err)
 	}
@@ -350,7 +351,7 @@ func (c *channel) Close() error {
 	return nil
 }
 
-func (c *channel) sendToTransport(ctx context.Context, e EnvelopeValue, action string) error {
+func (c *channel) sendToTransport(ctx context.Context, e EnvelopeValue, action string) (err error) {
 	if e == nil || reflect.ValueOf(e).IsNil() {
 		panic(fmt.Errorf("%v: envelope cannot be nil", action))
 	}
@@ -361,7 +362,8 @@ func (c *channel) sendToTransport(ctx context.Context, e EnvelopeValue, action s
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
 
-	tracing.InjectContextIfAbsent(ctx, e)
+	ctx, span := c.startSendSpan(ctx, e)
+	defer func() { finishEnvelopeSpan(span, &err, e) }()
 	if err := c.transport.Send(ctx, e); err != nil {
 		return fmt.Errorf("%v: %w", action, err)
 	}

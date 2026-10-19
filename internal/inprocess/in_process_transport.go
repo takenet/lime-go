@@ -21,20 +21,19 @@ type inProcessTransport struct {
 }
 
 func (t *inProcessTransport) Close() error {
+	t.closeLocal()
+	t.remote.closeLocal()
+	return nil
+}
+
+func (t *inProcessTransport) closeLocal() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	if !t.closed {
 		t.closed = true
-		t.done <- true
+		close(t.done)
 	}
-
-	if !t.remote.closed {
-		// We are not closing the envChan here to avoid panics on Send method
-		return t.remote.Close()
-	}
-
-	return nil
 }
 
 func (t *inProcessTransport) Send(_ context.Context, e EnvelopeValue) error {

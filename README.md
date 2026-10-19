@@ -248,10 +248,24 @@ export telemetry by itself.
 
 Channels propagate W3C `traceparent` and `tracestate` through envelope metadata
 when sending messages, notifications, commands, and sessions. Existing
-`traceparent` values are preserved. `EnvelopeMux` restores remote context and
-creates consumer spans around handlers; `ProcessCommand` creates a client span
-covering the request/response round trip. Errors are recorded on these spans.
-Ping commands do not create spans, but still propagate the caller's context.
+`traceparent` values are preserved. Each send creates a producer span, continuing
+the caller's trace (or the envelope's trace when there is no active caller), or
+starting a new trace when neither exists. `EnvelopeMux` restores remote context
+and creates consumer spans around handlers; `ProcessCommand` creates a client
+span covering the request/response round trip. Ping commands skip handler and
+round-trip spans, but still have send spans and propagate context.
+
+Connection attempts and session negotiation have bounded spans that continue
+an existing caller trace. Server negotiation prioritizes the initial session's
+metadata. These contexts are not retained by the session's receive loop, so
+unrelated envelopes without a parent start independent traces. Responses and
+other work explicitly sent with a handler's context remain in that handler's trace.
+
+HTTP callbacks prioritize valid envelope metadata, then the active HTTP request
+span or W3C HTTP headers. Poll and synchronous responses use W3C response headers
+as a fallback when envelope metadata has no valid parent. HTTP sends and session
+preflight propagate the active W3C context in request headers. Applications must
+configure a tracer provider to create spans. Errors are recorded on channel spans.
 
 For direct channel consumers or custom processing, start and end spans explicitly:
 

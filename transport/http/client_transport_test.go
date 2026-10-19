@@ -16,11 +16,61 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/takenet/lime-go/codec"
 	"github.com/takenet/lime-go/protocol"
+	"github.com/takenet/lime-go/tracing"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
+func TestClientTransportCallbackTraceContext(t *testing.T) {
+	const httpParent = "00-11111111111111111111111111111111-1111111111111111-01"
+	const envelopeParent = "00-22222222222222222222222222222222-2222222222222222-01"
+	const activeParent = "00-33333333333333333333333333333333-3333333333333333-01"
+	for _, test := range []struct {
+		name, metadata, header, active, want string
+	}{
+		{name: "HTTP header", header: httpParent, want: httpParent},
+		{name: "envelope wins", metadata: envelopeParent, header: httpParent, want: envelopeParent},
+		{name: "invalid envelope fallback", metadata: "invalid", header: httpParent, want: httpParent},
+		{name: "active HTTP span", header: httpParent, active: activeParent, want: activeParent},
+		{name: "envelope beats active span", metadata: envelopeParent, active: activeParent, want: envelopeParent},
+		{name: "invalid HTTP parent", header: "invalid"},
+		{name: "no parent"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client, err := NewClientTransport(Config{BaseURL: "https://iris.example.com",
+				Identity: protocol.Identity{Name: "bot", Domain: "example.com"}, CallbackBaseURL: "https://bot.example.com/lime"})
+			require.NoError(t, err)
+			defer func() { _ = client.Close() }()
+			message := &protocol.Message{Envelope: protocol.Envelope{Metadata: map[string]string{tracing.TraceParent: test.metadata}}}
+			content := protocol.TextDocument("hello")
+			message.SetContent(&content)
+			data, err := codec.MarshalEnvelope(message)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "/messages", bytes.NewReader(data))
+			request.Header.Set(tracing.TraceParent, test.header)
+			if test.active != "" {
+				ctx := propagation.TraceContext{}.Extract(request.Context(), propagation.MapCarrier{tracing.TraceParent: test.active})
+				request = request.WithContext(ctx)
+			}
+			response := httptest.NewRecorder()
+			client.ServeHTTP(response, request)
+			require.Equal(t, http.StatusAccepted, response.Code)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			received, err := client.Receive(ctx)
+			require.NoError(t, err)
+			actual := trace.SpanContextFromContext(tracing.ExtractContext(ctx, received))
+			expected := propagation.TraceContext{}.Extract(ctx, propagation.MapCarrier{tracing.TraceParent: test.want})
+			require.Equal(t, trace.SpanContextFromContext(expected), actual)
+		})
+	}
+}
+
 func TestClientTransportPostsSessionAndUsesSessionHeaders(t *testing.T) {
+	const parent = "00-11111111111111111111111111111111-1111111111111111-01"
 	requests := make(chan *http.Request, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		assert.Equal(t, parent, request.Header.Get(tracing.TraceParent))
 		if request.Method == http.MethodGet && request.URL.Path == "/sessions" {
 			writer.WriteHeader(http.StatusNotFound)
 			return
@@ -55,7 +105,8 @@ func TestClientTransportPostsSessionAndUsesSessionHeaders(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 
-	require.NoError(t, client.Send(context.Background(), &protocol.Session{State: protocol.SessionStateNew}))
+	ctx := propagation.TraceContext{}.Extract(context.Background(), propagation.MapCarrier{tracing.TraceParent: parent})
+	require.NoError(t, client.Send(ctx, &protocol.Session{State: protocol.SessionStateNew}))
 	envelope, err := client.Receive(context.Background())
 	require.NoError(t, err)
 	session, ok := envelope.(*protocol.Session)
@@ -65,7 +116,7 @@ func TestClientTransportPostsSessionAndUsesSessionHeaders(t *testing.T) {
 	message := &protocol.Message{}
 	content := protocol.TextDocument("hello")
 	message.SetContent(&content)
-	require.NoError(t, client.Send(context.Background(), message))
+	require.NoError(t, client.Send(ctx, message))
 
 	sessionRequest := <-requests
 	assert.Equal(t, "/sessions", sessionRequest.URL.Path)
@@ -141,9 +192,11 @@ func TestClientTransportCallbackCommandReturnsCorrelatedResponse(t *testing.T) {
 }
 
 func TestClientTransportPollsForIncomingEnvelope(t *testing.T) {
+	const parent = "00-11111111111111111111111111111111-1111111111111111-01"
 	var delivered atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method == http.MethodGet && request.URL.Path == "/messages" && delivered.CompareAndSwap(false, true) {
+			writer.Header().Set(tracing.TraceParent, parent)
 			message := &protocol.Message{}
 			content := protocol.TextDocument("from Iris")
 			message.SetContent(&content)
@@ -174,6 +227,7 @@ func TestClientTransportPollsForIncomingEnvelope(t *testing.T) {
 	require.NoError(t, err)
 	message, ok := envelope.(*protocol.Message)
 	require.True(t, ok)
+	require.Equal(t, parent, message.Metadata[tracing.TraceParent])
 	raw, ok := message.Content.(*protocol.TextDocument)
 	require.True(t, ok)
 	assert.Equal(t, protocol.TextDocument("from Iris"), *raw)
