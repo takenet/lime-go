@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -126,6 +127,54 @@ func TestInProcessTransportCloseWhenOpen(t *testing.T) {
 
 	// Assert
 	assert.NoError(t, err)
+}
+
+func TestInProcessTransportConcurrentClose(t *testing.T) {
+	client, server := newInProcessTransportPair(InProcessAddr(t.Name()), 1)
+	start := make(chan struct{})
+	results := make(chan error, 32)
+	for range 16 {
+		for _, transport := range []*inProcessTransport{client, server} {
+			go func() {
+				<-start
+				results <- transport.Close()
+			}()
+		}
+	}
+	close(start)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for range 32 {
+		select {
+		case err := <-results:
+			assert.NoError(t, err)
+		case <-ctx.Done():
+			t.Fatal("concurrent close did not complete")
+		}
+	}
+	assert.False(t, client.Connected())
+	assert.False(t, server.Connected())
+}
+
+func TestInProcessTransportCloseUnblocksAllReceivers(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		client, server := newInProcessTransportPair(InProcessAddr(t.Name()), 1)
+		results := make(chan error, 8)
+		for range 4 {
+			for _, transport := range []*inProcessTransport{client, server} {
+				go func() {
+					_, err := transport.Receive(context.Background())
+					results <- err
+				}()
+			}
+		}
+		synctest.Wait()
+		assert.NoError(t, client.Close())
+		synctest.Wait()
+		for range 8 {
+			assert.Error(t, <-results)
+		}
+	})
 }
 
 func TestInProcessTransportSendSession(t *testing.T) {
