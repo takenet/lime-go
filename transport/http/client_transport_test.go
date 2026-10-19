@@ -641,7 +641,7 @@ func TestClientTransportReconnectResetsOldCallbackAndMuxDoesNotLeak(t *testing.T
 	require.NoError(t, second.Send(context.Background(), &protocol.Session{State: protocol.SessionStateNew}))
 	post := <-posts
 	assert.Equal(t, "reset", post.Get(HeaderSession))
-	assert.Equal(t, second.callbackBaseURL+"/messages", post.Get(HeaderSessionMessageURL))
+	assert.Equal(t, second.receiveBaseUri+"/messages", post.Get(HeaderSessionMessageURL))
 	assert.Len(t, callbackMux.transports, 1)
 	assert.Same(t, second, callbackMux.transports[second.callbackPath])
 	oldResponse := httptest.NewRecorder()

@@ -80,18 +80,18 @@ type Config struct {
 // Polling uses a bounded inbox and survives Receive cancellation. Close cancels
 // and joins the pollers; a custom HTTPClient must honor request contexts.
 type ClientTransport struct {
-	config          Config
-	baseURL         *url.URL
-	callbackBaseURL string
-	callbackPath    string
-	httpClient      *http.Client
-	incoming        chan pollResult
-	done            chan struct{}
-	closeOnce       sync.Once
-	pollContext     context.Context
-	cancelPolling   context.CancelFunc
-	pollers         sync.WaitGroup
-	polling         bool
+	config         Config
+	baseURL        *url.URL
+	receiveBaseUri string
+	callbackPath   string
+	httpClient     *http.Client
+	incoming       chan pollResult
+	done           chan struct{}
+	closeOnce      sync.Once
+	pollContext    context.Context
+	cancelPolling  context.CancelFunc
+	pollers        sync.WaitGroup
+	polling        bool
 
 	mu            sync.RWMutex
 	closed        bool
@@ -177,10 +177,10 @@ func NewClientTransport(config Config) (*ClientTransport, error) {
 	client.pollContext, client.cancelPolling = context.WithCancel(context.Background())
 	if config.ReceiveBaseUri != "" {
 		callbackBase, _ := url.Parse(config.ReceiveBaseUri)
-		client.callbackBaseURL = strings.TrimRight(config.ReceiveBaseUri, "/")
+		client.receiveBaseUri = strings.TrimRight(config.ReceiveBaseUri, "/")
 		if config.CallbackMux != nil {
 			client.callbackPath = strings.TrimRight(callbackBase.Path, "/") + "/" + uuid.NewString()
-			client.callbackBaseURL = callbackBase.Scheme + "://" + callbackBase.Host + client.callbackPath
+			client.receiveBaseUri = callbackBase.Scheme + "://" + callbackBase.Host + client.callbackPath
 			config.CallbackMux.register(client.callbackPath, client)
 		}
 	}
@@ -530,8 +530,8 @@ func (t *ClientTransport) requestHeaders(initialSession bool) http.Header {
 		} else {
 			headers.Set(HeaderSessionExpiration, "-1")
 		}
-		if t.callbackBaseURL != "" {
-			base := strings.TrimRight(t.callbackBaseURL, "/")
+		if t.receiveBaseUri != "" {
+			base := strings.TrimRight(t.receiveBaseUri, "/")
 			headers.Set(HeaderSessionMessageURL, base+"/messages")
 			headers.Set(HeaderSessionNotificationURL, base+"/notifications")
 			headers.Set(HeaderSessionCommandURL, base+"/commands")
