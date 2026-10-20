@@ -499,7 +499,11 @@ func sessionHeadersEqual(expected, actual http.Header) bool {
 	} {
 		wanted := strings.Join(expected.Values(key), ",")
 		got := strings.Join(actual.Values(key), ",")
-		if strings.HasSuffix(key, "-Url") || strings.HasSuffix(key, "-Headers") {
+		if strings.HasSuffix(key, "-Url") {
+			if !sessionURLsEqual(wanted, got) {
+				return false
+			}
+		} else if strings.HasSuffix(key, "-Headers") {
 			if wanted != got {
 				return false
 			}
@@ -508,6 +512,31 @@ func sessionHeadersEqual(expected, actual http.Header) bool {
 		}
 	}
 	return true
+}
+
+func sessionURLsEqual(expected, actual string) bool {
+	if expected == actual {
+		return true
+	}
+	expectedURL, err := url.Parse(expected)
+	if err != nil || expectedURL.Host == "" {
+		return false
+	}
+	actualURL, err := url.Parse(actual)
+	if err != nil || actualURL.Host == "" {
+		return false
+	}
+	for _, callbackURL := range []*url.URL{expectedURL, actualURL} {
+		if callbackURL.Port() == "" {
+			switch callbackURL.Scheme {
+			case "http":
+				callbackURL.Host = net.JoinHostPort(callbackURL.Hostname(), "80")
+			case "https":
+				callbackURL.Host = net.JoinHostPort(callbackURL.Hostname(), "443")
+			}
+		}
+	}
+	return expectedURL.String() == actualURL.String()
 }
 
 func (t *ClientTransport) endpointURL(endpoint string) string {

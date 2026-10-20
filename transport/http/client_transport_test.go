@@ -243,16 +243,39 @@ func TestClientTransportReceiveDoesNotMakeHTTPRequests(t *testing.T) {
 
 func TestClientTransportSessionPreflight(t *testing.T) {
 	tests := []struct {
-		name      string
-		status    int
-		body      string
-		mutate    func(http.Header)
-		wantReset bool
-		wantError bool
-		oneWay    bool
+		name        string
+		status      int
+		body        string
+		mutate      func(http.Header)
+		wantReset   bool
+		wantError   bool
+		oneWay      bool
+		callbackURL string
 	}{
 		{name: "matching established session"},
 		{name: "missing session", status: http.StatusNotFound},
+		{name: "HTTP default port canonicalized by Iris", callbackURL: "http://bot.example.com:80/lime", mutate: func(headers http.Header) {
+			for _, key := range []string{HeaderSessionMessageURL, HeaderSessionNotificationURL, HeaderSessionCommandURL} {
+				headers.Set(key, strings.Replace(headers.Get(key), ":80/", "/", 1))
+			}
+		}},
+		{name: "HTTPS default port canonicalized by Iris", callbackURL: "https://bot.example.com:443/lime", mutate: func(headers http.Header) {
+			for _, key := range []string{HeaderSessionMessageURL, HeaderSessionNotificationURL, HeaderSessionCommandURL} {
+				headers.Set(key, strings.Replace(headers.Get(key), ":443/", "/", 1))
+			}
+		}},
+		{name: "default port explicit in response", mutate: func(headers http.Header) {
+			headers.Set(HeaderSessionCommandURL, "https://bot.example.com:443/lime/commands")
+		}},
+		{name: "non-default port matters", mutate: func(headers http.Header) {
+			headers.Set(HeaderSessionCommandURL, "https://bot.example.com:8443/lime/commands")
+		}, wantReset: true},
+		{name: "callback scheme matters", mutate: func(headers http.Header) {
+			headers.Set(HeaderSessionCommandURL, "http://bot.example.com/lime/commands")
+		}, wantReset: true},
+		{name: "callback query matters", mutate: func(headers http.Header) {
+			headers.Set(HeaderSessionCommandURL, "https://bot.example.com/lime/commands?destination=other")
+		}, wantReset: true},
 		{name: "old callback", mutate: func(headers http.Header) {
 			headers.Set(HeaderSessionMessageURL, "https://bot.example.com/old/messages")
 		}, wantReset: true},
@@ -284,6 +307,9 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var methods []string
 			callbackURL := "https://bot.example.com/lime"
+			if test.callbackURL != "" {
+				callbackURL = test.callbackURL
+			}
 			if test.oneWay {
 				callbackURL = ""
 			}
@@ -331,6 +357,38 @@ func TestClientTransportSessionPreflight(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, []string{http.MethodGet, http.MethodPost}, methods)
 			assert.Equal(t, "new-http-session", client.sessionID())
+		})
+	}
+}
+
+func TestSessionURLsEqual(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		expected string
+		actual   string
+		want     bool
+	}{
+		{name: "empty callbacks", want: true},
+		{name: "HTTP default port", expected: "http://bot.example.com:80/commands", actual: "http://bot.example.com/commands", want: true},
+		{name: "HTTPS default port", expected: "https://bot.example.com/commands", actual: "https://bot.example.com:443/commands", want: true},
+		{name: "absolute DNS name", expected: "http://bot.example.com.:80/commands", actual: "http://bot.example.com./commands", want: true},
+		{name: "IPv6 default port", expected: "http://[::1]:80/commands", actual: "http://[::1]/commands", want: true},
+		{name: "IPv6 HTTPS default port", expected: "https://[::1]/commands", actual: "https://[::1]:443/commands", want: true},
+		{name: "non-default port", expected: "http://bot.example.com:8080/commands", actual: "http://bot.example.com/commands"},
+		{name: "port must match scheme", expected: "http://bot.example.com:443/commands", actual: "http://bot.example.com/commands"},
+		{name: "different host", expected: "http://bot.example.com:80/commands", actual: "http://other.example.com/commands"},
+		{name: "scheme matters", expected: "http://bot.example.com:80/commands", actual: "https://bot.example.com:443/commands"},
+		{name: "path case matters", expected: "http://bot.example.com:80/Commands", actual: "http://bot.example.com/commands"},
+		{name: "escaped slash matters", expected: "http://bot.example.com:80/lime%2Fcommands", actual: "http://bot.example.com/lime/commands"},
+		{name: "query case matters", expected: "http://bot.example.com:80/commands?key=value", actual: "http://bot.example.com/commands?key=VALUE"},
+		{name: "userinfo matters", expected: "http://first@bot.example.com:80/commands", actual: "http://second@bot.example.com/commands"},
+		{name: "invalid expected URL", expected: "%", actual: "http://bot.example.com/commands"},
+		{name: "invalid actual URL", expected: "http://bot.example.com/commands", actual: "%"},
+		{name: "relative expected URL", expected: "/commands", actual: "http://bot.example.com/commands"},
+		{name: "relative actual URL", expected: "http://bot.example.com/commands", actual: "/commands"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, sessionURLsEqual(test.expected, test.actual))
 		})
 	}
 }
