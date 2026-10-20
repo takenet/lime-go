@@ -21,6 +21,26 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+func TestCallbackMuxDoesNotGuessDirectEndpointSession(t *testing.T) {
+	for _, prefix := range []string{"", "/callbacks"} {
+		t.Run(prefix, func(t *testing.T) {
+			mux := NewCallbackMux()
+			settings := Config{BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"}, ReceiveBaseUri: "http://service.example.com" + prefix, CallbackMux: mux}
+			first, err := NewClientTransport(settings)
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = first.Close() })
+			for _, endpoint := range []string{"commands", "messages", "notifications"} {
+				response := httptest.NewRecorder()
+				mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, prefix+"/"+endpoint, nil))
+				require.Equal(t, http.StatusNotFound, response.Code)
+			}
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, prefix+"/health", nil))
+			require.Equal(t, http.StatusNotFound, response.Code)
+		})
+	}
+}
+
 func TestClientTransportCallbackTraceContext(t *testing.T) {
 	const httpParent = "00-11111111111111111111111111111111-1111111111111111-01"
 	const envelopeParent = "00-22222222222222222222222222222222-2222222222222222-01"

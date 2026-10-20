@@ -678,6 +678,16 @@ func TestClientNewClientMessage(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestClientBuilderUseTransport(t *testing.T) {
+	expected := errors.New("factory failure")
+	builder := NewClientBuilder().UseTransport(func(ctx context.Context) (Transport, error) {
+		require.NoError(t, ctx.Err())
+		return nil, expected
+	})
+	_, err := builder.config.NewTransport(context.Background())
+	require.ErrorIs(t, err, expected)
+}
+
 func TestNewClientBuilder(t *testing.T) {
 	// Act
 	builder := NewClientBuilder()

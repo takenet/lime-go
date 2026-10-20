@@ -526,16 +526,18 @@ func (b *ClientBuilder) UseWebsocket(urlStr string, requestHeader http.Header, t
 	return b
 }
 
+// UseTransport delegates transport creation to the host application.
+func (b *ClientBuilder) UseTransport(factory func(context.Context) (Transport, error)) *ClientBuilder {
+	b.config.NewTransport = factory
+	return b
+}
+
 // UseHTTPTransport configures a session-oriented connection through Iris HTTP.
 func (b *ClientBuilder) UseHTTPTransport(config httptransport.Config) *ClientBuilder {
-	b.config.Authenticator = func([]AuthenticationScheme, Authentication) Authentication {
-		return &TransportAuthentication{}
-	}
-	b.config.NewTransport = func(context.Context) (Transport, error) {
+	return b.TransportAuthentication().UseTransport(func(context.Context) (Transport, error) {
 		config.Identity = b.config.Node.Identity
 		return httptransport.NewClientTransport(config)
-	}
-	return b
+	})
 }
 
 // GuestAuthentication enables the use of the guest authentication scheme during the session establishment with the server.
