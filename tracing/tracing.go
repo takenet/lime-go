@@ -104,8 +104,8 @@ func CopyContext(from, to protocol.EnvelopeValue) {
 // StartSpan starts an envelope-aware span, preferring ctx's active parent over
 // metadata. To prioritize metadata, pass ExtractContext(ctx, envelope) as ctx.
 // It sets Lime.Protocol tags and injects the new context into the envelope.
-// Success is left unset until SetEnvelopeTags is called after processing, so
-// a later processing error can still take precedence over protocol success.
+// Status is left unset until processing finishes, so handler and I/O errors
+// take precedence over the result carried by the envelope.
 // Nil envelopes and ping commands return a no-op span and do not mutate metadata.
 func StartSpan(ctx context.Context, value protocol.EnvelopeValue, name string, options ...trace.SpanStartOption) (context.Context, trace.Span) {
 	if envelopeOf(value) == nil || isPing(value) {
@@ -142,10 +142,16 @@ func enumName(value string) string {
 	return strings.ToUpper(value[:1]) + value[1:]
 }
 
-// SetEnvelopeTags applies the same attribute keys, enum names and statuses as
-// Lime.Protocol. It never records envelope bodies, metadata or authentication.
+// SetEnvelopeTags records envelope attributes and the protocol operation result.
+// Expected command rejections leave status unset; unknown failures remain errors.
 func SetEnvelopeTags(span trace.Span, value protocol.EnvelopeValue) {
 	setEnvelopeTags(span, value, true)
+}
+
+// SetEnvelopeAttributes records envelope attributes without changing span status.
+// Use it when processing or transmitting an envelope, rather than executing it.
+func SetEnvelopeAttributes(span trace.Span, value protocol.EnvelopeValue) {
+	setEnvelopeTags(span, value, false)
 }
 
 func setEnvelopeTags(span trace.Span, value protocol.EnvelopeValue, completed bool) {
@@ -183,7 +189,19 @@ func setEnvelopeTags(span trace.Span, value protocol.EnvelopeValue, completed bo
 			status = "Pending"
 		}
 		setCommandTags(span, &typed.Command, status)
-		setStatus(span, typed.Status == protocol.CommandStatusFailure, !completed || status == "Pending", typed.Reason)
+		if typed.Reason != nil {
+			span.SetAttributes(attribute.Int("lime.command.reason.code", typed.Reason.Code))
+		}
+		if typed.Status == protocol.CommandStatusFailure {
+			outcome := commandFailureOutcome(typed.Reason)
+			span.SetAttributes(attribute.String("lime.command.outcome", outcome))
+			if outcome == "error" {
+				setStatus(span, true, !completed, typed.Reason)
+			}
+		} else {
+			span.SetAttributes(attribute.String("lime.command.outcome", strings.ToLower(status)))
+			setStatus(span, false, !completed || status == "Pending", typed.Reason)
+		}
 	}
 	span.SetAttributes(attribute.String("lime.envelope.type", envelopeType), attribute.String("lime.envelope.id", envelope.ID))
 	if envelope.From != (protocol.Node{}) {
@@ -205,14 +223,35 @@ func setCommandTags(span trace.Span, command *protocol.Command, status string) {
 	}
 }
 
+func commandFailureOutcome(reason *protocol.Reason) string {
+	if reason != nil {
+		switch reason.Code {
+		case protocol.ReasonCodeCommandResourceNotFound:
+			return "not_found"
+		case protocol.ReasonCodeCommandInvalidArgument:
+			return "invalid"
+		case protocol.ReasonCodeCommandNotAllowed:
+			return "forbidden"
+		case protocol.ReasonCodeCommandResourceNotSupported:
+			return "unsupported_resource"
+		case protocol.ReasonCodeCommandMethodNotSupported:
+			return "unsupported_method"
+		}
+	}
+	return "error"
+}
+
 func setStatus(span trace.Span, failed, pending bool, reason *protocol.Reason) {
+	if pending {
+		return
+	}
 	if failed {
 		description := "Code : "
 		if reason != nil {
 			description = fmt.Sprintf("Code %d: %s", reason.Code, reason.Description)
 		}
 		span.SetStatus(codes.Error, description)
-	} else if !pending {
+	} else {
 		span.SetStatus(codes.Ok, "")
 	}
 }

@@ -93,7 +93,7 @@ func (m *EnvelopeMux) receiveAndHandle(ctx context.Context, c *channel) error {
 
 func (m *EnvelopeMux) handleMessage(ctx context.Context, msg *Message, s Sender) (err error) {
 	ctx, span := startHandlerSpan(ctx, msg, "MessageProcessor.Handle")
-	defer finishEnvelopeSpan(span, &err, msg)
+	defer finishProcessingSpan(span, &err, msg)
 	for _, handlers := range [][]MessageHandler{m.msgHandlers, m.defaultMsgHandlers} {
 		for _, h := range handlers {
 			if !h.Match(msg) {
@@ -110,7 +110,7 @@ func (m *EnvelopeMux) handleMessage(ctx context.Context, msg *Message, s Sender)
 
 func (m *EnvelopeMux) handleNotification(ctx context.Context, not *Notification) (err error) {
 	ctx, span := startHandlerSpan(ctx, not, "NotificationProcessor.Handle")
-	defer finishEnvelopeSpan(span, &err, not)
+	defer finishProcessingSpan(span, &err, not)
 	for _, handlers := range [][]NotificationHandler{m.notHandlers, m.defaultNotHandlers} {
 		for _, h := range handlers {
 			if !h.Match(not) {
@@ -127,7 +127,7 @@ func (m *EnvelopeMux) handleNotification(ctx context.Context, not *Notification)
 
 func (m *EnvelopeMux) handleRequestCommand(ctx context.Context, cmd *RequestCommand, s Sender) (err error) {
 	ctx, span := startHandlerSpan(ctx, cmd, "RequestCommandProcessor.Handle")
-	defer finishEnvelopeSpan(span, &err, cmd)
+	defer finishProcessingSpan(span, &err, cmd)
 	for _, handlers := range [][]RequestCommandHandler{m.reqCmdHandlers, m.defaultReqCmdHandlers} {
 		for _, h := range handlers {
 			if !h.Match(cmd) {
@@ -144,7 +144,7 @@ func (m *EnvelopeMux) handleRequestCommand(ctx context.Context, cmd *RequestComm
 
 func (m *EnvelopeMux) handleResponseCommand(ctx context.Context, cmd *ResponseCommand, s Sender) (err error) {
 	ctx, span := startHandlerSpan(ctx, cmd, "ResponseCommandProcessor.Handle")
-	defer finishEnvelopeSpan(span, &err, cmd)
+	defer finishProcessingSpan(span, &err, cmd)
 	for _, h := range m.respCmdHandlers {
 		if !h.Match(cmd) {
 			continue

@@ -52,6 +52,11 @@ func setChannelTags(span trace.Span, c *channel) {
 	span.SetAttributes(attribute.String("lime.transport.type", transportType.Name()))
 }
 
+func finishProcessingSpan(span trace.Span, err *error, envelope EnvelopeValue) {
+	tracing.SetEnvelopeAttributes(span, envelope)
+	finishEnvelopeSpan(span, err, nil)
+}
+
 func finishEnvelopeSpan(span trace.Span, err *error, envelope EnvelopeValue) {
 	if *err != nil {
 		span.RecordError(*err)

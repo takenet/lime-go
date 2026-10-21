@@ -10,6 +10,7 @@ import (
 	"github.com/takenet/lime-go/protocol"
 	"github.com/takenet/lime-go/tracing"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -85,6 +86,43 @@ func TestChannelSendsPropagateContext(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestFailureResponseDeliveryIsNotProcessingFailure(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		code int
+	}{
+		{"not found", protocol.ReasonCodeCommandResourceNotFound},
+		{"processing error", protocol.ReasonCodeCommandProcessingError},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := tracingRecorder(t)
+			local, remote := newInProcessTransportPair("localhost", 1)
+			client := newChannel(local, 1)
+			defer silentClose(client)
+			client.setState(SessionStateEstablished)
+			request := createGetPingCommand()
+			response := request.FailureResponse(&Reason{Code: test.code, Description: "failure response"})
+			require.NoError(t, client.SendResponseCommand(context.Background(), response))
+			received, err := remote.Receive(context.Background())
+			require.NoError(t, err)
+			require.Same(t, response, received)
+			mux := &EnvelopeMux{}
+			require.NoError(t, mux.handleResponseCommand(context.Background(), response, nil))
+			require.Len(t, recorder.Ended(), 2)
+			for _, span := range recorder.Ended() {
+				require.Equal(t, codes.Unset, span.Status().Code)
+				require.Empty(t, span.Events())
+				require.Contains(t, span.Attributes(), attribute.Int("lime.command.reason.code", test.code))
+			}
+			_, span := otel.Tracer("test").Start(context.Background(), "failed send")
+			sendErr := errors.New("transport failed")
+			finishProcessingSpan(span, &sendErr, response)
+			require.Equal(t, codes.Error, recorder.Ended()[2].Status().Code)
+			require.Len(t, recorder.Ended()[2].Events(), 1)
+		})
 	}
 }
 

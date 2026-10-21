@@ -270,7 +270,7 @@ func (c *channel) sendSession(ctx context.Context, ses *Session) (err error) {
 	}
 
 	ctx, span := c.startSendSpan(ctx, ses)
-	defer func() { finishEnvelopeSpan(span, &err, ses) }()
+	defer func() { finishProcessingSpan(span, &err, ses) }()
 	err = c.transport.Send(ctx, ses)
 	if err != nil {
 		return fmt.Errorf("send session: transport error: %w", err)
@@ -368,7 +368,7 @@ func (c *channel) sendToTransport(ctx context.Context, e EnvelopeValue, action s
 	defer c.sendMu.Unlock()
 
 	ctx, span := c.startSendSpan(ctx, e)
-	defer func() { finishEnvelopeSpan(span, &err, e) }()
+	defer func() { finishProcessingSpan(span, &err, e) }()
 	if err := c.transport.Send(ctx, e); err != nil {
 		return fmt.Errorf("%v: %w", action, err)
 	}

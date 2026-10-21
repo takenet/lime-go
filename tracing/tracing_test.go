@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/takenet/lime-go/protocol"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -117,6 +118,44 @@ func TestEnvelopeTags(t *testing.T) {
 	}
 }
 
+func TestCommandFailureClassification(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		reason  *protocol.Reason
+		outcome string
+		status  codes.Code
+	}{
+		{"not found", &protocol.Reason{Code: protocol.ReasonCodeCommandResourceNotFound}, "not_found", codes.Unset},
+		{"invalid", &protocol.Reason{Code: protocol.ReasonCodeCommandInvalidArgument}, "invalid", codes.Unset},
+		{"forbidden", &protocol.Reason{Code: protocol.ReasonCodeCommandNotAllowed}, "forbidden", codes.Unset},
+		{"unsupported resource", &protocol.Reason{Code: protocol.ReasonCodeCommandResourceNotSupported}, "unsupported_resource", codes.Unset},
+		{"unsupported method", &protocol.Reason{Code: protocol.ReasonCodeCommandMethodNotSupported}, "unsupported_method", codes.Unset},
+		{"processing error", &protocol.Reason{Code: protocol.ReasonCodeCommandProcessingError}, "error", codes.Error},
+		{"unknown failure", &protocol.Reason{Code: 42}, "error", codes.Error},
+		{"missing reason", nil, "error", codes.Error},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := provider(t)
+			response := &protocol.ResponseCommand{Status: protocol.CommandStatusFailure, Reason: test.reason}
+			_, span := StartSpan(context.Background(), response, "execute")
+			require.Equal(t, codes.Unset, span.(sdktrace.ReadWriteSpan).Status().Code)
+			SetEnvelopeTags(span, response)
+			span.End()
+			ended := recorder.Ended()[0]
+			require.Equal(t, test.status, ended.Status().Code)
+			require.Contains(t, ended.Attributes(), attribute.String("lime.command.status", "Failure"))
+			require.Contains(t, ended.Attributes(), attribute.String("lime.command.outcome", test.outcome))
+			if test.reason != nil {
+				require.Contains(t, ended.Attributes(), attribute.Int("lime.command.reason.code", test.reason.Code))
+			}
+			_, transportSpan := otel.Tracer("test").Start(context.Background(), "send")
+			SetEnvelopeAttributes(transportSpan, response)
+			transportSpan.End()
+			require.Equal(t, codes.Unset, recorder.Ended()[1].Status().Code)
+		})
+	}
+}
+
 func TestContextPropagation(t *testing.T) {
 	provider(t)
 	ctx, span := otel.Tracer("test").Start(context.Background(), "parent")
@@ -160,6 +199,8 @@ func TestNoopAndNilSafety(t *testing.T) {
 		CopyContext(value, nil)
 		SetEnvelopeTags(span, value)
 		SetEnvelopeTags(nil, value)
+		SetEnvelopeAttributes(span, value)
+		SetEnvelopeAttributes(nil, value)
 		require.False(t, span.IsRecording())
 	}
 	require.Empty(t, recorder.Ended())

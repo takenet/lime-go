@@ -268,6 +268,16 @@ as a fallback when envelope metadata has no valid parent. HTTP sends and session
 preflight propagate the active W3C context in request headers. Applications must
 configure a tracer provider to create spans. Errors are recorded on channel spans.
 
+Send and envelope-handler spans describe transmission and handling, not the
+success of the response payload. Successfully sending or handling a failure
+response does not mark those spans as errors; actual I/O and handler errors do.
+Command-operation spans retain `lime.command.status`, add numeric
+`lime.command.reason.code` and bounded `lime.command.outcome`, and leave known
+rejections (not found, invalid argument, forbidden, unsupported resource/method)
+unset. Processing and unknown failures remain errors. `SetEnvelopeTags` applies
+operation status; `SetEnvelopeAttributes` records the same attributes without
+changing status. These classifications do not change protocol responses.
+
 For direct channel consumers or custom processing, start and end spans explicitly:
 
 ```go
