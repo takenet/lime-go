@@ -70,20 +70,25 @@ type Config struct {
 	ReceiptEvents          []protocol.NotificationEvent
 	CallbackCommandTimeout time.Duration
 	MaxBodyBytes           int64
+	// Dispatch optionally processes business envelopes synchronously. It must
+	// honor ctx and use the established session. Responses still enter Receive.
+	Dispatch func(context.Context, protocol.EnvelopeValue) error
 }
 
 // ClientTransport implements transport.Transport over Iris HTTP sessions.
 // ServeHTTP receives two-way session callbacks and can be mounted on the
 // application HTTP server at the configured callback paths.
 type ClientTransport struct {
-	config         Config
-	baseURL        *url.URL
-	receiveBaseUri string
-	callbackPath   string
-	httpClient     *http.Client
-	incoming       chan protocol.EnvelopeValue
-	done           chan struct{}
-	closeOnce      sync.Once
+	config          Config
+	baseURL         *url.URL
+	receiveBaseUri  string
+	callbackPath    string
+	httpClient      *http.Client
+	incoming        chan protocol.EnvelopeValue
+	done            chan struct{}
+	closeOnce       sync.Once
+	dispatchContext context.Context
+	cancelDispatch  context.CancelFunc
 
 	mu            sync.RWMutex
 	closed        bool
@@ -152,13 +157,16 @@ func NewClientTransport(config Config) (*ClientTransport, error) {
 	config.CallbackHeaders = forwarded
 	config.ReceiptEvents = append([]protocol.NotificationEvent{}, config.ReceiptEvents...)
 
+	dispatchContext, cancelDispatch := context.WithCancel(context.Background())
 	client := &ClientTransport{
-		config:     config,
-		baseURL:    baseURL,
-		httpClient: config.HTTPClient,
-		incoming:   make(chan protocol.EnvelopeValue, 64),
-		done:       make(chan struct{}),
-		pending:    make(map[string]chan *protocol.ResponseCommand),
+		config:          config,
+		baseURL:         baseURL,
+		httpClient:      config.HTTPClient,
+		incoming:        make(chan protocol.EnvelopeValue, 64),
+		done:            make(chan struct{}),
+		pending:         make(map[string]chan *protocol.ResponseCommand),
+		dispatchContext: dispatchContext,
+		cancelDispatch:  cancelDispatch,
 	}
 	if config.ReceiveBaseUri != "" {
 		callbackBase, _ := url.Parse(config.ReceiveBaseUri)
@@ -226,6 +234,9 @@ func (t *ClientTransport) Send(ctx context.Context, envelope protocol.EnvelopeVa
 		return nil
 	}
 	if len(body) == 0 {
+		if endpoint == "commands" && response.StatusCode == http.StatusAccepted && t.receiveBaseUri != "" {
+			return nil
+		}
 		return fmt.Errorf("iris http transport: %s returned an empty response envelope", endpoint)
 	}
 	result, err := codec.UnmarshalEnvelope(body)
@@ -266,6 +277,7 @@ func (t *ClientTransport) Close() error {
 		t.closed = true
 		t.mu.Unlock()
 		close(t.done)
+		t.cancelDispatch()
 		if t.config.CallbackMux != nil {
 			t.config.CallbackMux.unregister(t.callbackPath, t)
 		}
@@ -364,7 +376,7 @@ func (t *ClientTransport) ServeHTTP(writer http.ResponseWriter, request *http.Re
 		t.handleCommandCallback(writer, request, command)
 		return
 	}
-	if err := t.enqueue(request.Context(), envelope); err != nil {
+	if err := t.dispatch(request.Context(), envelope); err != nil {
 		http.Error(writer, "transport is closed", http.StatusServiceUnavailable)
 		return
 	}
@@ -372,6 +384,8 @@ func (t *ClientTransport) ServeHTTP(writer http.ResponseWriter, request *http.Re
 }
 
 func (t *ClientTransport) handleCommandCallback(writer http.ResponseWriter, request *http.Request, command *protocol.RequestCommand) {
+	ctx, cancel := context.WithTimeout(request.Context(), t.config.CallbackCommandTimeout)
+	defer cancel()
 	responseChannel := make(chan *protocol.ResponseCommand, 1)
 	t.pendingMu.Lock()
 	if _, exists := t.pending[command.ID]; exists {
@@ -383,12 +397,18 @@ func (t *ClientTransport) handleCommandCallback(writer http.ResponseWriter, requ
 	t.pendingMu.Unlock()
 	defer t.removePending(command.ID, responseChannel)
 
-	if err := t.enqueue(request.Context(), command); err != nil {
-		http.Error(writer, "transport is closed", http.StatusServiceUnavailable)
+	if err := t.dispatch(ctx, command); err != nil {
+		status := http.StatusServiceUnavailable
+		if t.dispatchContext.Err() != nil {
+			status = http.StatusServiceUnavailable
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
+		} else if errors.Is(err, context.Canceled) {
+			status = http.StatusRequestTimeout
+		}
+		http.Error(writer, "command dispatch failed", status)
 		return
 	}
-	timeout := time.NewTimer(t.config.CallbackCommandTimeout)
-	defer timeout.Stop()
 	select {
 	case response := <-responseChannel:
 		data, err := codec.MarshalEnvelope(response)
@@ -399,13 +419,25 @@ func (t *ClientTransport) handleCommandCallback(writer http.ResponseWriter, requ
 		writer.Header().Set("Content-Type", "application/vnd.lime.command+json")
 		writer.WriteHeader(http.StatusOK)
 		_, _ = writer.Write(data)
-	case <-request.Context().Done():
-		http.Error(writer, request.Context().Err().Error(), http.StatusRequestTimeout)
-	case <-timeout.C:
-		http.Error(writer, "command response timeout", http.StatusGatewayTimeout)
+	case <-ctx.Done():
+		status := http.StatusGatewayTimeout
+		if request.Context().Err() != nil {
+			status = http.StatusRequestTimeout
+		}
+		http.Error(writer, "command response timeout", status)
 	case <-t.done:
 		http.Error(writer, "transport is closed", http.StatusServiceUnavailable)
 	}
+}
+
+func (t *ClientTransport) dispatch(ctx context.Context, envelope protocol.EnvelopeValue) error {
+	if _, response := envelope.(*protocol.ResponseCommand); !response && t.config.Dispatch != nil {
+		ctx, cancel := context.WithCancel(ctx)
+		stop := context.AfterFunc(t.dispatchContext, cancel)
+		defer func() { stop(); cancel() }()
+		return t.config.Dispatch(ctx, envelope)
+	}
+	return t.enqueue(ctx, envelope)
 }
 
 func inheritHTTPContext(ctx context.Context, headers http.Header, envelope protocol.EnvelopeValue) {

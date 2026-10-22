@@ -72,6 +72,19 @@ func (c *Client) LocalNode() (Node, bool) {
 	return c.channel.LocalNode(), true
 }
 
+// Dispatch handles an incoming decoded envelope on the calling goroutine.
+// Unlike queue delivery it preserves the caller's context and lifetime.
+// Response commands must be delivered through the transport for correlation.
+func (c *Client) Dispatch(ctx context.Context, envelope channel.EnvelopeValue) error {
+	c.mu.RLock()
+	channel := c.channel
+	c.mu.RUnlock()
+	if channel == nil {
+		return errors.New("client: no established session for dispatch")
+	}
+	return c.mux.DispatchClient(ctx, channel, envelope)
+}
+
 // Close stops the listener and finishes any established session with the server.
 func (c *Client) Close() error {
 	c.stopListener()
