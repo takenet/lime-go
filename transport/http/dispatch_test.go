@@ -176,7 +176,7 @@ func TestCommandEmptyAcknowledgmentRequiresAsyncCallbacks(t *testing.T) {
 			}
 			transport, err := NewClientTransport(settings)
 			require.NoError(t, err)
-			defer transport.Close()
+			t.Cleanup(func() { require.NoError(t, transport.Close()) })
 			uri, err := protocol.ParseLimeURI("/ping")
 			require.NoError(t, err)
 			command := &protocol.RequestCommand{Command: protocol.Command{

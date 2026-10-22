@@ -62,6 +62,7 @@ func TestDispatchClientRejectsInvalidInputsAndReturnsHandlerError(t *testing.T) 
 	defer silentClose(peer)
 	client := &ClientChannel{channel: &channel{transport: transport, state: SessionStateEstablished}}
 	ctx := context.Background()
+	//nolint:staticcheck // SA1012: intentionally test nil-context rejection.
 	require.Error(t, mux.DispatchClient(nil, client, &Message{}))
 	require.Error(t, mux.DispatchClient(ctx, nil, &Message{}))
 	require.Error(t, mux.DispatchClient(ctx, client, nil))
