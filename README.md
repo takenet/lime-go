@@ -236,6 +236,33 @@ For `AuthenticationSchemeTransport`, configure the supplied `http.Client` with
 the client certificate required by the Iris deployment. Callback URLs must be
 reachable by Iris and served over HTTPS in production.
 
+Hosts needing HTTP request-scoped execution may supply
+`transport/http.Config.Dispatch func(context.Context, protocol.EnvelopeValue) error`.
+It processes request commands, messages and notifications synchronously on the
+request goroutine. Route these through `Client.Dispatch`, which snapshots the
+established client channel, releases the client lock, attaches authoritative
+session metadata and invokes the same EnvelopeMux handlers as ordinary delivery.
+Publish the client safely before enabling callbacks; dispatch before session
+establishment fails explicitly. Handler registration must finish first.
+
+With `Dispatch` unset, HTTP delivery retains its existing queue behavior.
+Response commands always stay on that queue so the independent transport
+receiver can satisfy nested `ProcessCommand` calls while a business handler is
+running. `Client.Dispatch` rejects response/session envelopes. Command callback
+IDs are reserved before inline dispatch, duplicate IDs return HTTP 409, and
+request cancellation, callback timeout and transport closure cancel the dispatch
+context. Cancellation is cooperative: never retain host request objects or move
+request-bound handling to another goroutine.
+
+Outgoing request commands may receive an empty HTTP `202 Accepted` only when
+`ReceiveBaseUri` is configured. `ProcessCommand` then waits for the matching
+response envelope on `/commands`, under its caller's context/deadline. Empty
+synchronous responses and empty session responses remain errors.
+Asynchronous response callbacks must reach the instance that issued the command:
+`ProcessCommand` correlation is in memory. A shared load-balanced callback URL
+without instance affinity cannot reliably complete those waiters. Inline HTTP
+responses do not need this affinity.
+
 See the `http` package documentation and the `examples/http-iris/` directory
 for complete client and server examples.
 

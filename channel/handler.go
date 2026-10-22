@@ -48,6 +48,37 @@ func (m *EnvelopeMux) ListenClient(ctx context.Context, c *ClientChannel) error 
 	return nil
 }
 
+// DispatchClient handles a decoded incoming envelope synchronously using the
+// established client's session and the same handlers as ListenClient.
+// Handlers must be registered before concurrent dispatch begins.
+func (m *EnvelopeMux) DispatchClient(ctx context.Context, c *ClientChannel, envelope EnvelopeValue) error {
+	if ctx == nil || c == nil || c.channel == nil || envelope == nil {
+		return errors.New("dispatch client: context, channel and envelope are required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := c.ensureEstablished("dispatch"); err != nil {
+		return err
+	}
+	ctx = sessionContext(ctx, c.channel)
+	switch value := envelope.(type) {
+	case *Message:
+		if value != nil {
+			return m.handleMessage(ctx, value, c)
+		}
+	case *Notification:
+		if value != nil {
+			return m.handleNotification(ctx, value)
+		}
+	case *RequestCommand:
+		if value != nil {
+			return m.handleRequestCommand(ctx, value, c)
+		}
+	}
+	return errors.New("dispatch client: expected a non-nil message, notification or request command")
+}
+
 func (m *EnvelopeMux) listen(ctx context.Context, c *channel) error {
 	if err := c.ensureEstablished("receive"); err != nil {
 		return err
