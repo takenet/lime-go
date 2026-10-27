@@ -217,6 +217,99 @@ func (roundTrip roundTripFunc) RoundTrip(request *http.Request) (*http.Response,
 	return roundTrip(request)
 }
 
+func TestClientTransportSessionFailureClosesTransport(t *testing.T) {
+	content := protocol.TextDocument("hello")
+	for _, status := range []int{
+		http.StatusUnauthorized, http.StatusBadRequest, http.StatusForbidden,
+		http.StatusNotFound, http.StatusTooManyRequests, http.StatusInternalServerError,
+		http.StatusServiceUnavailable,
+	} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			for _, test := range []struct {
+				name     string
+				envelope protocol.EnvelopeValue
+			}{
+				{"message", &protocol.Message{Envelope: protocol.Envelope{ID: "message"}, Content: &content}},
+				{"notification", &protocol.Notification{Envelope: protocol.Envelope{ID: "notification"}, Event: protocol.NotificationEventReceived}},
+				{"command", (&protocol.RequestCommand{Envelope: protocol.Envelope{ID: "command"}, Method: protocol.CommandMethodGet}).SetURIString("/ping")},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					var requests atomic.Int32
+					client, err := NewClientTransport(Config{
+						BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
+						HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+							requests.Add(1)
+							return &http.Response{
+								StatusCode: status,
+								Body:       io.NopCloser(strings.NewReader(`{"code":4,"description":"rejected"}`)),
+								Header:     make(http.Header),
+							}, nil
+						})},
+					})
+					require.NoError(t, err)
+					t.Cleanup(func() { _ = client.Close() })
+					received := make(chan error, 1)
+					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+					defer cancel()
+					go func() {
+						_, receiveErr := client.Receive(ctx)
+						received <- receiveErr
+					}()
+
+					require.ErrorContains(t, client.Send(ctx, test.envelope), "returned status")
+					require.EqualValues(t, 1, requests.Load(), "failed envelopes must not be replayed")
+					if status == http.StatusUnauthorized {
+						require.False(t, client.Connected())
+						require.ErrorContains(t, <-received, "transport is closed")
+					} else {
+						require.True(t, client.Connected(), "business and transient failures must not force a new session")
+						cancel()
+						require.ErrorIs(t, <-received, context.Canceled)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestClientTransportUnauthorizedClosesBeforeReadingBody(t *testing.T) {
+	client, err := NewClientTransport(Config{
+		BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
+		MaxBodyBytes: 1,
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusUnauthorized,
+				Body:       io.NopCloser(strings.NewReader("too large")),
+				Header:     make(http.Header),
+			}, nil
+		})},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = client.Close() })
+	require.ErrorContains(t, client.Send(context.Background(), &protocol.Notification{Event: protocol.NotificationEventReceived}), "read notifications response")
+	require.False(t, client.Connected())
+}
+
+func TestClientTransportNetworkErrorsDoNotResetOrReplay(t *testing.T) {
+	for _, failure := range []error{errors.New("connection reset"), context.Canceled, context.DeadlineExceeded} {
+		t.Run(failure.Error(), func(t *testing.T) {
+			requests := 0
+			client, err := NewClientTransport(Config{
+				BaseURL: "https://iris.example.com", Identity: protocol.Identity{Name: "bot", Domain: "example.com"},
+				HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+					requests++
+					return nil, failure
+				})},
+			})
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = client.Close() })
+			require.ErrorIs(t, client.Send(context.Background(), &protocol.Notification{Event: protocol.NotificationEventReceived}), failure)
+			require.True(t, client.Connected())
+			require.Equal(t, 1, requests)
+		})
+	}
+}
+
 func TestClientTransportReceiveDoesNotMakeHTTPRequests(t *testing.T) {
 	var requests atomic.Int64
 	client, err := NewClientTransport(Config{

@@ -236,6 +236,20 @@ For `AuthenticationSchemeTransport`, configure the supplied `http.Client` with
 the client certificate required by the Iris deployment. Callback URLs must be
 reachable by Iris and served over HTTPS in production.
 
+The client reuses its established channel; business sends do not poll or
+renegotiate `/sessions`. Requests authenticate with `Http-Session-Identity`;
+`SendSessionIDHeader` is opt-in. Iris HTTP session IDs and LIME channel IDs are
+tracked separately.
+
+An outbound envelope rejected with HTTP `401 Unauthorized` invalidates the
+transport, unblocks its receiver and lets the client's existing reconnect loop
+establish a fresh session and callbacks. The failed send still returns an error:
+the library never replays it. Other HTTP failures (including `403`, `429` and
+`5xx`), network errors and caller cancellation do not force session recreation or
+retry the envelope. A network failure may occur after delivery; applications must
+not assume it is safe to resend. Persistent authentication failures continue
+through the existing bounded connection retry backoff until shutdown.
+
 Hosts needing HTTP request-scoped execution may supply
 `transport/http.Config.Dispatch func(context.Context, protocol.EnvelopeValue) error`.
 It processes request commands, messages and notifications synchronously on the

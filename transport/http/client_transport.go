@@ -222,6 +222,11 @@ func (t *ClientTransport) Send(ctx context.Context, envelope protocol.EnvelopeVa
 		return fmt.Errorf("iris http transport: send %s: %w", endpoint, err)
 	}
 	defer func() { _ = response.Body.Close() }()
+	if !initialSession && response.StatusCode == http.StatusUnauthorized {
+		// Iris uses 401 for invalid HTTP sessions. Wake the client listener
+		// to reconnect, but never replay a potentially delivered envelope.
+		_ = t.Close()
+	}
 	body, err := t.readBody(response.Body)
 	if err != nil {
 		return fmt.Errorf("iris http transport: read %s response: %w", endpoint, err)
